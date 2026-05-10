@@ -58,7 +58,7 @@ export function ContactsTabs({ contacts, promptpay }: ContactsTabsProps) {
         ) : (
           <div className="p-5 md:p-6">
             <div className="mb-4">
-              <h2 className="text-base font-serif font-semibold text-[#1a3c2a]">บัญชีรับชำระเงิน (PromptPay)</h2>
+              <h2 className="text-base font-serif font-semibold text-[#1a3c2a]">บัญชีรับชำระเงิน</h2>
               <p className="text-xs text-[#8b7355] mt-0.5">ตั้งค่าเลขบัญชีและชื่อผู้รับเงินสำหรับสร้าง QR Code ชำระเงิน</p>
             </div>
             <PromptPayEditor initialData={promptpay} />

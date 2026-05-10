@@ -34,8 +34,9 @@ yarn-error.log*
 .env*
 
 # uploaded images
-/public/uploads/*
-!/public/uploads/**/.gitkeep
+# Keep production images in git when they are stored under public/uploads.
+# Vercel only serves files that exist at build time, so ignoring this folder
+# makes database paths like /uploads/hero/example.jpg work locally but 404 online.
 
 # vercel
 .vercel

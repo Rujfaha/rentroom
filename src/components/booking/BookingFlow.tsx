@@ -8,7 +8,6 @@ import StepPayment from "./StepPayment";
 import StepConfirmation from "./StepConfirmation";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
 import { createWebsiteBooking, searchAvailableRoomTypes } from "@/app/actions/booking";
-import { calculateNights } from "@/services/mock-data";
 import { createClient } from "@/lib/supabase/client";
 import { bookingMessages, type BookingLocale } from "./booking-i18n";
 
@@ -20,6 +19,13 @@ interface BookingFlowProps {
   initialAdults: number;
   initialChildren: number;
   locale: BookingLocale;
+}
+
+function calculateNights(checkIn: string, checkOut: string): number {
+  const checkInDate = new Date(checkIn);
+  const checkOutDate = new Date(checkOut);
+  const diffTime = checkOutDate.getTime() - checkInDate.getTime();
+  return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 }
 
 export default function BookingFlow({
@@ -69,7 +75,7 @@ export default function BookingFlow({
     setStep(2);
   }
 
-  async function handlePaymentConfirm(uploadedSlipUrl: string) {
+  async function handlePaymentConfirm(uploadedSlipUrl: string, promotionCode?: string) {
     if (!selectedRoom || !guestInfo) return;
     setPaymentError("");
     setIsCreatingBooking(true);
@@ -82,7 +88,7 @@ export default function BookingFlow({
       children,
       guest: guestInfo,
       slipUrl: uploadedSlipUrl,
-      pricePerNight: selectedRoom.basePrice,
+      promotionCode,
     });
     setIsCreatingBooking(false);
 
@@ -263,6 +269,7 @@ export default function BookingFlow({
 
       {step === 2 && selectedRoom && guestInfo && (
         <StepPayment
+          hotelId={hotelId}
           room={selectedRoom}
           checkIn={checkIn}
           checkOut={checkOut}

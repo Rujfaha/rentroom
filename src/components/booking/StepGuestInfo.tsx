@@ -29,7 +29,7 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
   const [specialRequests, setSpecialRequests] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  const totalAmount = props.room.basePrice * props.totalNights;
+  const totalAmount = props.room.stayTotal ?? props.room.basePrice * props.totalNights;
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};

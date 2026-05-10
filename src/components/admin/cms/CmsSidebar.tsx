@@ -5,11 +5,12 @@ import { usePathname } from "next/navigation";
 import {
   Image as ImageIcon,
   Tag,
+  Landmark,
   Phone,
   Settings,
   Palette,
   ChevronRight,
-  BedDouble,
+  Search,
 } from "lucide-react";
 import { useState } from "react";
 
@@ -17,32 +18,38 @@ const cmsLinks = [
   {
     href: "/admin/cms/hero",
     label: "รูปภาพต้อนรับ",
-    subtitle: "Hero Slides",
+    subtitle: "สไลด์ต้อนรับ",
     icon: ImageIcon,
-  },
-  {
-    href: "/admin/rooms",
-    label: "ห้องพัก",
-    subtitle: "Room Types & Rooms",
-    icon: BedDouble,
   },
   {
     href: "/admin/cms/promotions",
     label: "โปรโมชั่น",
-    subtitle: "Promotions",
+    subtitle: "โปรโมชั่น",
     icon: Tag,
+  },
+  {
+    href: "/admin/cms/attractions",
+    label: "สถานที่ท่องเที่ยว",
+    subtitle: "สถานที่ท่องเที่ยว",
+    icon: Landmark,
   },
   {
     href: "/admin/cms/contacts",
     label: "ข้อมูลติดต่อ",
-    subtitle: "Contacts & Payment",
+    subtitle: "ติดต่อและชำระเงิน",
     icon: Phone,
   },
   {
     href: "/admin/cms/settings",
     label: "ตั้งค่าทั่วไป",
-    subtitle: "General Settings",
+    subtitle: "ตั้งค่าทั่วไป",
     icon: Settings,
+  },
+  {
+    href: "/admin/cms/seo",
+    label: "SEO",
+    subtitle: "Search Engine",
+    icon: Search,
   },
 ];
 
@@ -72,7 +79,7 @@ export function CmsSidebar() {
                   : cmsLinks.find((l) => pathname.startsWith(l.href))?.label || "CMS"}
               </p>
               <p className="text-[10px] uppercase tracking-wider text-[#8b7355]">
-                Content Management
+                จัดการเนื้อหา
               </p>
             </div>
           </div>

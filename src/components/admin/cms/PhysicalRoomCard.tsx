@@ -41,7 +41,7 @@ interface PhysicalRoomCardProps {
 
 export function PhysicalRoomCard({ room, roomTypeName, onEdit, onDelete }: PhysicalRoomCardProps) {
   return (
-    <div className="bg-white rounded-xl border border-[#e8e2d6] p-4 flex flex-col gap-3">
+    <div className="bg-white rounded-xl border border-[#e8e2d6] p-4 flex flex-col gap-3 h-full">
       <div className="flex items-start justify-between">
         <div>
           <div className="flex items-center gap-2">

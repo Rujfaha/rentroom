@@ -53,7 +53,7 @@ export function PromptPayEditor({ initialData }: { initialData: PromptPayData })
           defaultValue={initialData.type}
           className="w-full px-3 py-2 bg-white border border-[#e8e2d6] rounded-lg focus:ring-1 focus:ring-[#1a3c2a] focus:border-[#1a3c2a] text-sm outline-none text-[#2c2c2c]"
         >
-          <option value="phone">เบอร์โทรศัพท์ (Phone)</option>
+          <option value="phone">เบอร์โทรศัพท์</option>
           <option value="national_id">เลขบัตรประชาชน / เลขนิติบุคคล</option>
         </select>
       </div>

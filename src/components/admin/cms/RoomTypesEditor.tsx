@@ -86,11 +86,11 @@ export function RoomTypesEditor({ initialRoomTypes, initialRooms }: RoomTypesEdi
       </div>
 
       {/* Room Types Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="flex flex-wrap -mx-3">
         {roomTypes.map((roomType) => (
-          <div key={roomType.id}>
+          <div key={roomType.id} className={`w-full md:w-1/2 lg:w-1/3 px-3 mb-6 ${editingId !== null && editingId !== roomType.id ? 'self-start' : ''}`}>
             {editingId === roomType.id ? (
-              <div className="bg-white rounded-xl shadow-sm border border-[#e8e2d6] overflow-hidden flex flex-col">
+              <div className="bg-white rounded-xl shadow-sm border border-[#e8e2d6] overflow-hidden flex flex-col h-full">
                 <RoomTypeForm
                   roomType={editingRoomType}
                   onSave={handleSave}
@@ -123,7 +123,7 @@ export function RoomTypesEditor({ initialRoomTypes, initialRooms }: RoomTypesEdi
             ) : (
               <div
                 onClick={() => setSelectedRoomTypeId(roomType.id)}
-                className={`cursor-pointer transition-all ${
+                className={`cursor-pointer transition-all h-full ${
                   selectedRoomTypeId === roomType.id ? "ring-2 ring-[#c9a84c] rounded-xl" : ""
                 }`}
               >
@@ -138,7 +138,7 @@ export function RoomTypesEditor({ initialRoomTypes, initialRooms }: RoomTypesEdi
         ))}
 
         {roomTypes.length === 0 && (
-          <div className="col-span-full py-12 text-center border-2 border-dashed border-[#e8e2d6] rounded-xl text-[#a89279]">
+          <div className="w-full py-12 text-center border-2 border-dashed border-[#e8e2d6] rounded-xl text-[#a89279]">
             <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p>ยังไม่มีประเภทห้อง</p>
             <button

@@ -4,13 +4,36 @@ import Link from "next/link";
 import { getHotelConfig } from "@/services/mock-data";
 import { getBookingPageData } from "@/app/actions/booking";
 import { bookingMessages, getBookingLocale, type BookingLocale } from "@/components/booking/booking-i18n";
+import { buildHotelMetadata } from "@/lib/seo";
 
 const hotel = getHotelConfig();
 
-export const metadata = {
-  title: "Book Your Stay - " + hotel.name,
-  description: "Reserve your luxury mountain retreat experience",
-};
+export async function generateMetadata() {
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const supabase = await createServiceClient();
+  const { data: hotelRow } = await (supabase
+    .from("hotels") as any)
+    .select("id, name, description, address, province, district, sub_district, postal_code, logo_url, cover_image_url, settings")
+    .eq("is_active", true)
+    .limit(1)
+    .single();
+  const { data: rooms } = hotelRow?.id
+    ? await (supabase
+        .from("room_types") as any)
+        .select("name, description, base_price")
+        .eq("hotel_id", hotelRow.id)
+        .eq("is_active", true)
+        .limit(8)
+    : { data: [] };
+
+  return buildHotelMetadata({
+    hotel: hotelRow,
+    rooms: rooms ?? [],
+    pathname: "/booking",
+    pageTitle: `จองห้องพัก - ${hotelRow?.name || hotel.name}`,
+    pageDescription: `จองห้องพักออนไลน์สำหรับ ${hotelRow?.name || hotel.name} ดูห้องว่าง ราคา และยืนยันการจองได้สะดวก`,
+  });
+}
 
 function formatDate(date: Date): string {
   return date.toISOString().split("T")[0];

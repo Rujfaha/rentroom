@@ -21,7 +21,7 @@ function formatPrice(price: number): string {
 
 export default function StepConfirmation(props: StepConfirmationProps) {
   const labels = props.labels.confirmation;
-  const totalAmount = props.room.basePrice * props.totalNights;
+  const totalAmount = props.room.stayTotal ?? props.room.basePrice * props.totalNights;
 
   return (
     <div className="max-w-2xl mx-auto">

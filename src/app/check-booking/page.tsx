@@ -2,8 +2,8 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { lookupBooking, getHotelConfig } from "@/services/mock-data";
-import type { MockBooking } from "@/services/mock-data";
+import { getHotelConfig } from "@/services/mock-data";
+import { lookupPublicBooking, type PublicBookingLookup } from "@/app/actions/booking";
 
 const hotel = getHotelConfig();
 
@@ -28,20 +28,17 @@ const PAYMENT_MAP: Record<string, { label: string; color: string; bg: string }> 
 export default function CheckBookingPage() {
   const [ref, setRef] = useState("");
   const [email, setEmail] = useState("");
-  const [booking, setBooking] = useState<MockBooking | null>(null);
+  const [booking, setBooking] = useState<PublicBookingLookup | null>(null);
   const [searched, setSearched] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  function handleSearch() {
+  async function handleSearch() {
     if (!ref.trim() || !email.trim()) return;
     setLoading(true);
-    // Simulate network delay
-    setTimeout(function () {
-      const result = lookupBooking(ref, email);
-      setBooking(result);
-      setSearched(true);
-      setLoading(false);
-    }, 500);
+    const result = await lookupPublicBooking({ bookingRef: ref, email });
+    setBooking(result);
+    setSearched(true);
+    setLoading(false);
   }
 
   function handleKeyDown(e: React.KeyboardEvent) {
@@ -82,7 +79,7 @@ export default function CheckBookingPage() {
                 value={ref}
                 onChange={function (e) { setRef(e.target.value); }}
                 onKeyDown={handleKeyDown}
-                placeholder="e.g. VR-DEMO01-ABCD"
+                placeholder="e.g. VR-20260510-ABCD"
                 className={inputClass}
               />
             </div>
@@ -158,7 +155,7 @@ export default function CheckBookingPage() {
                   </div>
                   <div className="flex justify-between">
                     <span className="text-earth">Guests</span>
-                    <span className="font-medium text-forest-dark">{String(booking.adults) + " Adults, " + String(booking.children) + " Children"}</span>
+                    <span className="font-medium text-forest-dark">{String(booking.guests) + " guest(s)"}</span>
                   </div>
                 </div>
               </div>

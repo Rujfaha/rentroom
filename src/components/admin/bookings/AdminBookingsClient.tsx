@@ -160,8 +160,8 @@ function BookingActions({ booking }: { booking: AdminBookingRow }) {
   const canCheckIn = booking.status === "confirmed";
   const canCheckOut = booking.status === "checked_in";
   const canMarkNoShow = booking.status === "confirmed" || booking.status === "checked_in";
-  const confirmCheckIn = `ยืนยัน Check in รายการ ${booking.booking_number}?`;
-  const confirmCheckOut = `ยืนยัน Check out รายการ ${booking.booking_number}? ห้องจะถูกคืนเป็นว่าง`;
+  const confirmCheckIn = `ยืนยันเช็คอินรายการ ${booking.booking_number}?`;
+  const confirmCheckOut = `ยืนยันเช็คเอาท์รายการ ${booking.booking_number}? ห้องจะถูกคืนเป็นว่าง`;
   const confirmNoShow = `ยืนยันว่าลูกค้าไม่เข้าพักสำหรับรายการ ${booking.booking_number}? ห้องจะถูกคืนเป็นว่าง`;
 
   return (
@@ -216,7 +216,7 @@ function BookingActions({ booking }: { booking: AdminBookingRow }) {
             className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-sky-600 text-white rounded-lg hover:bg-sky-700 transition-colors text-sm font-medium cursor-pointer"
           >
             <LogIn className="w-3.5 h-3.5" />
-            Check in
+            เช็คอิน
           </button>
         </form>
       )}
@@ -234,7 +234,7 @@ function BookingActions({ booking }: { booking: AdminBookingRow }) {
             className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 bg-[#1a3c2a] text-[#faf7f0] rounded-lg hover:bg-[#0f2418] transition-colors text-sm font-medium cursor-pointer"
           >
             <LogOut className="w-3.5 h-3.5" />
-            Check out
+            เช็คเอาท์
           </button>
         </form>
       )}

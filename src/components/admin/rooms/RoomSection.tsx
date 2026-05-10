@@ -345,8 +345,8 @@ export function RoomSection({ rooms, roomTypes, onRoomsChange }: RoomSectionProp
                       <span className="flex items-center gap-1">
                         ออก: {new Date(room.currentBooking.check_out).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
                       </span>
-                      <span className="px-1 bg-white border border-[#e8e2d6] rounded-sm text-[9px] font-medium text-amber-600 uppercase">
-                        {room.currentBooking.status === 'checked_in' ? 'IN' : 'CONFIRMED'}
+                      <span className="px-1 bg-white border border-[#e8e2d6] rounded-sm text-[9px] font-medium text-amber-600">
+                        {room.currentBooking.status === 'checked_in' ? 'เข้าพัก' : 'ยืนยันแล้ว'}
                       </span>
                     </div>
                   </div>
@@ -531,7 +531,7 @@ function SingleRoomModal({
             <input type="checkbox" id="room-active-modal" checked={Boolean(isActive)} onChange={(e) => setIsActive(e.target.checked)}
               className="w-4 h-4 text-[#1a3c2a] rounded border-[#e8e2d6] focus:ring-[#1a3c2a]"
             />
-            <label htmlFor="room-active-modal" className="ml-2 text-sm text-[#2c2c2c]">แสดงผล (Active)</label>
+            <label htmlFor="room-active-modal" className="ml-2 text-sm text-[#2c2c2c]">แสดงผล</label>
           </div>
 
           <div className="flex justify-end gap-3 pt-2">

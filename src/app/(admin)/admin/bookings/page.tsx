@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { AdminBookingsClient, type AdminBookingRow } from "@/components/admin/bookings/AdminBookingsClient";
 
 export const metadata = {
-  title: "Bookings | Valley Retreat",
+  title: "การจอง | Arkkarawin",
 };
 
 export default async function AdminBookingsPage({

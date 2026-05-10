@@ -25,6 +25,7 @@ interface RoomTypeSectionProps {
   roomTypes: any[];
   rooms: any[];
   onRoomTypesChange: (types: any[]) => void;
+  onRoomsChange: (rooms: any[]) => void;
 }
 
 function safeString(value: unknown, fallback = ""): string {
@@ -50,7 +51,7 @@ function normalizeRoomType(roomType: any) {
   };
 }
 
-export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange }: RoomTypeSectionProps) {
+export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange, onRoomsChange }: RoomTypeSectionProps) {
   const safeRoomTypes = Array.isArray(roomTypes) ? roomTypes : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
   const [modalOpen, setModalOpen] = useState(false);
@@ -73,13 +74,19 @@ export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange }: RoomTyp
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm("แน่ใจหรือไม่ว่าต้องการลบประเภทห้องนี้?")) return;
+    const roomCount = getRoomCount(id);
+    const message = roomCount > 0
+      ? `แน่ใจหรือไม่ว่าต้องการลบประเภทห้องนี้?\nระบบจะลบห้องพักที่อยู่ในประเภทนี้ทั้งหมด ${roomCount} ห้องโดยอัตโนมัติ`
+      : "แน่ใจหรือไม่ว่าต้องการลบประเภทห้องนี้?";
+    if (!confirm(message)) return;
+    setError("");
     startTransition(async () => {
       const result = await deleteRoomType(id);
       if (result.error) {
         setError(result.error);
       } else {
         onRoomTypesChange(safeRoomTypes.filter((rt) => rt.id !== id));
+        onRoomsChange(safeRooms.filter((r) => r.room_type_id !== id));
       }
     });
   };
@@ -227,7 +234,7 @@ export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange }: RoomTyp
                       onClick={() => handleDelete(rt.id)}
                       disabled={isPending}
                       className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
-                      title="ลบ"
+                      title="ลบประเภทห้องและห้องพักที่เกี่ยวข้อง"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -431,7 +438,7 @@ function RoomTypeModal({
               type="checkbox" id="rt-active-modal" checked={Boolean(isActive)} onChange={(e) => setIsActive(e.target.checked)}
               className="w-4 h-4 text-[#1a3c2a] rounded border-[#e8e2d6] focus:ring-[#1a3c2a]"
             />
-            <label htmlFor="rt-active-modal" className="ml-2 text-sm text-[#2c2c2c]">แสดงผล (Active)</label>
+            <label htmlFor="rt-active-modal" className="ml-2 text-sm text-[#2c2c2c]">แสดงผล</label>
           </div>
 
           {/* Image Gallery (edit mode only) */}

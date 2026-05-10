@@ -27,7 +27,7 @@ export function RoomTypeCard({ roomType, onEdit, onDelete }: RoomTypeCardProps) 
   const moreAmenitiesCount = (roomType.amenities || []).length - 5;
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-[#e8e2d6] overflow-hidden flex flex-col">
+    <div className="bg-white rounded-xl shadow-sm border border-[#e8e2d6] overflow-hidden flex flex-col h-full">
       {/* Cover Image */}
       <div className="relative h-44 bg-[#f0ece4] flex items-center justify-center overflow-hidden">
         {coverImage?.image_url ? (

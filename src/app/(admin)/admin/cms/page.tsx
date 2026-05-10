@@ -2,6 +2,7 @@ import Link from "next/link";
 import {
   Image as ImageIcon,
   Tag,
+  Landmark,
   Phone,
   Settings,
   ArrowRight,
@@ -15,7 +16,7 @@ export const metadata = {
 const cmsSections = [
   {
     title: "รูปภาพต้อนรับ",
-    subtitle: "Hero Slides",
+    subtitle: "สไลด์ต้อนรับ",
     description: "จัดการรูปภาพสไลด์และข้อความต้อนรับด้านบนสุดของเว็บ",
     icon: ImageIcon,
     href: "/admin/cms/hero",
@@ -24,7 +25,7 @@ const cmsSections = [
   },
   {
     title: "โปรโมชั่น",
-    subtitle: "Promotions",
+    subtitle: "โปรโมชั่น",
     description: "จัดการโปรโมชั่น ส่วนลด และดีลพิเศษต่างๆ",
     icon: Tag,
     href: "/admin/cms/promotions",
@@ -32,8 +33,17 @@ const cmsSections = [
     bg: "bg-[#c9a84c]/8",
   },
   {
+    title: "สถานที่ท่องเที่ยว",
+    subtitle: "สถานที่ท่องเที่ยว",
+    description: "จัดการสถานที่ท่องเที่ยวใกล้โรงแรม ระยะทาง และแผนที่",
+    icon: Landmark,
+    href: "/admin/cms/attractions",
+    color: "text-[#1a3c2a]",
+    bg: "bg-[#1a3c2a]/6",
+  },
+  {
     title: "ข้อมูลติดต่อ",
-    subtitle: "Contacts & Payment",
+    subtitle: "ติดต่อและชำระเงิน",
     description: "เบอร์โทร, โซเชียลมีเดีย, แผนที่ และข้อมูลบัญชี PromptPay",
     icon: Phone,
     href: "/admin/cms/contacts",
@@ -42,7 +52,7 @@ const cmsSections = [
   },
   {
     title: "ตั้งค่าทั่วไป",
-    subtitle: "General Settings",
+    subtitle: "ตั้งค่าทั่วไป",
     description: "ชื่อโรงแรม, คำอธิบายสั้นๆ, และที่อยู่ของโรงแรม",
     icon: Settings,
     href: "/admin/cms/settings",

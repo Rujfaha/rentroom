@@ -5,7 +5,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { StatCard } from "@/components/admin/StatCard";
 
 export const metadata = {
-  title: "Dashboard Overview | Valley Retreat",
+  title: "ภาพรวมระบบ | Arkkarawin",
 };
 
 type RoomStatus = "available" | "occupied" | "maintenance" | "out_of_order";
@@ -54,6 +54,15 @@ function getTrend(current: number, previous: number) {
 
   return undefined;
 }
+
+const BOOKING_STATUS_LABELS: Record<string, string> = {
+  pending: "รอตรวจสอบ",
+  confirmed: "ยืนยันแล้ว",
+  checked_in: "เช็คอินแล้ว",
+  checked_out: "เช็คเอาท์แล้ว",
+  cancelled: "ยกเลิก",
+  no_show: "ไม่เข้าพัก",
+};
 
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString("th-TH", {
@@ -205,7 +214,7 @@ export default async function AdminDashboardPage() {
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-serif text-[#1a3c2a]">ภาพรวมระบบ (Overview)</h1>
+          <h1 className="text-2xl font-serif text-[#1a3c2a]">ภาพรวมระบบ</h1>
           <p className="text-[#8b7355] text-sm mt-1 uppercase tracking-wider font-medium">
             ยินดีต้อนรับกลับมา, {session.fullName}
           </p>
@@ -241,7 +250,7 @@ export default async function AdminDashboardPage() {
                   </div>
                   <div className="text-left sm:text-right">
                     <p className="text-sm text-[#2c2c2c]">{formatDate(booking.check_in_date)} - {formatDate(booking.check_out_date)}</p>
-                    <p className="text-xs text-[#8b7355]">{booking.status}</p>
+                    <p className="text-xs text-[#8b7355]">{BOOKING_STATUS_LABELS[booking.status] || booking.status}</p>
                   </div>
                 </div>
               ))}
@@ -257,7 +266,7 @@ export default async function AdminDashboardPage() {
               <span className="font-bold">{availableRooms}</span>
             </div>
             <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50 text-amber-700">
-              <span className="text-sm font-medium">Occupied</span>
+              <span className="text-sm font-medium">มีผู้เข้าพัก</span>
               <span className="font-bold">{occupiedRooms}</span>
             </div>
             <div className="flex items-center justify-between p-3 rounded-lg bg-stone-50 text-stone-600">

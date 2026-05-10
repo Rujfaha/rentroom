@@ -5,10 +5,11 @@ import { updateHeroSlide, deleteHeroSlide } from "@/app/actions/hero";
 import { Plus, Save, Trash2, Edit2, Image as ImageIcon, Link, Upload, X } from "lucide-react";
 
 function ImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isSaving?: boolean }) {
+  const safeDefaultUrl = defaultUrl ?? "";
   const [tab, setTab] = useState<"url" | "upload">("url");
   const [tempUrl, setTempUrl] = useState("");
-  const [imageUrl, setImageUrl] = useState(defaultUrl);
-  const [preview, setPreview] = useState(defaultUrl);
+  const [imageUrl, setImageUrl] = useState(safeDefaultUrl);
+  const [preview, setPreview] = useState(safeDefaultUrl);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
@@ -40,7 +41,7 @@ function ImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isSaving?: b
       }
     } catch {
       setUploading(false);
-      setUploadError("Upload failed");
+      setUploadError("อัปโหลดไม่สำเร็จ");
       setPreview(imageUrl);
     }
   };
@@ -80,7 +81,7 @@ function ImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isSaving?: b
 
   return (
     <div className="space-y-2">
-      <input type="hidden" name="image_url" value={imageUrl} />
+      <input type="hidden" name="image_url" value={imageUrl ?? ""} />
 
       <label className="block text-xs font-medium text-[#8b7355] mb-1">รูปภาพ Slide</label>
 
@@ -112,7 +113,7 @@ function ImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isSaving?: b
         <div className="space-y-2">
           <input
             type="text"
-            value={tempUrl}
+            value={tempUrl ?? ""}
             onChange={(e) => setTempUrl(e.target.value)}
             disabled={uploading}
             className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm disabled:opacity-60"
@@ -191,7 +192,7 @@ function ImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isSaving?: b
 }
 
 export function HeroSlideEditor({ initialSlides }: { initialSlides: any[] }) {
-  const [slides, setSlides] = useState(initialSlides);
+  const [slides, setSlides] = useState(initialSlides ?? []);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -214,7 +215,7 @@ export function HeroSlideEditor({ initialSlides }: { initialSlides: any[] }) {
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm("แน่ใจหรือไม่ว่าต้องการลบ Slide นี้?")) return;
+    if (!confirm("แน่ใจหรือไม่ว่าต้องการลบสไลด์นี้?")) return;
     startTransition(async () => {
       const result = await deleteHeroSlide(id);
       if (!result.error) {
@@ -241,28 +242,29 @@ export function HeroSlideEditor({ initialSlides }: { initialSlides: any[] }) {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="flex flex-wrap -mx-3">
         {slides.map((slide) => (
-          <div key={slide.id} className="bg-white rounded-xl shadow-sm border border-[#e8e2d6] overflow-hidden flex flex-col">
+          <div key={slide.id} className={`w-full md:w-1/2 lg:w-1/3 px-3 mb-6 ${editingId !== null && editingId !== slide.id ? 'self-start' : ''}`}>
+            <div className="bg-white rounded-xl shadow-sm border border-[#e8e2d6] overflow-hidden flex flex-col h-full">
             {editingId === slide.id ? (
               <form onSubmit={(e) => handleSave(e, slide.id)} className="p-4 space-y-4 flex-1 flex flex-col">
 
                 <ImageInput defaultUrl={slide.image_url || ""} isSaving={isPending} />
 
                 <div>
-                  <label className="block text-xs font-medium text-[#8b7355] mb-1">Headline (พาดหัว)</label>
+                  <label className="block text-xs font-medium text-[#8b7355] mb-1">พาดหัว</label>
                   <input
                     type="text"
                     name="headline"
-                    defaultValue={slide.headline}
+                    defaultValue={slide.headline ?? ""}
                     className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-medium text-[#8b7355] mb-1">Sub-headline</label>
+                  <label className="block text-xs font-medium text-[#8b7355] mb-1">คำบรรยายใต้พาดหัว</label>
                   <textarea
                     name="subheadline"
-                    defaultValue={slide.subheadline}
+                    defaultValue={slide.subheadline ?? ""}
                     rows={2}
                     className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
                   />
@@ -272,10 +274,10 @@ export function HeroSlideEditor({ initialSlides }: { initialSlides: any[] }) {
                     type="checkbox"
                     id={`active-${slide.id}`}
                     name="is_active"
-                    defaultChecked={slide.is_active}
+                    defaultChecked={slide.is_active !== false}
                     className="w-4 h-4 text-[#1a3c2a] rounded border-[#e8e2d6] focus:ring-[#1a3c2a]"
                   />
-                  <label htmlFor={`active-${slide.id}`} className="ml-2 text-sm text-[#2c2c2c]">แสดงผล (Active)</label>
+                  <label htmlFor={`active-${slide.id}`} className="ml-2 text-sm text-[#2c2c2c]">แสดงผล</label>
                 </div>
 
                 <div className="flex justify-end gap-2 mt-auto pt-4">
@@ -331,13 +333,14 @@ export function HeroSlideEditor({ initialSlides }: { initialSlides: any[] }) {
                 </div>
               </>
             )}
+            </div>
           </div>
         ))}
 
         {slides.length === 0 && (
-          <div className="col-span-full py-12 text-center border-2 border-dashed border-[#e8e2d6] rounded-xl text-[#a89279]">
+          <div className="w-full py-12 text-center border-2 border-dashed border-[#e8e2d6] rounded-xl text-[#a89279]">
             <ImageIcon className="w-8 h-8 mx-auto mb-2 opacity-50" />
-            <p>ยังไม่มีรูปภาพ Slide</p>
+            <p>ยังไม่มีรูปภาพสไลด์</p>
           </div>
         )}
       </div>

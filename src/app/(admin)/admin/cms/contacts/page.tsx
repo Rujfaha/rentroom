@@ -1,17 +1,17 @@
 import { getSession } from "@/lib/session";
-import { createClient } from "@/lib/supabase/server";
+import { createServiceClient } from "@/lib/supabase/service";
 import { ContactsTabs } from "@/components/admin/cms/ContactsTabs";
 import { redirect } from "next/navigation";
 
 export const metadata = {
-  title: "Contacts & Payment CMS | Valley Retreat",
+  title: "ข้อมูลติดต่อและการชำระเงิน | Arkkarawin",
 };
 
 export default async function ContactsCmsPage() {
   const session = await getSession();
   if (!session?.hotelId) redirect("/admin");
 
-  const supabase = await createClient();
+  const supabase = await createServiceClient();
 
   // Fetch Contacts
   const { data: contacts } = await supabase

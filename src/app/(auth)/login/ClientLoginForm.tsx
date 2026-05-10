@@ -1,11 +1,25 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
 import { loginAction } from "@/app/actions/auth";
 import { LogIn, ShieldAlert, KeyRound, Mail, Leaf } from "lucide-react";
+import {
+  ADMIN_TAB_SESSION_KEY,
+  ADMIN_TAB_SESSION_VALUE,
+} from "@/lib/admin-tab-session";
 
 export function LoginFormClient({ hotelName }: { hotelName: string }) {
   const [state, action, pending] = useActionState(loginAction, undefined);
+
+  useEffect(() => {
+    if (state?.error) {
+      sessionStorage.removeItem(ADMIN_TAB_SESSION_KEY);
+    }
+  }, [state?.error]);
+
+  const handleSubmit = () => {
+    sessionStorage.setItem(ADMIN_TAB_SESSION_KEY, ADMIN_TAB_SESSION_VALUE);
+  };
 
   return (
     <div className="flex min-h-screen w-full flex-col lg:flex-row bg-[#faf7f0]">
@@ -39,7 +53,7 @@ export function LoginFormClient({ hotelName }: { hotelName: string }) {
             <p className="text-[#8b7355] text-sm md:text-base">Please enter your credentials to continue.</p>
           </div>
 
-          <form action={action} className="space-y-6">
+          <form action={action} onSubmit={handleSubmit} className="space-y-6">
             {state?.error && (
               <div className="p-4 bg-[#fdf2f2] text-[#ef4444] text-sm rounded-xl border border-[#fca5a5] flex items-center gap-3">
                 <ShieldAlert className="w-5 h-5 flex-shrink-0" />

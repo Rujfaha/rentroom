@@ -6,8 +6,6 @@ import {
   LayoutDashboard, 
   CalendarDays, 
   BedDouble, 
-  Users, 
-  CreditCard, 
   Settings,
   Image as ImageIcon,
   Menu,
@@ -18,6 +16,7 @@ import {
 import { logoutAction } from "@/app/actions/auth";
 import { useState } from "react";
 import type { SessionPayload } from "@/lib/session";
+import { ADMIN_TAB_SESSION_KEY } from "@/lib/admin-tab-session";
 
 interface SidebarProps {
   session: SessionPayload | null;
@@ -30,12 +29,14 @@ export function Sidebar({ session }: SidebarProps) {
   // Filter links based on role
   const isAdmin = session?.role === "admin" || session?.role === "super_admin";
 
+  const handleLogout = () => {
+    sessionStorage.removeItem(ADMIN_TAB_SESSION_KEY);
+  };
+
   const links = [
     { href: "/admin", label: "ภาพรวม", icon: LayoutDashboard, show: true },
     { href: "/admin/bookings", label: "การจอง", icon: CalendarDays, show: true },
     { href: "/admin/rooms", label: "ห้องพัก", icon: BedDouble, show: true },
-    { href: "/admin/customers", label: "ลูกค้า", icon: Users, show: true },
-    { href: "/admin/payments", label: "การชำระเงิน", icon: CreditCard, show: isAdmin },
     { href: "/admin/cms", label: "จัดการหน้าเว็บ", icon: ImageIcon, show: isAdmin },
     { href: "/admin/pricing", label: "ราคา & ฤดูกาล", icon: Settings, show: isAdmin },
   ].filter(link => link.show);
@@ -76,15 +77,15 @@ export function Sidebar({ session }: SidebarProps) {
           </div>
           <div className="truncate">
             <span className="font-serif text-[#faf7f0] text-base tracking-wide block truncate">
-              {session?.hotelName || "Valley Retreat"}
+              {session?.hotelName || "Arkkarawin"}
             </span>
-            <span className="text-[10px] uppercase tracking-[0.2em] text-[#c9a84c]/60 font-medium">Management</span>
+            <span className="text-[10px] uppercase tracking-[0.2em] text-[#c9a84c]/60 font-medium">จัดการ</span>
           </div>
         </div>
 
         {/* Navigation */}
         <nav className="flex-1 overflow-y-auto py-5 px-3 space-y-0.5">
-          <p className="px-3 mb-3 text-[10px] uppercase tracking-[0.2em] text-[#8b7355]/60 font-semibold">Menu</p>
+          <p className="px-3 mb-3 text-[10px] uppercase tracking-[0.2em] text-[#8b7355]/60 font-semibold">เมนู</p>
           {links.map((link) => {
             const isActive = pathname === link.href || (link.href !== '/admin' && pathname.startsWith(`${link.href}/`));
             const Icon = link.icon;
@@ -133,13 +134,13 @@ export function Sidebar({ session }: SidebarProps) {
                 </div>
               </div>
             </div>
-            <form action={logoutAction} className="mt-3 pt-3 border-t border-[#c9a84c]/10">
+            <form action={logoutAction} onSubmit={handleLogout} className="mt-3 pt-3 border-t border-[#c9a84c]/10">
               <button 
                 type="submit"
                 className="flex items-center w-full px-2 py-1.5 text-xs text-[#8b7355] hover:text-red-400 transition-colors rounded-lg hover:bg-red-500/5 font-medium"
               >
                 <LogOut className="w-3.5 h-3.5 mr-2" />
-                <span className="uppercase tracking-wider">Sign Out</span>
+                <span className="uppercase tracking-wider">ออกจากระบบ</span>
               </button>
             </form>
           </div>

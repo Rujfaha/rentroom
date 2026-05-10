@@ -120,22 +120,59 @@ export async function deleteRoomType(id: string): Promise<ActionResult> {
   const session = await getValidatedSession();
   if (!session) return { error: "Unauthorized" };
   const hotelId = session.hotelId!;
+  if (!id) return { error: "ID is required" };
 
   const supabase = await createServiceClient();
 
-  // Check if any rooms reference this room type
+  const { data: roomType, error: roomTypeCheckError } = await (supabase.from("room_types") as any)
+    .select("id")
+    .eq("id", id)
+    .eq("hotel_id", hotelId)
+    .maybeSingle();
+
+  if (roomTypeCheckError) {
+    console.error("deleteRoomType room type check error:", roomTypeCheckError);
+    return { error: "ไม่สามารถตรวจสอบประเภทห้องได้" };
+  }
+  if (!roomType) return { error: "ไม่พบประเภทห้องที่ต้องการลบ" };
+
   const { data: roomsData, error: roomsError } = await (supabase.from("rooms") as any)
     .select("id")
     .eq("room_type_id", id)
-    .eq("hotel_id", hotelId)
-    .limit(1);
+    .eq("hotel_id", hotelId);
 
-  if (roomsError) return { error: "Failed to check associated rooms" };
-  if (roomsData && roomsData.length > 0) {
-    return { error: "ไม่สามารถลบได้ เนื่องจากมีห้องพักที่ใช้ประเภทนี้อยู่" };
+  if (roomsError) {
+    console.error("deleteRoomType rooms check error:", roomsError);
+    return { error: "ไม่สามารถตรวจสอบห้องพักที่เกี่ยวข้องได้" };
   }
 
-  // Delete room type (room_type_images will cascade)
+  const roomIds = (roomsData || []).map((room: any) => room.id);
+
+  if (roomIds.length > 0) {
+    const { count: bookingCount, error: bookingsError } = await (supabase.from("bookings") as any)
+      .select("id", { count: "exact", head: true })
+      .eq("hotel_id", hotelId)
+      .in("room_id", roomIds);
+
+    if (bookingsError) {
+      console.error("deleteRoomType bookings check error:", bookingsError);
+      return { error: "ไม่สามารถตรวจสอบการจองที่เกี่ยวข้องได้" };
+    }
+    if ((bookingCount ?? 0) > 0) {
+      return { error: `ไม่สามารถลบประเภทห้องนี้ได้ เนื่องจากมีการจอง ${bookingCount} รายการที่เกี่ยวข้องกับห้องพักในประเภทนี้` };
+    }
+
+    const { error: deleteRoomsError } = await (supabase.from("rooms") as any)
+      .delete()
+      .eq("room_type_id", id)
+      .eq("hotel_id", hotelId);
+
+    if (deleteRoomsError) {
+      console.error("deleteRoomType rooms delete error:", deleteRoomsError);
+      return { error: "ไม่สามารถลบห้องพักที่เกี่ยวข้องได้: " + (deleteRoomsError.message || JSON.stringify(deleteRoomsError)) };
+    }
+  }
+
   const { error } = await (supabase.from("room_types") as any)
     .delete()
     .eq("id", id)
@@ -148,7 +185,7 @@ export async function deleteRoomType(id: string): Promise<ActionResult> {
 
   revalidatePath("/admin/rooms");
   revalidatePath("/");
-  return { success: true };
+  return { success: true, data: { deletedRooms: roomIds.length } };
 }
 
 // ─── Room Type Image Actions ───────────────────────────────

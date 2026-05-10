@@ -74,7 +74,7 @@ export function HotelSettingsEditor({ initialData }: { initialData: any }) {
             </div>
             <div>
               <h3 className="text-[15px] font-serif font-semibold text-[#1a3c2a]">คำอธิบาย</h3>
-              <p className="text-[11px] text-[#8b7355]">Tagline สั้นๆ แสดงใต้ชื่อโรงแรม</p>
+              <p className="text-[11px] text-[#8b7355]">คำขวัญสั้นๆ แสดงใต้ชื่อโรงแรม</p>
             </div>
           </div>
         </div>
@@ -84,7 +84,7 @@ export function HotelSettingsEditor({ initialData }: { initialData: any }) {
             rows={3}
             defaultValue={initialData?.description || ""}
             className="w-full px-4 py-2.5 bg-white border border-[#e8e2d6] rounded-xl focus:ring-1 focus:ring-[#1a3c2a] focus:border-[#1a3c2a] outline-none transition-colors text-[#2c2c2c] text-sm resize-y"
-            placeholder="เช่น Luxury Mountain Resort in the heart of the valley..."
+            placeholder="เช่น รีสอร์ทหรูท่ามกลางหุบเขา..."
           />
         </div>
       </div>

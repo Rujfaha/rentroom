@@ -108,13 +108,13 @@ export function PhysicalRoomsManager({ roomTypeId, roomTypes, initialRooms, onRo
         />
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="flex flex-wrap -mx-3">
         {sortedRooms
           .filter((r) => r.id !== "new")
           .map((room) => (
-            <div key={room.id}>
+            <div key={room.id} className={`w-full sm:w-1/2 lg:w-1/3 px-3 mb-4 ${editingId !== null && editingId !== room.id ? 'self-start' : ''}`}>
               {editingId === room.id ? (
-                <PhysicalRoomForm
+                <div className="h-full"><PhysicalRoomForm
                   room={room}
                   roomTypes={roomTypes}
                   defaultRoomTypeId={roomTypeId}
@@ -123,14 +123,14 @@ export function PhysicalRoomsManager({ roomTypeId, roomTypes, initialRooms, onRo
                     setEditingId(null);
                     setError("");
                   }}
-                />
+                /></div>
               ) : (
-                <PhysicalRoomCard
+                <div className="h-full"><PhysicalRoomCard
                   room={room}
                   roomTypeName={roomTypes.find((rt) => rt.id === room.room_type_id)?.name}
                   onEdit={() => setEditingId(room.id)}
                   onDelete={() => handleDelete(room.id)}
-                />
+                /></div>
               )}
             </div>
           ))}

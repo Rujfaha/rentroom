@@ -70,7 +70,7 @@ export function PhysicalRoomForm({ room, roomTypes, defaultRoomTypeId, onSave, o
   };
 
   return (
-    <form onSubmit={handleSubmit} className="p-4 space-y-3 bg-white rounded-xl border border-[#e8e2d6]">
+    <form onSubmit={handleSubmit} className="p-4 space-y-3 bg-white rounded-xl border border-[#e8e2d6] h-full">
       <div>
         <label className="block text-xs font-medium text-[#8b7355] mb-1">ประเภทห้อง <span className="text-red-400">*</span></label>
         <select
@@ -163,7 +163,7 @@ export function PhysicalRoomForm({ room, roomTypes, defaultRoomTypeId, onSave, o
           className="w-4 h-4 text-[#1a3c2a] rounded border-[#e8e2d6] focus:ring-[#1a3c2a]"
         />
         <label htmlFor={`rm-active-${room?.id || "new"}`} className="ml-2 text-sm text-[#2c2c2c]">
-          แสดงผล (Active)
+          แสดงผล
         </label>
       </div>
 

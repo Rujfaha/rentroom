@@ -4,7 +4,7 @@ import { createServiceClient } from "@/lib/supabase/service";
 import { RoomManagement } from "@/components/admin/rooms/RoomManagement";
 
 export const metadata = {
-  title: "Rooms | Valley Retreat",
+  title: "ห้องพัก | Arkkarawin",
 };
 
 export default async function AdminRoomsPage() {
@@ -79,7 +79,7 @@ export default async function AdminRoomsPage() {
   const roomsWithBookings = (rooms || []).map((room: any) => {
     const processedBookings = (room.bookings || []).map((b: any) => ({
       ...b,
-      guest_name: b.customers?.full_name || "Unknown Guest",
+      guest_name: b.customers?.full_name || "ไม่ระบุชื่อ",
       check_in: b.check_in_date,
       check_out: b.check_out_date,
     }));

@@ -132,3 +132,46 @@ export async function updateHotelGeneralSettings(formData: FormData) {
   revalidatePath("/", "layout");
   return { success: true };
 }
+
+export async function updateSeoSettings(formData: FormData) {
+  const session = await getSession();
+  if (!session?.hotelId) return { error: "Unauthorized" };
+
+  const seo = {
+    siteName: String(formData.get("siteName") || "").trim(),
+    titleTemplate: String(formData.get("titleTemplate") || "").trim(),
+    metaTitle: String(formData.get("metaTitle") || "").trim(),
+    metaDescription: String(formData.get("metaDescription") || "").trim(),
+    keywords: String(formData.get("keywords") || "").trim(),
+    ogImageUrl: String(formData.get("ogImageUrl") || "").trim(),
+    canonicalBaseUrl: String(formData.get("canonicalBaseUrl") || "").trim().replace(/\/+$/, ""),
+    googleSiteVerification: String(formData.get("googleSiteVerification") || "").trim(),
+    allowIndex: formData.get("allowIndex") === "on",
+  };
+
+  const supabase = await createClient();
+  const { data: hotelData, error: fetchErr } = await supabase
+    .from("hotels")
+    .select("settings")
+    .eq("id", session.hotelId)
+    .single();
+
+  if (fetchErr) return { error: "Failed to fetch SEO settings" };
+
+  const currentSettings = ((hotelData as any)?.settings as Record<string, any>) || {};
+  const { error: updateErr } = await (supabase.from("hotels") as any)
+    .update({
+      settings: {
+        ...currentSettings,
+        seo,
+      },
+    })
+    .eq("id", session.hotelId);
+
+  if (updateErr) return { error: "Failed to update SEO settings" };
+
+  revalidatePath("/", "layout");
+  revalidatePath("/booking");
+  revalidatePath("/admin/cms/seo");
+  return { success: true };
+}

@@ -1,7 +1,7 @@
-// ============================================================
-// Mock Data Service — CMS-ready
-// จำลองข้อมูลจาก Database/API
-// เมื่อเชื่อมต่อกับ Supabase จริง ให้เปลี่ยนจาก mockData เป็น fetch จาก DB
+﻿// ============================================================
+// Mock Data Service â€” CMS-ready
+// à¸ˆà¸³à¸¥à¸­à¸‡à¸‚à¹‰à¸­à¸¡à¸¹à¸¥à¸ˆà¸²à¸ Database/API
+// à¹€à¸¡à¸·à¹ˆà¸­à¹€à¸Šà¸·à¹ˆà¸­à¸¡à¸•à¹ˆà¸­à¸à¸±à¸š Supabase à¸ˆà¸£à¸´à¸‡ à¹ƒà¸«à¹‰à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™à¸ˆà¸²à¸ mockData à¹€à¸›à¹‡à¸™ fetch à¸ˆà¸²à¸ DB
 // ============================================================
 
 import type {
@@ -20,24 +20,24 @@ const heroSlides: HeroSlide[] = [
     id: "hero-1",
     imageUrl: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=1920&q=80",
     altText: "Mountain resort view at sunrise",
-    headline: "Valley Retreat",
-    subheadline: "หลีกหนีความวุ่นวาย สู่ความสงบกลางหุบเขา",
+    headline: "Arkkarawin",
+    subheadline: "à¸«à¸¥à¸µà¸à¸«à¸™à¸µà¸„à¸§à¸²à¸¡à¸§à¸¸à¹ˆà¸™à¸§à¸²à¸¢ à¸ªà¸¹à¹ˆà¸„à¸§à¸²à¸¡à¸ªà¸‡à¸šà¸à¸¥à¸²à¸‡à¸«à¸¸à¸šà¹€à¸‚à¸²",
     sortOrder: 1,
   },
   {
     id: "hero-2",
     imageUrl: "https://images.unsplash.com/photo-1571896349842-33c89424de2d?w=1920&q=80",
     altText: "Luxury room interior",
-    headline: "ห้องพักหรูระดับพรีเมียม",
-    subheadline: "ทุกห้องมองเห็นวิวภูเขา พร้อมสิ่งอำนวยความสะดวกครบครัน",
+    headline: "à¸«à¹‰à¸­à¸‡à¸žà¸±à¸à¸«à¸£à¸¹à¸£à¸°à¸”à¸±à¸šà¸žà¸£à¸µà¹€à¸¡à¸µà¸¢à¸¡",
+    subheadline: "à¸—à¸¸à¸à¸«à¹‰à¸­à¸‡à¸¡à¸­à¸‡à¹€à¸«à¹‡à¸™à¸§à¸´à¸§à¸ à¸¹à¹€à¸‚à¸² à¸žà¸£à¹‰à¸­à¸¡à¸ªà¸´à¹ˆà¸‡à¸­à¸³à¸™à¸§à¸¢à¸„à¸§à¸²à¸¡à¸ªà¸°à¸”à¸§à¸à¸„à¸£à¸šà¸„à¸£à¸±à¸™",
     sortOrder: 2,
   },
   {
     id: "hero-3",
     imageUrl: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=1920&q=80",
     altText: "Infinity pool with mountain view",
-    headline: "สระว่ายน้ำ Infinity Pool",
-    subheadline: "ดื่มด่ำกับวิวหุบเขาแบบพาโนรามาจากสระว่ายน้ำของเรา",
+    headline: "à¸ªà¸£à¸°à¸§à¹ˆà¸²à¸¢à¸™à¹‰à¸³ Infinity Pool",
+    subheadline: "à¸”à¸·à¹ˆà¸¡à¸”à¹ˆà¸³à¸à¸±à¸šà¸§à¸´à¸§à¸«à¸¸à¸šà¹€à¸‚à¸²à¹à¸šà¸šà¸žà¸²à¹‚à¸™à¸£à¸²à¸¡à¸²à¸ˆà¸²à¸à¸ªà¸£à¸°à¸§à¹ˆà¸²à¸¢à¸™à¹‰à¸³à¸‚à¸­à¸‡à¹€à¸£à¸²",
     sortOrder: 3,
   },
 ];
@@ -45,33 +45,33 @@ const heroSlides: HeroSlide[] = [
 const promotions: Promotion[] = [
   {
     id: "promo-1",
-    title: "Early Bird ส่วนลด 20%",
-    description: "จองล่วงหน้า 30 วัน รับส่วนลดทันที 20% สำหรับทุกประเภทห้องพัก",
+    title: "Early Bird à¸ªà¹ˆà¸§à¸™à¸¥à¸” 20%",
+    description: "à¸ˆà¸­à¸‡à¸¥à¹ˆà¸§à¸‡à¸«à¸™à¹‰à¸² 30 à¸§à¸±à¸™ à¸£à¸±à¸šà¸ªà¹ˆà¸§à¸™à¸¥à¸”à¸—à¸±à¸™à¸—à¸µ 20% à¸ªà¸³à¸«à¸£à¸±à¸šà¸—à¸¸à¸à¸›à¸£à¸°à¹€à¸ à¸—à¸«à¹‰à¸­à¸‡à¸žà¸±à¸",
     imageUrl: "https://images.unsplash.com/photo-1578683010236-d716f9a3f461?w=800&q=80",
     discountPercentage: 20,
-    discountText: "ลด 20%",
+    discountText: "à¸¥à¸” 20%",
     validUntil: "2026-12-31",
     isActive: true,
     sortOrder: 1,
   },
   {
     id: "promo-2",
-    title: "แพ็กเกจฮันนีมูนสุดโรแมนติก",
-    description: "ดินเนอร์ใต้แสงเทียน + สปาคู่ + ห้องสวีท 2 คืน ในราคาพิเศษ",
+    title: "à¹à¸žà¹‡à¸à¹€à¸à¸ˆà¸®à¸±à¸™à¸™à¸µà¸¡à¸¹à¸™à¸ªà¸¸à¸”à¹‚à¸£à¹à¸¡à¸™à¸•à¸´à¸",
+    description: "à¸”à¸´à¸™à¹€à¸™à¸­à¸£à¹Œà¹ƒà¸•à¹‰à¹à¸ªà¸‡à¹€à¸—à¸µà¸¢à¸™ + à¸ªà¸›à¸²à¸„à¸¹à¹ˆ + à¸«à¹‰à¸­à¸‡à¸ªà¸§à¸µà¸— 2 à¸„à¸·à¸™ à¹ƒà¸™à¸£à¸²à¸„à¸²à¸žà¸´à¹€à¸¨à¸©",
     imageUrl: "https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?w=800&q=80",
     discountPercentage: null,
-    discountText: "ราคาพิเศษ",
+    discountText: "à¸£à¸²à¸„à¸²à¸žà¸´à¹€à¸¨à¸©",
     validUntil: "2026-09-30",
     isActive: true,
     sortOrder: 2,
   },
   {
     id: "promo-3",
-    title: "พัก 3 คืน แถม 1 คืน",
-    description: "เข้าพัก 3 คืนขึ้นไป รับฟรี 1 คืน สำหรับวันธรรมดา (จันทร์-พฤหัส)",
+    title: "à¸žà¸±à¸ 3 à¸„à¸·à¸™ à¹à¸–à¸¡ 1 à¸„à¸·à¸™",
+    description: "à¹€à¸‚à¹‰à¸²à¸žà¸±à¸ 3 à¸„à¸·à¸™à¸‚à¸¶à¹‰à¸™à¹„à¸› à¸£à¸±à¸šà¸Ÿà¸£à¸µ 1 à¸„à¸·à¸™ à¸ªà¸³à¸«à¸£à¸±à¸šà¸§à¸±à¸™à¸˜à¸£à¸£à¸¡à¸”à¸² (à¸ˆà¸±à¸™à¸—à¸£à¹Œ-à¸žà¸¤à¸«à¸±à¸ª)",
     imageUrl: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&q=80",
     discountPercentage: null,
-    discountText: "แถม 1 คืน",
+    discountText: "à¹à¸–à¸¡ 1 à¸„à¸·à¸™",
     validUntil: "2026-11-30",
     isActive: true,
     sortOrder: 3,
@@ -81,10 +81,10 @@ const promotions: Promotion[] = [
 const roomTypes: RoomTypeDisplay[] = [
   {
     id: "room-1",
-    name: "Valley Deluxe",
+    name: "Arkkarawin Deluxe",
     description:
-      "ห้องพักขนาดกว้างขวาง 45 ตร.ม. ตกแต่งด้วยโทนสีธรรมชาติ พร้อมระเบียงส่วนตัวที่มองเห็นวิวหุบเขาแบบพาโนรามา ห้องน้ำหินอ่อนพร้อมอ่างอาบน้ำแยกจากโซนฝักบัว",
-    shortDescription: "ห้องดีลักซ์กว้างขวาง พร้อมวิวหุบเขา",
+      "à¸«à¹‰à¸­à¸‡à¸žà¸±à¸à¸‚à¸™à¸²à¸”à¸à¸§à¹‰à¸²à¸‡à¸‚à¸§à¸²à¸‡ 45 à¸•à¸£.à¸¡. à¸•à¸à¹à¸•à¹ˆà¸‡à¸”à¹‰à¸§à¸¢à¹‚à¸—à¸™à¸ªà¸µà¸˜à¸£à¸£à¸¡à¸Šà¸²à¸•à¸´ à¸žà¸£à¹‰à¸­à¸¡à¸£à¸°à¹€à¸šà¸µà¸¢à¸‡à¸ªà¹ˆà¸§à¸™à¸•à¸±à¸§à¸—à¸µà¹ˆà¸¡à¸­à¸‡à¹€à¸«à¹‡à¸™à¸§à¸´à¸§à¸«à¸¸à¸šà¹€à¸‚à¸²à¹à¸šà¸šà¸žà¸²à¹‚à¸™à¸£à¸²à¸¡à¸² à¸«à¹‰à¸­à¸‡à¸™à¹‰à¸³à¸«à¸´à¸™à¸­à¹ˆà¸­à¸™à¸žà¸£à¹‰à¸­à¸¡à¸­à¹ˆà¸²à¸‡à¸­à¸²à¸šà¸™à¹‰à¸³à¹à¸¢à¸à¸ˆà¸²à¸à¹‚à¸‹à¸™à¸à¸±à¸à¸šà¸±à¸§",
+    shortDescription: "à¸«à¹‰à¸­à¸‡à¸”à¸µà¸¥à¸±à¸à¸‹à¹Œà¸à¸§à¹‰à¸²à¸‡à¸‚à¸§à¸²à¸‡ à¸žà¸£à¹‰à¸­à¸¡à¸§à¸´à¸§à¸«à¸¸à¸šà¹€à¸‚à¸²",
     coverImageUrl: "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800&q=80",
     galleryUrls: [
       "https://images.unsplash.com/photo-1590490360182-c33d57733427?w=800&q=80",
@@ -95,12 +95,12 @@ const roomTypes: RoomTypeDisplay[] = [
     bedType: "King Size",
     roomSize: 45,
     amenities: [
-      { icon: "wifi", label: "Wi-Fi ฟรี" },
+      { icon: "wifi", label: "Wi-Fi à¸Ÿà¸£à¸µ" },
       { icon: "tv", label: "Smart TV 55\"" },
-      { icon: "bath", label: "อ่างอาบน้ำ" },
-      { icon: "coffee", label: "ชา/กาแฟฟรี" },
-      { icon: "ac", label: "เครื่องปรับอากาศ" },
-      { icon: "balcony", label: "ระเบียงส่วนตัว" },
+      { icon: "bath", label: "à¸­à¹ˆà¸²à¸‡à¸­à¸²à¸šà¸™à¹‰à¸³" },
+      { icon: "coffee", label: "à¸Šà¸²/à¸à¸²à¹à¸Ÿà¸Ÿà¸£à¸µ" },
+      { icon: "ac", label: "à¹€à¸„à¸£à¸·à¹ˆà¸­à¸‡à¸›à¸£à¸±à¸šà¸­à¸²à¸à¸²à¸¨" },
+      { icon: "balcony", label: "à¸£à¸°à¹€à¸šà¸µà¸¢à¸‡à¸ªà¹ˆà¸§à¸™à¸•à¸±à¸§" },
     ],
     isActive: true,
     availableRoomsCount: 5,
@@ -109,8 +109,8 @@ const roomTypes: RoomTypeDisplay[] = [
     id: "room-2",
     name: "Mountain Suite",
     description:
-      "ห้องสวีทสุดหรู 65 ตร.ม. พร้อมห้องนั่งเล่นแยกเป็นสัดส่วน ระเบียงกว้างพร้อมจากุซซี่ส่วนตัว เหมาะสำหรับคู่รักที่ต้องการความเป็นส่วนตัวสูงสุด",
-    shortDescription: "สวีทหรูพร้อมจากุซซี่ส่วนตัว",
+      "à¸«à¹‰à¸­à¸‡à¸ªà¸§à¸µà¸—à¸ªà¸¸à¸”à¸«à¸£à¸¹ 65 à¸•à¸£.à¸¡. à¸žà¸£à¹‰à¸­à¸¡à¸«à¹‰à¸­à¸‡à¸™à¸±à¹ˆà¸‡à¹€à¸¥à¹ˆà¸™à¹à¸¢à¸à¹€à¸›à¹‡à¸™à¸ªà¸±à¸”à¸ªà¹ˆà¸§à¸™ à¸£à¸°à¹€à¸šà¸µà¸¢à¸‡à¸à¸§à¹‰à¸²à¸‡à¸žà¸£à¹‰à¸­à¸¡à¸ˆà¸²à¸à¸¸à¸‹à¸‹à¸µà¹ˆà¸ªà¹ˆà¸§à¸™à¸•à¸±à¸§ à¹€à¸«à¸¡à¸²à¸°à¸ªà¸³à¸«à¸£à¸±à¸šà¸„à¸¹à¹ˆà¸£à¸±à¸à¸—à¸µà¹ˆà¸•à¹‰à¸­à¸‡à¸à¸²à¸£à¸„à¸§à¸²à¸¡à¹€à¸›à¹‡à¸™à¸ªà¹ˆà¸§à¸™à¸•à¸±à¸§à¸ªà¸¹à¸‡à¸ªà¸¸à¸”",
+    shortDescription: "à¸ªà¸§à¸µà¸—à¸«à¸£à¸¹à¸žà¸£à¹‰à¸­à¸¡à¸ˆà¸²à¸à¸¸à¸‹à¸‹à¸µà¹ˆà¸ªà¹ˆà¸§à¸™à¸•à¸±à¸§",
     coverImageUrl: "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&q=80",
     galleryUrls: [
       "https://images.unsplash.com/photo-1582719478250-c89cae4dc85b?w=800&q=80",
@@ -121,14 +121,14 @@ const roomTypes: RoomTypeDisplay[] = [
     bedType: "King Size",
     roomSize: 65,
     amenities: [
-      { icon: "wifi", label: "Wi-Fi ฟรี" },
+      { icon: "wifi", label: "Wi-Fi à¸Ÿà¸£à¸µ" },
       { icon: "tv", label: "Smart TV 65\"" },
-      { icon: "jacuzzi", label: "จากุซซี่ส่วนตัว" },
+      { icon: "jacuzzi", label: "à¸ˆà¸²à¸à¸¸à¸‹à¸‹à¸µà¹ˆà¸ªà¹ˆà¸§à¸™à¸•à¸±à¸§" },
       { icon: "coffee", label: "Nespresso Machine" },
-      { icon: "ac", label: "เครื่องปรับอากาศ" },
-      { icon: "balcony", label: "ระเบียงกว้าง" },
-      { icon: "minibar", label: "มินิบาร์ฟรี" },
-      { icon: "robe", label: "เสื้อคลุมอาบน้ำ" },
+      { icon: "ac", label: "à¹€à¸„à¸£à¸·à¹ˆà¸­à¸‡à¸›à¸£à¸±à¸šà¸­à¸²à¸à¸²à¸¨" },
+      { icon: "balcony", label: "à¸£à¸°à¹€à¸šà¸µà¸¢à¸‡à¸à¸§à¹‰à¸²à¸‡" },
+      { icon: "minibar", label: "à¸¡à¸´à¸™à¸´à¸šà¸²à¸£à¹Œà¸Ÿà¸£à¸µ" },
+      { icon: "robe", label: "à¹€à¸ªà¸·à¹‰à¸­à¸„à¸¥à¸¸à¸¡à¸­à¸²à¸šà¸™à¹‰à¸³" },
     ],
     isActive: true,
     availableRoomsCount: 2,
@@ -137,8 +137,8 @@ const roomTypes: RoomTypeDisplay[] = [
     id: "room-3",
     name: "Family Villa",
     description:
-      "วิลล่าสำหรับครอบครัว 80 ตร.ม. มี 2 ห้องนอน ห้องนั่งเล่นกว้าง และสวนส่วนตัว พร้อมอุปกรณ์สำหรับเด็กเล็ก เหมาะสำหรับครอบครัว 4-6 ท่าน",
-    shortDescription: "วิลล่าครอบครัว 2 ห้องนอน พร้อมสวนส่วนตัว",
+      "à¸§à¸´à¸¥à¸¥à¹ˆà¸²à¸ªà¸³à¸«à¸£à¸±à¸šà¸„à¸£à¸­à¸šà¸„à¸£à¸±à¸§ 80 à¸•à¸£.à¸¡. à¸¡à¸µ 2 à¸«à¹‰à¸­à¸‡à¸™à¸­à¸™ à¸«à¹‰à¸­à¸‡à¸™à¸±à¹ˆà¸‡à¹€à¸¥à¹ˆà¸™à¸à¸§à¹‰à¸²à¸‡ à¹à¸¥à¸°à¸ªà¸§à¸™à¸ªà¹ˆà¸§à¸™à¸•à¸±à¸§ à¸žà¸£à¹‰à¸­à¸¡à¸­à¸¸à¸›à¸à¸£à¸“à¹Œà¸ªà¸³à¸«à¸£à¸±à¸šà¹€à¸”à¹‡à¸à¹€à¸¥à¹‡à¸ à¹€à¸«à¸¡à¸²à¸°à¸ªà¸³à¸«à¸£à¸±à¸šà¸„à¸£à¸­à¸šà¸„à¸£à¸±à¸§ 4-6 à¸—à¹ˆà¸²à¸™",
+    shortDescription: "à¸§à¸´à¸¥à¸¥à¹ˆà¸²à¸„à¸£à¸­à¸šà¸„à¸£à¸±à¸§ 2 à¸«à¹‰à¸­à¸‡à¸™à¸­à¸™ à¸žà¸£à¹‰à¸­à¸¡à¸ªà¸§à¸™à¸ªà¹ˆà¸§à¸™à¸•à¸±à¸§",
     coverImageUrl: "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
     galleryUrls: [
       "https://images.unsplash.com/photo-1566073771259-6a8506099945?w=800&q=80",
@@ -149,14 +149,14 @@ const roomTypes: RoomTypeDisplay[] = [
     bedType: "King + Twin",
     roomSize: 80,
     amenities: [
-      { icon: "wifi", label: "Wi-Fi ฟรี" },
+      { icon: "wifi", label: "Wi-Fi à¸Ÿà¸£à¸µ" },
       { icon: "tv", label: "Smart TV 65\"" },
-      { icon: "bath", label: "อ่างอาบน้ำ" },
-      { icon: "kitchen", label: "ครัวขนาดเล็ก" },
-      { icon: "ac", label: "เครื่องปรับอากาศ" },
-      { icon: "garden", label: "สวนส่วนตัว" },
-      { icon: "crib", label: "เตียงเด็ก" },
-      { icon: "parking", label: "ที่จอดรถส่วนตัว" },
+      { icon: "bath", label: "à¸­à¹ˆà¸²à¸‡à¸­à¸²à¸šà¸™à¹‰à¸³" },
+      { icon: "kitchen", label: "à¸„à¸£à¸±à¸§à¸‚à¸™à¸²à¸”à¹€à¸¥à¹‡à¸" },
+      { icon: "ac", label: "à¹€à¸„à¸£à¸·à¹ˆà¸­à¸‡à¸›à¸£à¸±à¸šà¸­à¸²à¸à¸²à¸¨" },
+      { icon: "garden", label: "à¸ªà¸§à¸™à¸ªà¹ˆà¸§à¸™à¸•à¸±à¸§" },
+      { icon: "crib", label: "à¹€à¸•à¸µà¸¢à¸‡à¹€à¸”à¹‡à¸" },
+      { icon: "parking", label: "à¸—à¸µà¹ˆà¸ˆà¸­à¸”à¸£à¸–à¸ªà¹ˆà¸§à¸™à¸•à¸±à¸§" },
     ],
     isActive: true,
     availableRoomsCount: 0,
@@ -167,7 +167,7 @@ const contacts: ContactInfo[] = [
   {
     id: "contact-1",
     type: "phone",
-    label: "โทรศัพท์",
+    label: "à¹‚à¸—à¸£à¸¨à¸±à¸žà¸—à¹Œ",
     value: "+66 81 234 5678",
     iconUrl: null,
     sortOrder: 1,
@@ -175,8 +175,8 @@ const contacts: ContactInfo[] = [
   {
     id: "contact-2",
     type: "email",
-    label: "อีเมล",
-    value: "reservation@valleyretreat.com",
+    label: "à¸­à¸µà¹€à¸¡à¸¥",
+    value: "reservation@arkkarawin.com",
     iconUrl: null,
     sortOrder: 2,
   },
@@ -184,7 +184,7 @@ const contacts: ContactInfo[] = [
     id: "contact-3",
     type: "line",
     label: "LINE",
-    value: "@valleyretreat",
+    value: "@arkkarawin",
     iconUrl: null,
     sortOrder: 3,
   },
@@ -200,7 +200,7 @@ const contacts: ContactInfo[] = [
     id: "contact-5",
     type: "instagram",
     label: "Instagram",
-    value: "@valleyretreat",
+    value: "@arkkarawin",
     iconUrl: null,
     sortOrder: 5,
   },
@@ -209,8 +209,8 @@ const contacts: ContactInfo[] = [
 const attractions: LocalAttraction[] = [
   {
     id: "attr-1",
-    name: "น้ำตกห้วยแก้ว",
-    description: "น้ำตก 7 ชั้นที่สวยงาม ห่างจากรีสอร์ตเพียง 3 กม. สามารถเดินป่าระยะสั้นถึงได้",
+    name: "à¸™à¹‰à¸³à¸•à¸à¸«à¹‰à¸§à¸¢à¹à¸à¹‰à¸§",
+    description: "à¸™à¹‰à¸³à¸•à¸ 7 à¸Šà¸±à¹‰à¸™à¸—à¸µà¹ˆà¸ªà¸§à¸¢à¸‡à¸²à¸¡ à¸«à¹ˆà¸²à¸‡à¸ˆà¸²à¸à¸£à¸µà¸ªà¸­à¸£à¹Œà¸•à¹€à¸žà¸µà¸¢à¸‡ 3 à¸à¸¡. à¸ªà¸²à¸¡à¸²à¸£à¸–à¹€à¸”à¸´à¸™à¸›à¹ˆà¸²à¸£à¸°à¸¢à¸°à¸ªà¸±à¹‰à¸™à¸–à¸¶à¸‡à¹„à¸”à¹‰",
     imageUrl: "https://images.unsplash.com/photo-1542314831-068cd1dbfeeb?w=600&q=80",
     distanceKm: 3,
     mapUrl: null,
@@ -218,8 +218,8 @@ const attractions: LocalAttraction[] = [
   },
   {
     id: "attr-2",
-    name: "จุดชมวิวดอยผาหม่น",
-    description: "จุดชมทะเลหมอกยามเช้าที่สวยที่สุดในพื้นที่ ระยะทาง 12 กม. จากรีสอร์ต",
+    name: "à¸ˆà¸¸à¸”à¸Šà¸¡à¸§à¸´à¸§à¸”à¸­à¸¢à¸œà¸²à¸«à¸¡à¹ˆà¸™",
+    description: "à¸ˆà¸¸à¸”à¸Šà¸¡à¸—à¸°à¹€à¸¥à¸«à¸¡à¸­à¸à¸¢à¸²à¸¡à¹€à¸Šà¹‰à¸²à¸—à¸µà¹ˆà¸ªà¸§à¸¢à¸—à¸µà¹ˆà¸ªà¸¸à¸”à¹ƒà¸™à¸žà¸·à¹‰à¸™à¸—à¸µà¹ˆ à¸£à¸°à¸¢à¸°à¸—à¸²à¸‡ 12 à¸à¸¡. à¸ˆà¸²à¸à¸£à¸µà¸ªà¸­à¸£à¹Œà¸•",
     imageUrl: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=600&q=80",
     distanceKm: 12,
     mapUrl: null,
@@ -227,8 +227,8 @@ const attractions: LocalAttraction[] = [
   },
   {
     id: "attr-3",
-    name: "ไร่ชาเขียวหุบเขา",
-    description: "ไร่ชาออร์แกนิกพร้อมคาเฟ่ชมวิว สามารถนั่งจิบชาชมพระอาทิตย์ตกได้",
+    name: "à¹„à¸£à¹ˆà¸Šà¸²à¹€à¸‚à¸µà¸¢à¸§à¸«à¸¸à¸šà¹€à¸‚à¸²",
+    description: "à¹„à¸£à¹ˆà¸Šà¸²à¸­à¸­à¸£à¹Œà¹à¸à¸™à¸´à¸à¸žà¸£à¹‰à¸­à¸¡à¸„à¸²à¹€à¸Ÿà¹ˆà¸Šà¸¡à¸§à¸´à¸§ à¸ªà¸²à¸¡à¸²à¸£à¸–à¸™à¸±à¹ˆà¸‡à¸ˆà¸´à¸šà¸Šà¸²à¸Šà¸¡à¸žà¸£à¸°à¸­à¸²à¸—à¸´à¸•à¸¢à¹Œà¸•à¸à¹„à¸”à¹‰",
     imageUrl: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=600&q=80",
     distanceKm: 5,
     mapUrl: null,
@@ -237,11 +237,11 @@ const attractions: LocalAttraction[] = [
 ];
 
 const hotelConfig: HotelConfig = {
-  name: "Valley Retreat",
-  slug: "valley-retreat",
-  description: "Valley Retreat คือรีสอร์ตหรูที่ซ่อนตัวอยู่ท่ามกลางหุบเขาอันเงียบสงบ โอบล้อมด้วยธรรมชาติที่บริสุทธิ์ เรามอบประสบการณ์การพักผ่อนที่ผสมผสานความหรูหราเข้ากับความเรียบง่ายของธรรมชาติได้อย่างลงตัว ทุกห้องพักถูกออกแบบมาเพื่อให้คุณได้สัมผัสกับวิวทิวทัศน์ของภูเขาและป่าไม้อย่างใกล้ชิด พร้อมบริการระดับพรีเมียมที่จะทำให้การเข้าพักของคุณเป็นช่วงเวลาที่น่าจดจำ",
-  address: "123 หมู่ 5 ต.ห้วยแก้ว อ.แม่ออน จ.เชียงใหม่ 50130",
-  contactEmail: "reservation@valleyretreat.com",
+  name: "Arkkarawin",
+  slug: "arkkarawin",
+  description: "Arkkarawin à¸„à¸·à¸­à¸£à¸µà¸ªà¸­à¸£à¹Œà¸•à¸«à¸£à¸¹à¸—à¸µà¹ˆà¸‹à¹ˆà¸­à¸™à¸•à¸±à¸§à¸­à¸¢à¸¹à¹ˆà¸—à¹ˆà¸²à¸¡à¸à¸¥à¸²à¸‡à¸«à¸¸à¸šà¹€à¸‚à¸²à¸­à¸±à¸™à¹€à¸‡à¸µà¸¢à¸šà¸ªà¸‡à¸š à¹‚à¸­à¸šà¸¥à¹‰à¸­à¸¡à¸”à¹‰à¸§à¸¢à¸˜à¸£à¸£à¸¡à¸Šà¸²à¸•à¸´à¸—à¸µà¹ˆà¸šà¸£à¸´à¸ªà¸¸à¸—à¸˜à¸´à¹Œ à¹€à¸£à¸²à¸¡à¸­à¸šà¸›à¸£à¸°à¸ªà¸šà¸à¸²à¸£à¸“à¹Œà¸à¸²à¸£à¸žà¸±à¸à¸œà¹ˆà¸­à¸™à¸—à¸µà¹ˆà¸œà¸ªà¸¡à¸œà¸ªà¸²à¸™à¸„à¸§à¸²à¸¡à¸«à¸£à¸¹à¸«à¸£à¸²à¹€à¸‚à¹‰à¸²à¸à¸±à¸šà¸„à¸§à¸²à¸¡à¹€à¸£à¸µà¸¢à¸šà¸‡à¹ˆà¸²à¸¢à¸‚à¸­à¸‡à¸˜à¸£à¸£à¸¡à¸Šà¸²à¸•à¸´à¹„à¸”à¹‰à¸­à¸¢à¹ˆà¸²à¸‡à¸¥à¸‡à¸•à¸±à¸§ à¸—à¸¸à¸à¸«à¹‰à¸­à¸‡à¸žà¸±à¸à¸–à¸¹à¸à¸­à¸­à¸à¹à¸šà¸šà¸¡à¸²à¹€à¸žà¸·à¹ˆà¸­à¹ƒà¸«à¹‰à¸„à¸¸à¸“à¹„à¸”à¹‰à¸ªà¸±à¸¡à¸œà¸±à¸ªà¸à¸±à¸šà¸§à¸´à¸§à¸—à¸´à¸§à¸—à¸±à¸¨à¸™à¹Œà¸‚à¸­à¸‡à¸ à¸¹à¹€à¸‚à¸²à¹à¸¥à¸°à¸›à¹ˆà¸²à¹„à¸¡à¹‰à¸­à¸¢à¹ˆà¸²à¸‡à¹ƒà¸à¸¥à¹‰à¸Šà¸´à¸” à¸žà¸£à¹‰à¸­à¸¡à¸šà¸£à¸´à¸à¸²à¸£à¸£à¸°à¸”à¸±à¸šà¸žà¸£à¸µà¹€à¸¡à¸µà¸¢à¸¡à¸—à¸µà¹ˆà¸ˆà¸°à¸—à¸³à¹ƒà¸«à¹‰à¸à¸²à¸£à¹€à¸‚à¹‰à¸²à¸žà¸±à¸à¸‚à¸­à¸‡à¸„à¸¸à¸“à¹€à¸›à¹‡à¸™à¸Šà¹ˆà¸§à¸‡à¹€à¸§à¸¥à¸²à¸—à¸µà¹ˆà¸™à¹ˆà¸²à¸ˆà¸”à¸ˆà¸³",
+  address: "123 à¸«à¸¡à¸¹à¹ˆ 5 à¸•.à¸«à¹‰à¸§à¸¢à¹à¸à¹‰à¸§ à¸­.à¹à¸¡à¹ˆà¸­à¸­à¸™ à¸ˆ.à¹€à¸Šà¸µà¸¢à¸‡à¹ƒà¸«à¸¡à¹ˆ 50130",
+  contactEmail: "reservation@arkkarawin.com",
   latitude: 18.7883,
   longitude: 98.9853,
   navLinks: [
@@ -263,11 +263,11 @@ const hotelConfig: HotelConfig = {
     bookCtaText: "Experience the perfect blend of luxury and nature. Book directly for the best rates.",
     bookCtaButton: "Reserve Now",
     quickLinksTitle: "Quick Links",
-    copyright: "Valley Retreat. All rights reserved.",
+    copyright: "Arkkarawin. All rights reserved.",
   },
   promptPay: {
     accountId: "0812345678",
-    accountName: "Valley Retreat Co., Ltd.",
+    accountName: "Arkkarawin Co., Ltd.",
     type: "phone",
   },
 };
@@ -306,7 +306,7 @@ export function generateBookingReference(): string {
   return `${prefix}-${timestamp}-${random}`;
 }
 
-// Mock booking storage (ในอนาคตเปลี่ยนเป็น Supabase query)
+// Mock booking storage (à¹ƒà¸™à¸­à¸™à¸²à¸„à¸•à¹€à¸›à¸¥à¸µà¹ˆà¸¢à¸™à¹€à¸›à¹‡à¸™ Supabase query)
 export interface MockBooking {
   bookingRef: string;
   guestName: string;
@@ -328,10 +328,10 @@ export interface MockBooking {
 const mockBookings: MockBooking[] = [
   {
     bookingRef: "VR-DEMO01-ABCD",
-    guestName: "สมชาย ใจดี",
+    guestName: "à¸ªà¸¡à¸Šà¸²à¸¢ à¹ƒà¸ˆà¸”à¸µ",
     guestEmail: "somchai@example.com",
     guestPhone: "+66 81 234 5678",
-    roomName: "Valley Deluxe",
+    roomName: "Arkkarawin Deluxe",
     checkIn: "2026-06-01",
     checkOut: "2026-06-03",
     totalNights: 2,
@@ -379,3 +379,4 @@ export function calculateNights(checkIn: string, checkOut: string): number {
   const diffTime = checkOutDate.getTime() - checkInDate.getTime();
   return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
 }
+

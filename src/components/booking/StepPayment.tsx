@@ -4,8 +4,10 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
 import type { BookingLabels } from "./booking-i18n";
+import { validatePromotionCode } from "@/app/actions/booking";
 
 interface StepPaymentProps {
+  hotelId: string;
   room: RoomTypeDisplay;
   checkIn: string;
   checkOut: string;
@@ -13,7 +15,7 @@ interface StepPaymentProps {
   adults: number;
   childrenCount: number;
   guest: GuestInfo;
-  onConfirm: (slipUrl: string) => void;
+  onConfirm: (slipUrl: string, promotionCode?: string) => void;
   onBack: () => void;
   labels: BookingLabels;
   error?: string;
@@ -26,7 +28,13 @@ function formatPrice(price: number): string {
 
 export default function StepPayment(props: StepPaymentProps) {
   const labels = props.labels.payment;
-  const totalAmount = props.room.basePrice * props.totalNights;
+  const subtotalAmount = props.room.stayTotal ?? props.room.basePrice * props.totalNights;
+  const [promotionCode, setPromotionCode] = useState("");
+  const [discountAmount, setDiscountAmount] = useState(0);
+  const [discountLabel, setDiscountLabel] = useState("");
+  const [discountMessage, setDiscountMessage] = useState("");
+  const [isCheckingDiscount, setIsCheckingDiscount] = useState(false);
+  const totalAmount = Math.max(0, subtotalAmount - discountAmount);
   const [qrDataUrl, setQrDataUrl] = useState("");
   const [accountName, setAccountName] = useState("");
   const [accountId, setAccountId] = useState("");
@@ -45,9 +53,11 @@ export default function StepPayment(props: StepPaymentProps) {
       fetch("/api/promptpay-qr", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount: totalAmount }),
+        body: JSON.stringify({ amount: totalAmount, hotelId: props.hotelId }),
       })
-        .then(function (res) { return res.json(); })
+        .then(function (res) {
+          return res.json();
+        })
         .then(function (data) {
           if (data.error) {
             setError(data.error);
@@ -67,7 +77,7 @@ export default function StepPayment(props: StepPaymentProps) {
     return function () {
       window.clearTimeout(timeoutId);
     };
-  }, [labels.qrError, totalAmount]);
+  }, [labels.qrError, props.hotelId, totalAmount]);
 
   function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -79,6 +89,34 @@ export default function StepPayment(props: StepPaymentProps) {
       setSlipPreview(ev.target?.result as string);
     };
     reader.readAsDataURL(file);
+  }
+
+  async function handleApplyPromotion() {
+    const code = promotionCode.trim().toUpperCase();
+    if (!code) {
+      setDiscountAmount(0);
+      setDiscountLabel("");
+      setDiscountMessage("กรุณากรอก code ส่วนลด");
+      return;
+    }
+
+    setIsCheckingDiscount(true);
+    const result = await validatePromotionCode({
+      hotelId: props.hotelId,
+      code,
+      subtotal: subtotalAmount,
+    });
+    setIsCheckingDiscount(false);
+
+    if (result.valid) {
+      setDiscountAmount(result.discountAmount);
+      setDiscountLabel(result.title || code);
+      setDiscountMessage("ใช้ code ส่วนลดสำเร็จ");
+    } else {
+      setDiscountAmount(0);
+      setDiscountLabel("");
+      setDiscountMessage(result.message || "code ส่วนลดไม่ถูกต้อง");
+    }
   }
 
   async function handleConfirm() {
@@ -101,7 +139,10 @@ export default function StepPayment(props: StepPaymentProps) {
         return;
       }
 
-      props.onConfirm(result.url);
+      props.onConfirm(
+        result.url,
+        discountAmount > 0 ? promotionCode.trim().toUpperCase() : undefined
+      );
     } catch {
       setUploadError("Unable to upload payment slip");
     } finally {
@@ -117,6 +158,37 @@ export default function StepPayment(props: StepPaymentProps) {
           <p className="text-sm text-earth mb-6">{labels.subtitle}</p>
 
           <div className="flex flex-col items-center">
+            <div className="mb-6 w-full max-w-sm rounded-xl border border-stone-light bg-cream/50 p-4">
+              <label className="block text-xs font-semibold uppercase tracking-wider text-earth mb-2">
+                Code ส่วนลด
+              </label>
+              <input
+                type="text"
+                value={promotionCode}
+                onChange={(e) => {
+                  setPromotionCode(e.target.value.toUpperCase());
+                  setDiscountAmount(0);
+                  setDiscountLabel("");
+                  setDiscountMessage("");
+                }}
+                className="w-full rounded-lg border border-stone bg-white px-3 py-2 text-sm text-forest-dark outline-none transition-colors focus:border-gold"
+                placeholder="กรอก code ส่วนลด"
+              />
+              <button
+                type="button"
+                onClick={handleApplyPromotion}
+                disabled={isCheckingDiscount || !promotionCode.trim()}
+                className="mt-3 w-full rounded-lg bg-forest px-3 py-2 text-sm font-semibold text-white transition-colors hover:bg-forest-dark disabled:cursor-not-allowed disabled:bg-stone"
+              >
+                {isCheckingDiscount ? "กำลังตรวจสอบ..." : "ใช้ส่วนลด"}
+              </button>
+              {(discountMessage || isCheckingDiscount) && (
+                <p className={"mt-2 text-xs " + (discountAmount > 0 ? "text-forest" : "text-earth-light")}>
+                  {isCheckingDiscount ? "กำลังตรวจสอบ code..." : discountMessage}
+                </p>
+              )}
+            </div>
+
             {loading && (
               <div className="w-64 h-64 bg-stone-light/50 rounded-xl flex items-center justify-center animate-pulse">
                 <span className="text-earth text-sm">{labels.generatingQr}</span>
@@ -150,6 +222,11 @@ export default function StepPayment(props: StepPaymentProps) {
 
             <div className="mt-6 bg-gold/10 rounded-xl px-6 py-4 text-center w-full max-w-sm">
               <p className="text-xs text-earth uppercase tracking-wider">{labels.amountToPay}</p>
+              {discountAmount > 0 && (
+                <p className="text-sm text-earth-light line-through mt-1">
+                  {props.labels.shared.thb + formatPrice(subtotalAmount)}
+                </p>
+              )}
               <p className="text-3xl font-bold text-gold mt-1">
                 {props.labels.shared.thb + formatPrice(totalAmount)}
               </p>
@@ -185,7 +262,18 @@ export default function StepPayment(props: StepPaymentProps) {
               </div>
             ) : (
               <label className="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-stone rounded-xl cursor-pointer hover:border-gold hover:bg-gold/5 transition-all">
-                <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-earth mb-2">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="32"
+                  height="32"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  className="text-earth mb-2"
+                >
                   <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                   <polyline points="17 8 12 3 7 8" />
                   <line x1="12" y1="3" x2="12" y2="15" />
@@ -222,9 +310,18 @@ export default function StepPayment(props: StepPaymentProps) {
             <button
               onClick={handleConfirm}
               disabled={!slipFile || props.isConfirming || isUploadingSlip}
-              className={"flex-1 px-6 py-3 rounded-lg font-semibold transition-all " + (slipFile && !props.isConfirming && !isUploadingSlip ? "bg-gold text-white hover:bg-gold-dark shadow-lg shadow-gold/20 cursor-pointer" : "bg-stone-light text-earth cursor-not-allowed")}
+              className={
+                "flex-1 px-6 py-3 rounded-lg font-semibold transition-all " +
+                (slipFile && !props.isConfirming && !isUploadingSlip
+                  ? "bg-gold text-white hover:bg-gold-dark shadow-lg shadow-gold/20 cursor-pointer"
+                  : "bg-stone-light text-earth cursor-not-allowed")
+              }
             >
-              {isUploadingSlip ? "กำลังอัปโหลดสลิป..." : props.isConfirming ? "กำลังบันทึกการจอง..." : labels.confirm}
+              {isUploadingSlip
+                ? "กำลังอัปโหลดสลิป..."
+                : props.isConfirming
+                ? "กำลังบันทึกการจอง..."
+                : labels.confirm}
             </button>
           </div>
         </div>
@@ -234,9 +331,17 @@ export default function StepPayment(props: StepPaymentProps) {
         <div className="bg-white rounded-xl p-5 shadow-md sticky top-24">
           <h4 className="font-semibold text-forest-dark mb-3">{labels.summary}</h4>
           <div className="relative h-32 rounded-lg overflow-hidden mb-3">
-            <Image src={props.room.coverImageUrl} alt={props.room.name} fill className="object-cover" sizes="300px" />
+            <Image
+              src={props.room.coverImageUrl}
+              alt={props.room.name}
+              fill
+              className="object-cover"
+              sizes="300px"
+            />
           </div>
-          <p className="font-[family-name:var(--font-serif)] text-lg font-semibold text-forest-dark">{props.room.name}</p>
+          <p className="font-[family-name:var(--font-serif)] text-lg font-semibold text-forest-dark">
+            {props.room.name}
+          </p>
           <div className="mt-3 space-y-2 text-sm text-earth">
             <div className="flex justify-between">
               <span>{props.labels.shared.checkIn}</span>
@@ -252,13 +357,27 @@ export default function StepPayment(props: StepPaymentProps) {
             </div>
             <div className="flex justify-between">
               <span>{labels.duration}</span>
-              <span className="font-medium text-forest-dark">{props.labels.guestInfo.nights(props.totalNights)}</span>
+              <span className="font-medium text-forest-dark">
+                {props.labels.guestInfo.nights(props.totalNights)}
+              </span>
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-stone-light">
             <div className="flex justify-between text-sm text-earth">
-              <span>{props.labels.shared.thb + formatPrice(props.room.basePrice) + " x " + props.labels.guestInfo.nights(props.totalNights)}</span>
+              <span>
+                {props.labels.shared.thb +
+                  formatPrice(props.room.basePrice) +
+                  " x " +
+                  props.labels.guestInfo.nights(props.totalNights)}
+              </span>
+              <span>{props.labels.shared.thb + formatPrice(subtotalAmount)}</span>
             </div>
+            {discountAmount > 0 && (
+              <div className="flex justify-between mt-2 text-sm text-forest">
+                <span>{"ส่วนลด " + (discountLabel ? "(" + discountLabel + ")" : "")}</span>
+                <span>{"-" + props.labels.shared.thb + formatPrice(discountAmount)}</span>
+              </div>
+            )}
             <div className="flex justify-between mt-2 text-lg font-bold text-forest-dark">
               <span>{labels.total}</span>
               <span className="text-gold">{props.labels.shared.thb + formatPrice(totalAmount)}</span>

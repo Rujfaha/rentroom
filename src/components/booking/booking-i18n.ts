@@ -175,7 +175,7 @@ export const bookingMessages: Record<BookingLocale, BookingLabels> = {
     },
     confirmation: {
       title: "ยืนยันการจองแล้ว",
-      subtitle: "ขอบคุณที่เลือกพักกับ Valley Retreat",
+      subtitle: "ขอบคุณที่เลือกพักกับ Arkkarawin",
       reference: "รหัสการจอง",
       bookingDetails: "รายละเอียดการจอง",
       room: "ห้องพัก",
@@ -274,7 +274,7 @@ export const bookingMessages: Record<BookingLocale, BookingLabels> = {
     },
     confirmation: {
       title: "Booking Confirmed!",
-      subtitle: "Thank you for choosing Valley Retreat",
+      subtitle: "Thank you for choosing Arkkarawin",
       reference: "Booking Reference",
       bookingDetails: "Booking Details",
       room: "Room",

@@ -171,6 +171,7 @@ export function RoomManagement({ hotelId, initialRoomTypes, initialRooms }: Room
           roomTypes={roomTypes}
           rooms={rooms}
           onRoomTypesChange={setRoomTypes}
+          onRoomsChange={setRooms}
         />
       ) : (
         <RoomSection

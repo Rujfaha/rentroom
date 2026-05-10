@@ -1,11 +1,263 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { updatePromotion, deletePromotion } from "@/app/actions/promotions";
-import { Plus, Save, Trash2, Edit2, X, Image as ImageIcon, Calendar, Percent } from "lucide-react";
+import { Plus, Save, Trash2, Edit2, Link, Upload, X, Calendar, Percent } from "lucide-react";
+
+function PromotionImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isSaving?: boolean }) {
+  const safeDefaultUrl = defaultUrl ?? "";
+  const [tab, setTab] = useState<"url" | "upload">("url");
+  const [tempUrl, setTempUrl] = useState("");
+  const [imageUrl, setImageUrl] = useState(safeDefaultUrl);
+  const [preview, setPreview] = useState(safeDefaultUrl);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const localPreview = URL.createObjectURL(file);
+    setPreview(localPreview);
+    setUploadError("");
+    setUploading(true);
+
+    const fd = new FormData();
+    fd.append("file", file);
+    fd.append("folder", "promotions");
+
+    try {
+      const res = await fetch("/api/cms/upload-image", { method: "POST", body: fd });
+      const result = await res.json();
+      setUploading(false);
+
+      if (result.error) {
+        setUploadError(result.error);
+        setPreview(imageUrl);
+      } else if (result.url) {
+        setImageUrl(result.url);
+        setPreview(result.url);
+      }
+    } catch {
+      setUploading(false);
+      setUploadError("อัปโหลดไม่สำเร็จ");
+      setPreview(imageUrl);
+    }
+  };
+
+  const handleFetchExternalUrl = async () => {
+    if (!tempUrl.trim()) {
+      setUploadError("กรุณาใส่ URL");
+      return;
+    }
+
+    setUploadError("");
+    setUploading(true);
+    setPreview(tempUrl);
+
+    const fd = new FormData();
+    fd.append("url", tempUrl);
+    fd.append("folder", "promotions");
+
+    try {
+      const res = await fetch("/api/cms/upload-image", { method: "POST", body: fd });
+      const result = await res.json();
+      setUploading(false);
+
+      if (result.error) {
+        setUploadError(result.error);
+        setPreview(imageUrl);
+      } else if (result.url) {
+        setImageUrl(result.url);
+        setPreview(result.url);
+      }
+    } catch {
+      setUploading(false);
+      setUploadError("ไม่สามารถดาวน์โหลดรูปภาพจาก URL นี้ได้");
+      setPreview(imageUrl);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <input type="hidden" name="image_url" value={imageUrl ?? ""} />
+
+      <label className="block text-xs font-medium text-[#8b7355] mb-1">รูปภาพโปรโมชั่น</label>
+
+      <div className="flex gap-1 p-1 bg-[#f0ece4] rounded-lg">
+        <button
+          type="button"
+          onClick={() => setTab("url")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+            tab === "url" ? "bg-white text-[#1a3c2a] shadow-sm" : "text-[#8b7355] hover:text-[#1a3c2a]"
+          }`}
+        >
+          <Link className="w-3.5 h-3.5" />
+          URL
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("upload")}
+          className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-md text-xs font-medium transition-all cursor-pointer ${
+            tab === "upload" ? "bg-white text-[#1a3c2a] shadow-sm" : "text-[#8b7355] hover:text-[#1a3c2a]"
+          }`}
+        >
+          <Upload className="w-3.5 h-3.5" />
+          อัปโหลดไฟล์
+        </button>
+      </div>
+
+      {tab === "url" ? (
+        <div key="promotion-image-url" className="space-y-2">
+          <input
+            key="promotion-image-url-input"
+            type="text"
+            value={tempUrl ?? ""}
+            onChange={(e) => setTempUrl(e.target.value)}
+            disabled={uploading}
+            className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm disabled:opacity-60"
+            placeholder="https://example.com/promo.jpg"
+          />
+          <button
+            type="button"
+            onClick={handleFetchExternalUrl}
+            disabled={uploading || !tempUrl.trim()}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#1a3c2a] text-[#faf7f0] rounded-md text-sm font-medium hover:bg-[#0f2418] transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {uploading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-[#faf7f0]/30 border-t-[#faf7f0] rounded-full animate-spin" />
+                กำลังดาวน์โหลด...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4" />
+                บันทึก URL
+              </>
+            )}
+          </button>
+          {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
+        </div>
+      ) : (
+        <div key="promotion-image-upload">
+          <input
+            key="promotion-image-file-input"
+            ref={fileRef}
+            type="file"
+            accept="image/*"
+            onChange={handleFileChange}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={uploading}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 border-2 border-dashed border-[#e8e2d6] rounded-md text-sm text-[#8b7355] hover:border-[#1a3c2a]/30 hover:text-[#1a3c2a] hover:bg-[#faf7f0] transition-colors cursor-pointer disabled:opacity-60"
+          >
+            {uploading ? (
+              <>
+                <span className="w-4 h-4 border-2 border-[#1a3c2a]/30 border-t-[#1a3c2a] rounded-full animate-spin" />
+                กำลังอัปโหลด...
+              </>
+            ) : (
+              <>
+                <Upload className="w-4 h-4" />
+                เลือกไฟล์รูปภาพ
+              </>
+            )}
+          </button>
+          {uploadError && <p className="text-xs text-red-500 mt-1">{uploadError}</p>}
+        </div>
+      )}
+
+      {preview && !isSaving && (
+        <div className="relative mt-2 rounded-lg overflow-hidden border border-[#e8e2d6] h-28">
+          <img src={preview} alt="preview" className="w-full h-full object-cover" />
+          <button
+            type="button"
+            onClick={() => {
+              setImageUrl("");
+              setPreview("");
+              setTempUrl("");
+              if (fileRef.current) fileRef.current.value = "";
+            }}
+            className="absolute top-1.5 right-1.5 w-6 h-6 bg-black/50 hover:bg-black/70 rounded-full flex items-center justify-center cursor-pointer transition-colors"
+          >
+            <X className="w-3.5 h-3.5 text-white" />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DiscountFields({ promo }: { promo: any }) {
+  const [discountType, setDiscountType] = useState<"percent" | "fixed">(
+    promo.discount_type === "fixed" ? "fixed" : "percent"
+  );
+
+  return (
+    <>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div>
+          <label className="block text-xs font-medium text-[#8b7355] mb-1">รูปแบบส่วนลด</label>
+          <select
+            name="discount_type"
+            value={discountType}
+            onChange={(e) => setDiscountType(e.target.value === "fixed" ? "fixed" : "percent")}
+            className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
+          >
+            <option value="percent">เปอร์เซ็นต์ (%)</option>
+            <option value="fixed">ราคา (บาท)</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-[#8b7355] mb-1">รหัสส่วนลด</label>
+          <input
+            type="text"
+            name="discount_code"
+            defaultValue={promo.discount_code ?? ""}
+            className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm uppercase"
+            placeholder="เช่น SUMMER10"
+          />
+        </div>
+      </div>
+
+      {discountType === "percent" ? (
+        <div>
+          <label className="block text-xs font-medium text-[#8b7355] mb-1">ลดแบบเปอร์เซ็นต์ (%)</label>
+          <input
+            type="number"
+            name="discount_percentage"
+            min="0"
+            max="100"
+            step="0.01"
+            defaultValue={promo.discount_percentage ?? ""}
+            className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
+            placeholder="เช่น 10"
+          />
+        </div>
+      ) : (
+        <div>
+          <label className="block text-xs font-medium text-[#8b7355] mb-1">ลดเป็นราคา (บาท)</label>
+          <input
+            type="number"
+            name="discount_amount"
+            min="0"
+            step="0.01"
+            defaultValue={promo.discount_amount ?? ""}
+            className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
+            placeholder="เช่น 500"
+          />
+        </div>
+      )}
+    </>
+  );
+}
 
 export function PromotionEditor({ initialPromotions }: { initialPromotions: any[] }) {
-  const [promotions, setPromotions] = useState(initialPromotions);
+  const [promotions, setPromotions] = useState(initialPromotions ?? []);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 
@@ -29,7 +281,7 @@ export function PromotionEditor({ initialPromotions }: { initialPromotions: any[
   };
 
   const handleDelete = (id: string) => {
-    if (!confirm("Are you sure you want to delete this promotion?")) return;
+    if (!confirm("แน่ใจหรือไม่ว่าต้องการลบโปรโมชั่นนี้?")) return;
     startTransition(async () => {
       const result = await deletePromotion(id);
       if (!result.error) {
@@ -45,7 +297,7 @@ export function PromotionEditor({ initialPromotions }: { initialPromotions: any[
       <div className="flex justify-end">
         <button
           onClick={() => {
-            const newPromo = { id: "new", title: "", description: "", image_url: "", discount_text: "", valid_until: "", is_active: true };
+            const newPromo = { id: "new", title: "", description: "", image_url: "", discount_type: "percent", discount_percentage: "", discount_amount: "", discount_code: "", discount_text: "", valid_until: "", is_active: true };
             setPromotions([newPromo, ...promotions]);
             setEditingId("new");
           }}
@@ -56,9 +308,10 @@ export function PromotionEditor({ initialPromotions }: { initialPromotions: any[
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+      <div className="flex flex-wrap -mx-3">
         {promotions.map((promo) => (
-          <div key={promo.id} className="bg-white rounded-xl shadow-sm border border-[#e8e2d6] overflow-hidden flex flex-col relative">
+          <div key={promo.id} className={`w-full md:w-1/2 xl:w-1/3 px-3 mb-6 ${editingId !== null && editingId !== promo.id ? 'self-start' : ''}`}>
+            <div className="bg-white rounded-xl shadow-sm border border-[#e8e2d6] overflow-hidden flex flex-col relative h-full">
             {editingId === promo.id ? (
               <form onSubmit={(e) => handleSave(e, promo.id)} className="p-5 space-y-4 flex-1 flex flex-col">
                 <div>
@@ -66,7 +319,7 @@ export function PromotionEditor({ initialPromotions }: { initialPromotions: any[
                   <input
                     type="text"
                     name="title"
-                    defaultValue={promo.title}
+                    defaultValue={promo.title ?? ""}
                     required
                     className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
                   />
@@ -76,15 +329,16 @@ export function PromotionEditor({ initialPromotions }: { initialPromotions: any[
                   <input
                     type="text"
                     name="discount_text"
-                    defaultValue={promo.discount_text}
+                    defaultValue={promo.discount_text ?? ""}
                     className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
                   />
                 </div>
+                <DiscountFields promo={promo} />
                 <div>
                   <label className="block text-xs font-medium text-[#8b7355] mb-1">รายละเอียดเงื่อนไข</label>
                   <textarea
                     name="description"
-                    defaultValue={promo.description}
+                    defaultValue={promo.description ?? ""}
                     rows={2}
                     className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
                   />
@@ -98,22 +352,13 @@ export function PromotionEditor({ initialPromotions }: { initialPromotions: any[
                     className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-medium text-[#8b7355] mb-1">Image URL</label>
-                  <input
-                    type="url"
-                    name="image_url"
-                    defaultValue={promo.image_url}
-                    className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
-                    placeholder="https://example.com/promo.jpg"
-                  />
-                </div>
+                <PromotionImageInput defaultUrl={promo.image_url || ""} isSaving={isPending} />
                 <div className="flex items-center mt-2">
                   <input
                     type="checkbox"
                     id={`active-${promo.id}`}
                     name="is_active"
-                    defaultChecked={promo.is_active}
+                    defaultChecked={promo.is_active !== false}
                     className="w-4 h-4 text-[#1a3c2a] rounded border-[#e8e2d6] focus:ring-[#1a3c2a]"
                   />
                   <label htmlFor={`active-${promo.id}`} className="ml-2 text-sm text-[#2c2c2c]">เปิดใช้งานโปรโมชั่นนี้</label>
@@ -160,6 +405,11 @@ export function PromotionEditor({ initialPromotions }: { initialPromotions: any[
                       {promo.discount_text}
                     </div>
                   )}
+                  {promo.discount_code && (
+                    <div className="text-xs text-[#1a3c2a] bg-[#1a3c2a]/5 border border-[#1a3c2a]/10 rounded-md px-2 py-1 mb-2 w-fit">
+                      รหัส: {promo.discount_code}
+                    </div>
+                  )}
 
                   <p className="text-sm text-[#8b7355] line-clamp-3 mb-4">{promo.description || "-"}</p>
                   
@@ -187,11 +437,12 @@ export function PromotionEditor({ initialPromotions }: { initialPromotions: any[
                 </div>
               </>
             )}
+            </div>
           </div>
         ))}
 
         {promotions.length === 0 && (
-          <div className="col-span-full py-12 text-center border-2 border-dashed border-[#e8e2d6] rounded-xl text-[#a89279]">
+          <div className="w-full py-12 text-center border-2 border-dashed border-[#e8e2d6] rounded-xl text-[#a89279]">
             <Percent className="w-8 h-8 mx-auto mb-2 opacity-50" />
             <p>ยังไม่มีโปรโมชั่น</p>
           </div>

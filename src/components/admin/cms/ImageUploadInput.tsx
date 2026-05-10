@@ -38,7 +38,7 @@ export function ImageUploadInput({ folder, onUploadSuccess, defaultUrl = "" }: I
       setUploading(false);
 
       if (result.error) {
-      setUploadError(result.error || "Upload failed");
+        setUploadError(result.error || "อัปโหลดไม่สำเร็จ");
         setPreview(imageUrl);
       } else if (result.url) {
         setImageUrl(result.url);
@@ -47,7 +47,7 @@ export function ImageUploadInput({ folder, onUploadSuccess, defaultUrl = "" }: I
       }
     } catch {
       setUploading(false);
-      setUploadError("Upload failed");
+      setUploadError("อัปโหลดไม่สำเร็จ");
       setPreview(imageUrl);
     }
   };

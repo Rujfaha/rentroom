@@ -18,6 +18,7 @@ export interface Promotion {
   description: string;
   imageUrl: string;
   discountPercentage: number | null;
+  discountCode?: string | null;
   discountText: string | null;
   validUntil: string;
   isActive: boolean;
@@ -37,6 +38,7 @@ export interface RoomTypeDisplay {
   coverImageUrl: string;
   galleryUrls: string[];
   basePrice: number;
+  stayTotal?: number;
   maxGuests: number;
   bedType: string;
   roomSize: number;

@@ -4,11 +4,24 @@ import { createClient } from "@/lib/supabase/server";
 import { createSession, deleteSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import bcrypt from "bcryptjs";
-import type { UserRole } from "@/types/database.types";
+import type { User, UserRole } from "@/types/database.types";
 
 export type ActionState = {
   error?: string;
   success?: boolean;
+};
+
+type LoginUser = User & {
+  user_hotels?: Array<{
+    hotel_id: string;
+    hotels?: { name: string } | null;
+  }>;
+};
+
+type UsersUpdateQuery = {
+  update(values: Partial<User>): {
+    eq(column: string, value: string): Promise<unknown>;
+  };
 };
 
 export async function loginAction(
@@ -34,7 +47,11 @@ export async function loginAction(
     return { error: "ไม่พบผู้ใช้งาน หรือ ข้อมูลไม่ถูกต้อง" };
   }
 
-  const user = data as any;
+  const user = data as LoginUser;
+
+  if (!user.is_active) {
+    return { error: "บัญชีผู้ใช้งานนี้ถูกปิดการใช้งาน" };
+  }
 
   // Validate with bcrypt
   const isPasswordValid = await bcrypt.compare(password, user.password_hash);
@@ -43,8 +60,8 @@ export async function loginAction(
   }
 
   const role = user.role as UserRole;
-  let hotelId = null;
-  let hotelName = null;
+  let hotelId: string | null = null;
+  let hotelName: string | null = null;
 
   if (role !== "super_admin") {
     const userHotel = user.user_hotels?.[0];
@@ -52,7 +69,7 @@ export async function loginAction(
       return { error: "ผู้ใช้งานนี้ยังไม่ได้ผูกกับโรงแรมใดๆ" };
     }
     hotelId = userHotel.hotel_id;
-    hotelName = userHotel.hotels?.name;
+    hotelName = userHotel.hotels?.name ?? null;
   }
 
   // Create JWT session
@@ -64,14 +81,22 @@ export async function loginAction(
     fullName: user.full_name,
   });
 
+  await (supabase.from("users") as unknown as UsersUpdateQuery)
+    .update({ last_login_at: new Date().toISOString() })
+    .eq("id", user.id);
+
   // Redirect based on role
   if (role === "super_admin") {
     redirect("/superadmin");
   } else if (role === "staff") {
-    redirect("/admin/rooms/housekeeping");
+    redirect("/admin/rooms");
   } else {
     redirect("/admin");
   }
+}
+
+export async function expireSessionAction() {
+  await deleteSession();
 }
 
 export async function logoutAction() {

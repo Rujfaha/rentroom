@@ -31,8 +31,11 @@ const niramit = Niramit({
 });
 
 export const metadata: Metadata = {
-  title: "Valley Retreat — Luxury Mountain Resort",
-  description: "สัมผัสประสบการณ์การพักผ่อนท่ามกลางหุบเขาอันเงียบสงบ พร้อมห้องพักหรูหราและบริการระดับพรีเมียม",
+  title: {
+    default: "Arkkarawin",
+    template: "%s | Arkkarawin",
+  },
+  description: "ระบบจองห้องพักและจัดการที่พัก",
 };
 
 export default function RootLayout({

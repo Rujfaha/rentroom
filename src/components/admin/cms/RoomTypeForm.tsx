@@ -249,7 +249,7 @@ export function RoomTypeForm({ roomType, onSave, onCancel }: RoomTypeFormProps) 
           className="w-4 h-4 text-[#1a3c2a] rounded border-[#e8e2d6] focus:ring-[#1a3c2a]"
         />
         <label htmlFor={`rt-active-${roomType?.id || "new"}`} className="ml-2 text-sm text-[#2c2c2c]">
-          แสดงผล (Active)
+          แสดงผล
         </label>
       </div>
 
