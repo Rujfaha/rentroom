@@ -19,55 +19,61 @@ export default async function AdminRoomsPage() {
   const hotelId = session.hotelId;
 
   // DEBUG: log hotelId
-  console.log("[DEBUG admin/rooms] session.hotelId:", hotelId);
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[DEBUG admin/rooms] session.hotelId:", hotelId);
+  }
 
-  // Fetch room types with images
-  const { data: roomTypes, error: roomTypesError } = await (supabase.from("room_types") as any)
-    .select(`
-      *,
-      room_type_images (*)
-    `)
-    .eq("hotel_id", hotelId)
-    .order("created_at", { ascending: false });
+  const [
+    { data: roomTypes, error: roomTypesError },
+    { data: rooms, error: roomsError },
+  ] = await Promise.all([
+    (supabase.from("room_types") as any)
+      .select(`
+        *,
+        room_type_images (*)
+      `)
+      .eq("hotel_id", hotelId)
+      .order("created_at", { ascending: false }),
+    (supabase.from("rooms") as any)
+      .select(`
+        *,
+        bookings (
+          id,
+          check_in_date,
+          check_out_date,
+          status,
+          customers (
+            full_name
+          )
+        )
+      `)
+      .eq("hotel_id", hotelId)
+      .order("room_number", { ascending: true }),
+  ]);
 
   if (roomTypesError) console.error("[DEBUG admin/rooms] room_types error:", roomTypesError);
 
-  // Fetch all rooms for this hotel with their current active booking
-  const { data: rooms, error: roomsError } = await (supabase.from("rooms") as any)
-    .select(`
-      *,
-      bookings (
-        id,
-        check_in_date,
-        check_out_date,
-        status,
-        customers (
-          full_name
-        )
-      )
-    `)
-    .eq("hotel_id", hotelId)
-    .order("room_number", { ascending: true });
-
   if (roomsError) console.error("[DEBUG admin/rooms] rooms error:", JSON.stringify(roomsError));
 
-  console.log("[DEBUG admin/rooms] rooms raw result:", JSON.stringify(rooms, null, 2));
+  if (process.env.NODE_ENV !== "production") {
+    console.log("[DEBUG admin/rooms] rooms raw result:", JSON.stringify(rooms, null, 2));
 
-  // DEBUG: fallback query without hotel_id filter to verify data exists
-  const { data: allRoomsDebug, error: allRoomsError } = await (supabase.from("rooms") as any).select("id, room_number, hotel_id, status").limit(10);
-  if (allRoomsError) console.error("[DEBUG admin/rooms] all rooms error:", JSON.stringify(allRoomsError));
-  console.log("[DEBUG admin/rooms] all rooms (no filter):", allRoomsDebug?.length ?? 0, allRoomsDebug);
+    // DEBUG: fallback query without hotel_id filter to verify data exists
+    const { data: allRoomsDebug, error: allRoomsError } = await (supabase.from("rooms") as any).select("id, room_number, hotel_id, status").limit(10);
+    if (allRoomsError) console.error("[DEBUG admin/rooms] all rooms error:", JSON.stringify(allRoomsError));
+    console.log("[DEBUG admin/rooms] all rooms (no filter):", allRoomsDebug?.length ?? 0, allRoomsDebug);
 
-  // DEBUG: query rooms without bookings join to isolate issue
-  const { data: roomsSimple, error: roomsSimpleError } = await (supabase.from("rooms") as any)
-    .select("id, room_number, hotel_id, status, is_active")
-    .eq("hotel_id", hotelId)
-    .order("room_number", { ascending: true });
-  if (roomsSimpleError) console.error("[DEBUG admin/rooms] simple rooms error:", JSON.stringify(roomsSimpleError));
-  console.log("[DEBUG admin/rooms] simple rooms filtered:", roomsSimple?.length ?? 0, roomsSimple);
+    // DEBUG: query rooms without bookings join to isolate issue
+    const { data: roomsSimple, error: roomsSimpleError } = await (supabase.from("rooms") as any)
+      .select("id, room_number, hotel_id, status, is_active")
+      .eq("hotel_id", hotelId)
+      .order("room_number", { ascending: true });
+    if (roomsSimpleError) console.error("[DEBUG admin/rooms] simple rooms error:", JSON.stringify(roomsSimpleError));
+    console.log("[DEBUG admin/rooms] simple rooms filtered:", roomsSimple?.length ?? 0, roomsSimple);
 
-  console.log("[DEBUG admin/rooms] filtered rooms count:", (rooms || []).length);
-  console.log("[DEBUG admin/rooms] filtered roomTypes count:", (roomTypes || []).length);
+    console.log("[DEBUG admin/rooms] filtered rooms count:", (rooms || []).length);
+    console.log("[DEBUG admin/rooms] filtered roomTypes count:", (roomTypes || []).length);
+  }
 
   // Transform room_types data to include images array
   const roomTypesWithImages = (roomTypes || []).map((rt: any) => ({

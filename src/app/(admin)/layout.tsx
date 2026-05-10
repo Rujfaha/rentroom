@@ -16,15 +16,18 @@ export default async function AdminLayout({
     redirect("/login");
   }
 
-  const supabase = await createClient();
-  const { data: hotelData } = await supabase
-    .from("hotels")
-    .select("name")
-    .eq("id", session.hotelId as string)
-    .single();
+  let updatedSession = session;
+  if (!session.hotelName && session.hotelId) {
+    const supabase = await createClient();
+    const { data: hotelData } = await supabase
+      .from("hotels")
+      .select("name")
+      .eq("id", session.hotelId)
+      .single();
 
-  const hotel = hotelData as { name?: string } | null;
-  const updatedSession = { ...session, hotelName: hotel?.name || session.hotelName };
+    const hotel = hotelData as { name?: string } | null;
+    updatedSession = { ...session, hotelName: hotel?.name || session.hotelName };
+  }
 
   return (
     <AdminSessionGuard>

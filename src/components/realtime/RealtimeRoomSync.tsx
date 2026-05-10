@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -15,11 +15,9 @@ interface RealtimeRoomSyncProps {
  */
 export default function RealtimeRoomSync({ hotelId }: RealtimeRoomSyncProps) {
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   useEffect(() => {
-    console.log("RealtimeRoomSync: Starting subscription for hotel:", hotelId);
-
     // 1. ฟังการเปลี่ยนแปลงของตาราง rooms
     const roomsChannel = supabase
       .channel("rooms-realtime-" + hotelId)
@@ -29,16 +27,13 @@ export default function RealtimeRoomSync({ hotelId }: RealtimeRoomSyncProps) {
           event: "*",
           schema: "public",
           table: "rooms",
-          // filter: "hotel_id=eq." + hotelId, // ลองเอาออกเพื่อเช็คว่า event มาไหม
+          filter: "hotel_id=eq." + hotelId,
         },
-        (payload) => {
-          console.log("RealtimeRoomSync: Room change detected!", payload);
+        () => {
           router.refresh();
         }
       )
-      .subscribe((status) => {
-        console.log("RealtimeRoomSync: Rooms channel status:", status);
-      });
+      .subscribe();
 
     // 2. ฟังการเปลี่ยนแปลงของตาราง room_types
     const roomTypesChannel = supabase
@@ -49,19 +44,15 @@ export default function RealtimeRoomSync({ hotelId }: RealtimeRoomSyncProps) {
           event: "*",
           schema: "public",
           table: "room_types",
-          // filter: "hotel_id=eq." + hotelId, // ลองเอาออกเพื่อเช็คว่า event มาไหม
+          filter: "hotel_id=eq." + hotelId,
         },
-        (payload) => {
-          console.log("RealtimeRoomSync: Room type change detected!", payload);
+        () => {
           router.refresh();
         }
       )
-      .subscribe((status) => {
-        console.log("RealtimeRoomSync: Room types channel status:", status);
-      });
+      .subscribe();
 
     return () => {
-      console.log("RealtimeRoomSync: Cleaning up subscriptions");
       supabase.removeChannel(roomsChannel);
       supabase.removeChannel(roomTypesChannel);
     };

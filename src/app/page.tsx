@@ -22,8 +22,7 @@ const sanitizeImageUrl = (url: any) => {
   return `/${trimmed}`;
 };
 
-export const dynamic = "force-dynamic";
-export const revalidate = 0;
+export const revalidate = 120;
 
 export async function generateMetadata() {
   const { createServiceClient } = await import("@/lib/supabase/service");
@@ -88,12 +87,39 @@ export default async function Home() {
   let attractions: LocalAttraction[] = mockData.attractions;
 
   if (hotelRow?.id) {
-    const { data: dbSlides } = await (supabase
-      .from("hero_slides") as any)
-      .select("id, image_url, alt_text, headline, subheadline, sort_order")
-      .eq("hotel_id", hotelRow.id)
-      .eq("is_active", true)
-      .order("sort_order", { ascending: true });
+    const [
+      { data: dbSlides },
+      { data: dbContacts },
+      { data: dbPromotions },
+      { data: dbAttractions },
+      dbRoomTypes,
+    ] = await Promise.all([
+      (supabase
+        .from("hero_slides") as any)
+        .select("id, image_url, alt_text, headline, subheadline, sort_order")
+        .eq("hotel_id", hotelRow.id)
+        .eq("is_active", true)
+        .order("sort_order", { ascending: true }),
+      (supabase
+        .from("cms_hotel_contacts") as any)
+        .select("id, contact_type, label, value, icon_url, sort_order")
+        .eq("hotel_id", hotelRow.id)
+        .eq("is_visible", true)
+        .order("sort_order", { ascending: true }),
+      (supabase
+        .from("promotions") as any)
+        .select("id, title, description, image_url, discount_type, discount_percentage, discount_amount, discount_code, discount_text, valid_until, is_active, sort_order")
+        .eq("hotel_id", hotelRow.id)
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false }),
+      (supabase
+        .from("local_attractions") as any)
+        .select("id, name, description, image_url, distance_km, map_url, sort_order")
+        .eq("hotel_id", hotelRow.id)
+        .eq("is_visible", true)
+        .order("sort_order", { ascending: true }),
+      getRoomTypesForLanding(hotelRow.id),
+    ]);
 
     if (dbSlides) {
       heroSlides = dbSlides.map((s: any) => ({
@@ -107,13 +133,6 @@ export default async function Home() {
     }
 
     // --- Fetch contacts from CMS ---
-    const { data: dbContacts } = await (supabase
-      .from("cms_hotel_contacts") as any)
-      .select("id, contact_type, label, value, icon_url, sort_order")
-      .eq("hotel_id", hotelRow.id)
-      .eq("is_visible", true)
-      .order("sort_order", { ascending: true });
-
     if (dbContacts) {
       const mapContact = dbContacts.find((c: any) => c.contact_type === "map_url");
       if (mapContact) {
@@ -133,13 +152,6 @@ export default async function Home() {
     }
 
     // --- Fetch promotions from CMS ---
-    const { data: dbPromotions } = await (supabase
-      .from("promotions") as any)
-      .select("id, title, description, image_url, discount_type, discount_percentage, discount_amount, discount_code, discount_text, valid_until, is_active, sort_order")
-      .eq("hotel_id", hotelRow.id)
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: false });
-
     if (dbPromotions) {
       promotions = dbPromotions.map((promo: any) => ({
         id: promo.id,
@@ -156,13 +168,6 @@ export default async function Home() {
     }
 
     // --- Fetch local attractions from CMS ---
-    const { data: dbAttractions } = await (supabase
-      .from("local_attractions") as any)
-      .select("id, name, description, image_url, distance_km, map_url, sort_order")
-      .eq("hotel_id", hotelRow.id)
-      .eq("is_visible", true)
-      .order("sort_order", { ascending: true });
-
     if (dbAttractions) {
       attractions = dbAttractions.map((attraction: any) => ({
         id: attraction.id,
@@ -176,7 +181,6 @@ export default async function Home() {
     }
 
     // --- Fetch room types from database ---
-    const dbRoomTypes = await getRoomTypesForLanding(hotelRow.id);
     if (dbRoomTypes) {
       roomTypes = dbRoomTypes;
     }

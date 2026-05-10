@@ -353,15 +353,28 @@ export async function searchAvailableRoomTypes(input: BookingRoomSearchInput): P
     return [];
   }
 
-  const { data: roomsData, error: roomsError } = await supabase
-    .from("rooms")
-    .select("id, room_type_id, status, is_active")
-    .eq("hotel_id", input.hotelId)
-    .eq("is_active", true)
-    .eq("status", "available")
-    .returns<RoomRow[]>();
-
-  const pricing = await getPricingContext(input.hotelId);
+  const [
+    { data: roomsData, error: roomsError },
+    pricing,
+    { data: bookingsData, error: bookingsError },
+  ] = await Promise.all([
+    supabase
+      .from("rooms")
+      .select("id, room_type_id, status, is_active")
+      .eq("hotel_id", input.hotelId)
+      .eq("is_active", true)
+      .eq("status", "available")
+      .returns<RoomRow[]>(),
+    getPricingContext(input.hotelId),
+    supabase
+      .from("bookings")
+      .select("room_id")
+      .eq("hotel_id", input.hotelId)
+      .in("status", BLOCKING_BOOKING_STATUSES)
+      .lt("check_in_date", input.checkOut)
+      .gt("check_out_date", input.checkIn)
+      .returns<BookingRow[]>(),
+  ]);
 
   if (roomsError || !roomsData?.length) {
     if (roomsError) console.error("searchAvailableRoomTypes rooms error:", roomsError);
@@ -370,15 +383,6 @@ export async function searchAvailableRoomTypes(input: BookingRoomSearchInput): P
       return toRoomTypeDisplay(roomType, 0, getAverageNightlyPrice(roomType, input.checkIn, input.checkOut, pricing), stayTotal);
     });
   }
-
-  const { data: bookingsData, error: bookingsError } = await supabase
-    .from("bookings")
-    .select("room_id")
-    .eq("hotel_id", input.hotelId)
-    .in("status", BLOCKING_BOOKING_STATUSES)
-    .lt("check_in_date", input.checkOut)
-    .gt("check_out_date", input.checkIn)
-    .returns<BookingRow[]>();
 
   if (bookingsError) {
     console.error("searchAvailableRoomTypes bookings error:", bookingsError);

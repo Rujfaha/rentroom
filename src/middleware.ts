@@ -32,7 +32,12 @@ function hasValidAdminScope(session: SessionPayload) {
 
 export async function middleware(request: NextRequest) {
   // 1. Maintain Supabase Session (if any customer Auth is used later)
-  const response = await updateSession(request);
+  const hasSupabaseAuthCookie = request.cookies
+    .getAll()
+    .some(({ name }) => name.startsWith("sb-") && name.includes("auth-token"));
+  const response = hasSupabaseAuthCookie
+    ? await updateSession(request)
+    : NextResponse.next({ request });
 
   // 2. Custom Admin JWT Session Check
   const { pathname } = request.nextUrl;

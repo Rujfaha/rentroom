@@ -87,19 +87,75 @@ export default async function AdminDashboardPage() {
   const yesterday = toDateKey(new Date(now.getTime() - 86400000));
   const tomorrow = toDateKey(new Date(now.getTime() + 86400000));
 
-  const { data: roomsData } = await supabase
-    .from("rooms")
-    .select(`
-      id,
-      status,
-      room_types (
-        name,
-        base_price
-      )
-    `)
-    .eq("hotel_id", hotelId)
-    .eq("is_active", true)
-    .returns<DashboardRoomRow[]>();
+  const [
+    { data: roomsData },
+    { data: todayBookings },
+    { data: yesterdayBookings },
+    { data: checkInBookings },
+    { data: yesterdayCheckIns },
+    { data: recentBookingsData },
+  ] = await Promise.all([
+    supabase
+      .from("rooms")
+      .select(`
+        id,
+        status,
+        room_types (
+          name,
+          base_price
+        )
+      `)
+      .eq("hotel_id", hotelId)
+      .eq("is_active", true)
+      .returns<DashboardRoomRow[]>(),
+    supabase
+      .from("bookings")
+      .select("id")
+      .eq("hotel_id", hotelId)
+      .gte("created_at", today)
+      .lt("created_at", tomorrow),
+    supabase
+      .from("bookings")
+      .select("id")
+      .eq("hotel_id", hotelId)
+      .gte("created_at", yesterday)
+      .lt("created_at", today),
+    supabase
+      .from("bookings")
+      .select("id")
+      .eq("hotel_id", hotelId)
+      .eq("check_in_date", today)
+      .in("status", ["confirmed", "checked_in"]),
+    supabase
+      .from("bookings")
+      .select("id")
+      .eq("hotel_id", hotelId)
+      .eq("check_in_date", yesterday)
+      .in("status", ["confirmed", "checked_in"]),
+    supabase
+      .from("bookings")
+      .select(`
+        id,
+        booking_number,
+        check_in_date,
+        check_out_date,
+        status,
+        created_at,
+        customers (
+          full_name
+        ),
+        rooms (
+          room_number,
+          room_types (
+            name
+          )
+        )
+      `)
+      .eq("hotel_id", hotelId)
+      .order("created_at", { ascending: false })
+      .limit(5)
+      .returns<DashboardBookingRow[]>(),
+  ]);
 
   const rooms = roomsData ?? [];
   const totalRooms = rooms.length;
@@ -111,65 +167,13 @@ export default async function AdminDashboardPage() {
     .filter((room) => room.status === "occupied")
     .reduce((sum, room) => sum + Number(room.room_types?.base_price || 0), 0);
 
-  const { data: todayBookings } = await supabase
-    .from("bookings")
-    .select("id")
-    .eq("hotel_id", hotelId)
-    .gte("created_at", today)
-    .lt("created_at", tomorrow);
-
-  const { data: yesterdayBookings } = await supabase
-    .from("bookings")
-    .select("id")
-    .eq("hotel_id", hotelId)
-    .gte("created_at", yesterday)
-    .lt("created_at", today);
-
   const todayCount = todayBookings?.length || 0;
   const yesterdayCount = yesterdayBookings?.length || 0;
   const bookingDiff = todayCount - yesterdayCount;
 
-  const { data: checkInBookings } = await supabase
-    .from("bookings")
-    .select("id")
-    .eq("hotel_id", hotelId)
-    .eq("check_in_date", today)
-    .in("status", ["confirmed", "checked_in"]);
-
-  const { data: yesterdayCheckIns } = await supabase
-    .from("bookings")
-    .select("id")
-    .eq("hotel_id", hotelId)
-    .eq("check_in_date", yesterday)
-    .in("status", ["confirmed", "checked_in"]);
-
   const checkInCount = checkInBookings?.length || 0;
   const yesterdayCheckInCount = yesterdayCheckIns?.length || 0;
   const checkInDiff = checkInCount - yesterdayCheckInCount;
-
-  const { data: recentBookingsData } = await supabase
-    .from("bookings")
-    .select(`
-      id,
-      booking_number,
-      check_in_date,
-      check_out_date,
-      status,
-      created_at,
-      customers (
-        full_name
-      ),
-      rooms (
-        room_number,
-        room_types (
-          name
-        )
-      )
-    `)
-    .eq("hotel_id", hotelId)
-    .order("created_at", { ascending: false })
-    .limit(5)
-    .returns<DashboardBookingRow[]>();
 
   const recentBookings = recentBookingsData ?? [];
 

@@ -146,6 +146,7 @@ export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomType
   const supabase = useMemo(() => createClient(), []);
 
   const refreshAvailability = useCallback(async () => {
+    if (!hotelId) return;
     const availableCounts = await getRoomAvailabilityCounts(hotelId);
     setAvailabilityCounts(availableCounts);
   }, [hotelId]);
@@ -161,6 +162,9 @@ export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomType
   );
 
   useEffect(() => {
+    if (!hotelId) return;
+    void refreshAvailability();
+
     const channel = supabase
       .channel("landing-rooms-" + hotelId)
       .on(
