@@ -1,10 +1,16 @@
+"use client";
+
+import { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import SectionTitle from "@/components/ui/SectionTitle";
 import Button from "@/components/ui/Button";
 import type { RoomTypeDisplay } from "@/types/landing.types";
+import { getRoomAvailabilityCounts } from "@/app/actions/landing";
+import { createClient } from "@/lib/supabase/client";
 
 interface RoomTypesSectionProps {
-  roomTypes: RoomTypeDisplay[];
+  initialRoomTypes: RoomTypeDisplay[];
+  hotelId: string;
 }
 
 function formatPrice(price: number): string {
@@ -35,7 +41,68 @@ function AmenityIcon({ icon }: { icon: string }) {
   );
 }
 
-export default function RoomTypesSection({ roomTypes }: RoomTypesSectionProps) {
+export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomTypesSectionProps) {
+  const [availabilityCounts, setAvailabilityCounts] = useState<Record<string, number>>({});
+  const supabase = useMemo(() => createClient(), []);
+
+  const refreshAvailability = useCallback(async () => {
+    const availableCounts = await getRoomAvailabilityCounts(hotelId);
+    setAvailabilityCounts(availableCounts);
+  }, [hotelId]);
+
+  const roomTypes = useMemo(
+    () =>
+      initialRoomTypes.map((roomType) => ({
+        ...roomType,
+        availableRoomsCount:
+          availabilityCounts[roomType.id] ?? roomType.availableRoomsCount,
+      })),
+    [availabilityCounts, initialRoomTypes]
+  );
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("landing-rooms-" + hotelId)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "rooms",
+          filter: "hotel_id=eq." + hotelId,
+        },
+        () => {
+          void refreshAvailability();
+        }
+      )
+      .subscribe();
+
+    const intervalId = window.setInterval(() => {
+      void refreshAvailability();
+    }, 5000);
+
+    return () => {
+      window.clearInterval(intervalId);
+      supabase.removeChannel(channel);
+    };
+  }, [hotelId, refreshAvailability, supabase]);
+
+  if (!roomTypes || roomTypes.length === 0) {
+    return (
+      <section id="rooms" className="py-20 md:py-28 bg-cream px-4">
+        <div className="max-w-7xl mx-auto">
+          <SectionTitle
+            title="Room Types"
+            subtitle="Each room is designed to provide the ultimate comfort with stunning mountain views"
+          />
+          <div className="text-center py-12">
+            <p className="text-earth-light">ยังไม่มีข้อมูลประเภทห้องพัก</p>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section id="rooms" className="py-20 md:py-28 bg-cream px-4">
       <div className="max-w-7xl mx-auto">
@@ -46,10 +113,11 @@ export default function RoomTypesSection({ roomTypes }: RoomTypesSectionProps) {
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {roomTypes.map(function (room) {
+            const isFull = (room.availableRoomsCount || 0) <= 0;
             return (
               <div
                 key={room.id}
-                className="group bg-white rounded-2xl overflow-hidden shadow-lg shadow-forest-dark/5 hover:shadow-2xl hover:shadow-forest-dark/10 transition-all duration-500 hover:-translate-y-1"
+                className={"group bg-white rounded-2xl overflow-hidden shadow-lg shadow-forest-dark/5 hover:shadow-2xl hover:shadow-forest-dark/10 transition-all duration-500 hover:-translate-y-1 " + (isFull ? "grayscale opacity-75" : "")}
               >
                 <div className="relative h-64 overflow-hidden">
                   <Image
@@ -59,10 +127,35 @@ export default function RoomTypesSection({ roomTypes }: RoomTypesSectionProps) {
                     className="object-cover group-hover:scale-105 transition-transform duration-700"
                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
                   />
-                  <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm px-3 py-1.5 rounded-full">
-                    <span className="text-forest-dark font-semibold text-sm">
-                      {"THB " + formatPrice(room.basePrice) + "/night"}
-                    </span>
+                  {/* Info Tags - Top Right */}
+                  <div className="absolute top-4 right-4 flex flex-col items-end gap-2 z-10">
+                    {/* Price Tag */}
+                    <div className="bg-white/80 backdrop-blur-md px-3 py-1.5 rounded-full shadow-[0_0_15px_rgba(255,255,255,0.4)] border border-white/50">
+                      <span className="text-forest-dark font-bold text-sm tracking-tight">
+                        {"THB " + formatPrice(room.basePrice) + "/night"}
+                      </span>
+                    </div>
+
+                    {/* Availability Badge */}
+                    <div className={"backdrop-blur-md px-3 py-1.5 rounded-full border shadow-lg transition-all duration-300 " + 
+                      (isFull 
+                        ? "bg-red-500/60 border-red-400/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]" 
+                        : "bg-forest-dark/60 border-forest-light/50 text-white shadow-[0_0_15px_rgba(26,60,42,0.4)]"
+                      )}>
+                      <span className="text-[10px] sm:text-xs font-semibold flex items-center gap-1.5 tracking-wide">
+                        {isFull ? (
+                          <>
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-200 animate-pulse" />
+                            ห้องพักเต็ม
+                          </>
+                        ) : (
+                          <>
+                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                            {"ว่าง " + room.availableRoomsCount + " ห้อง"}
+                          </>
+                        )}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -104,12 +197,13 @@ export default function RoomTypesSection({ roomTypes }: RoomTypesSectionProps) {
 
                   <div className="mt-6">
                     <Button
-                      href={"/booking?room=" + room.id}
+                      href={isFull ? undefined : "/booking?room=" + room.id}
                       variant="outline"
                       size="sm"
                       className="w-full"
+                      disabled={isFull}
                     >
-                      Book This Room
+                      {isFull ? "จองเต็มแล้ว (Fully Booked)" : "Book This Room"}
                     </Button>
                   </div>
                 </div>

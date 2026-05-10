@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import type { RoomTypeDisplay } from "@/types/landing.types";
+import type { BookingLabels } from "./booking-i18n";
 
 interface StepSelectRoomProps {
   roomTypes: RoomTypeDisplay[];
@@ -9,27 +10,35 @@ interface StepSelectRoomProps {
   checkOut: string;
   adults: number;
   childrenCount: number;
+  isSearching: boolean;
+  totalGuests: number;
   onCheckInChange: (v: string) => void;
   onCheckOutChange: (v: string) => void;
   onAdultsChange: (v: number) => void;
   onChildrenChange: (v: number) => void;
   onSelect: (room: RoomTypeDisplay) => void;
+  labels: BookingLabels;
 }
 
 function formatPrice(price: number): string {
   return price.toLocaleString("th-TH");
 }
 
+function getToday(): string {
+  return new Date().toISOString().split("T")[0];
+}
+
 export default function StepSelectRoom(props: StepSelectRoomProps) {
-  const today = new Date().toISOString().split("T")[0];
+  const today = getToday();
+  const labels = props.labels.selectRoom;
 
   return (
     <div>
       <div className="bg-white rounded-xl p-6 shadow-md mb-8">
-        <h3 className="font-semibold text-forest-dark mb-4">Select Dates & Guests</h3>
+        <h3 className="font-semibold text-forest-dark mb-4">{labels.title}</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
-            <label className="text-xs text-earth uppercase tracking-wider font-medium block mb-1">Check-in</label>
+            <label className="text-xs text-earth uppercase tracking-wider font-medium block mb-1">{labels.checkIn}</label>
             <input
               type="date"
               value={props.checkIn}
@@ -39,7 +48,7 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
             />
           </div>
           <div>
-            <label className="text-xs text-earth uppercase tracking-wider font-medium block mb-1">Check-out</label>
+            <label className="text-xs text-earth uppercase tracking-wider font-medium block mb-1">{labels.checkOut}</label>
             <input
               type="date"
               value={props.checkOut}
@@ -49,7 +58,7 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
             />
           </div>
           <div>
-            <label className="text-xs text-earth uppercase tracking-wider font-medium block mb-1">Adults</label>
+            <label className="text-xs text-earth uppercase tracking-wider font-medium block mb-1">{labels.adults}</label>
             <select
               value={props.adults}
               onChange={function (e) { props.onAdultsChange(Number(e.target.value)); }}
@@ -61,7 +70,7 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
             </select>
           </div>
           <div>
-            <label className="text-xs text-earth uppercase tracking-wider font-medium block mb-1">Children</label>
+            <label className="text-xs text-earth uppercase tracking-wider font-medium block mb-1">{labels.children}</label>
             <select
               value={props.childrenCount}
               onChange={function (e) { props.onChildrenChange(Number(e.target.value)); }}
@@ -75,11 +84,28 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
         </div>
       </div>
 
-      <h3 className="font-semibold text-forest-dark mb-4">Choose Your Room</h3>
+      <h3 className="font-semibold text-forest-dark mb-4">{labels.chooseRoom}</h3>
       <div className="space-y-4">
+        {props.isSearching && (
+          <div className="bg-white rounded-xl p-6 shadow-md text-center text-earth">
+            {labels.searching}
+          </div>
+        )}
+
+        {!props.isSearching && props.roomTypes.length === 0 && (
+          <div className="bg-white rounded-xl p-6 shadow-md text-center">
+            <p className="font-semibold text-forest-dark">{labels.noRoomsTitle}</p>
+            <p className="text-sm text-earth mt-1">{labels.noRoomsHint}</p>
+          </div>
+        )}
+
         {props.roomTypes.map(function (room) {
-          const totalGuests = props.adults + props.childrenCount;
-          const isAvailable = room.maxGuests >= totalGuests;
+          const hasVacancy = room.availableRoomsCount > 0;
+          const fitsGuests = room.maxGuests >= props.totalGuests;
+          const isAvailable = hasVacancy && fitsGuests;
+          const availabilityText = hasVacancy
+            ? labels.availableRooms(room.availableRoomsCount)
+            : labels.fullyBooked;
           return (
             <div
               key={room.id}
@@ -92,23 +118,26 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
                 <div>
                   <h4 className="font-[family-name:var(--font-serif)] text-xl font-semibold text-forest-dark">{room.name}</h4>
                   <p className="text-sm text-earth mt-1">{room.shortDescription}</p>
-                  <div className="flex gap-3 mt-2 text-xs text-earth-light">
+                  <div className="flex flex-wrap gap-3 mt-2 text-xs text-earth-light">
                     <span>{String(room.roomSize) + " sqm"}</span>
                     <span>{room.bedType}</span>
-                    <span>{"Max " + String(room.maxGuests) + " guests"}</span>
+                    <span>{labels.maxGuests(room.maxGuests)}</span>
+                    <span className={"inline-flex items-center rounded-full px-2 py-0.5 font-semibold " + (hasVacancy ? "bg-emerald-50 text-emerald-700" : "bg-red-50 text-red-700")}>
+                      {availabilityText}
+                    </span>
                   </div>
                 </div>
                 <div className="flex items-center justify-between mt-4">
                   <div>
                     <span className="text-lg font-bold text-forest-dark">{"THB " + formatPrice(room.basePrice)}</span>
-                    <span className="text-sm text-earth"> / night</span>
+                    <span className="text-sm text-earth">{labels.perNight}</span>
                   </div>
                   <button
                     onClick={function () { if (isAvailable) props.onSelect(room); }}
                     disabled={!isAvailable}
                     className={"px-5 py-2 rounded-lg text-sm font-semibold transition-all " + (isAvailable ? "bg-gold text-white hover:bg-gold-dark cursor-pointer" : "bg-stone-light text-earth cursor-not-allowed")}
                   >
-                    {isAvailable ? "Select" : "Not Available"}
+                    {isAvailable ? labels.select : labels.notAvailable}
                   </button>
                 </div>
               </div>

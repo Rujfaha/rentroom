@@ -103,6 +103,7 @@ const roomTypes: RoomTypeDisplay[] = [
       { icon: "balcony", label: "ระเบียงส่วนตัว" },
     ],
     isActive: true,
+    availableRoomsCount: 5,
   },
   {
     id: "room-2",
@@ -130,6 +131,7 @@ const roomTypes: RoomTypeDisplay[] = [
       { icon: "robe", label: "เสื้อคลุมอาบน้ำ" },
     ],
     isActive: true,
+    availableRoomsCount: 2,
   },
   {
     id: "room-3",
@@ -157,6 +159,7 @@ const roomTypes: RoomTypeDisplay[] = [
       { icon: "parking", label: "ที่จอดรถส่วนตัว" },
     ],
     isActive: true,
+    availableRoomsCount: 0,
   },
 ];
 

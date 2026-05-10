@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
+import type { BookingLabels } from "./booking-i18n";
 
 interface StepGuestInfoProps {
   room: RoomTypeDisplay;
@@ -13,6 +14,7 @@ interface StepGuestInfoProps {
   childrenCount: number;
   onSubmit: (info: GuestInfo) => void;
   onBack: () => void;
+  labels: BookingLabels;
 }
 
 function formatPrice(price: number): string {
@@ -20,6 +22,7 @@ function formatPrice(price: number): string {
 }
 
 export default function StepGuestInfo(props: StepGuestInfoProps) {
+  const labels = props.labels.guestInfo;
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
@@ -30,10 +33,10 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
 
   function validate(): boolean {
     const newErrors: Record<string, string> = {};
-    if (!fullName.trim()) newErrors["fullName"] = "Please enter your full name";
-    if (!phone.trim()) newErrors["phone"] = "Please enter your phone number";
-    if (!email.trim()) newErrors["email"] = "Please enter your email";
-    else if (email.indexOf("@") === -1) newErrors["email"] = "Please enter a valid email";
+    if (!fullName.trim()) newErrors["fullName"] = labels.errors.fullName;
+    if (!phone.trim()) newErrors["phone"] = labels.errors.phone;
+    if (!email.trim()) newErrors["email"] = labels.errors.email;
+    else if (email.indexOf("@") === -1) newErrors["email"] = labels.errors.invalidEmail;
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   }
@@ -55,49 +58,49 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
     <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
       <div className="md:col-span-2">
         <div className="bg-white rounded-xl p-6 shadow-md">
-          <h3 className="font-semibold text-forest-dark text-lg mb-6">Guest Information</h3>
+          <h3 className="font-semibold text-forest-dark text-lg mb-6">{labels.title}</h3>
           <div className="space-y-4">
             <div>
-              <label className={labelClass}>Full Name *</label>
+              <label className={labelClass}>{labels.fullName}</label>
               <input
                 type="text"
                 value={fullName}
                 onChange={function (e) { setFullName(e.target.value); }}
-                placeholder="John Doe"
+                placeholder={labels.fullNamePlaceholder}
                 className={inputClass}
               />
               {errors["fullName"] && <p className="text-red-500 text-xs mt-1">{errors["fullName"]}</p>}
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className={labelClass}>Phone *</label>
+                <label className={labelClass}>{labels.phone}</label>
                 <input
                   type="tel"
                   value={phone}
                   onChange={function (e) { setPhone(e.target.value); }}
-                  placeholder="+66 81 234 5678"
+                  placeholder={labels.phonePlaceholder}
                   className={inputClass}
                 />
                 {errors["phone"] && <p className="text-red-500 text-xs mt-1">{errors["phone"]}</p>}
               </div>
               <div>
-                <label className={labelClass}>Email *</label>
+                <label className={labelClass}>{labels.email}</label>
                 <input
                   type="email"
                   value={email}
                   onChange={function (e) { setEmail(e.target.value); }}
-                  placeholder="you@example.com"
+                  placeholder={labels.emailPlaceholder}
                   className={inputClass}
                 />
                 {errors["email"] && <p className="text-red-500 text-xs mt-1">{errors["email"]}</p>}
               </div>
             </div>
             <div>
-              <label className={labelClass}>Special Requests</label>
+              <label className={labelClass}>{labels.specialRequests}</label>
               <textarea
                 value={specialRequests}
                 onChange={function (e) { setSpecialRequests(e.target.value); }}
-                placeholder="Any special requests or notes..."
+                placeholder={labels.specialRequestsPlaceholder}
                 rows={3}
                 className={inputClass}
               />
@@ -105,10 +108,10 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
           </div>
           <div className="flex gap-3 mt-8">
             <button onClick={props.onBack} className="px-6 py-3 border-2 border-stone text-earth rounded-lg hover:bg-stone-light/50 transition-colors font-medium cursor-pointer">
-              Back
+              {labels.back}
             </button>
             <button onClick={handleSubmit} className="flex-1 px-6 py-3 bg-gold text-white rounded-lg hover:bg-gold-dark transition-colors font-semibold shadow-lg shadow-gold/20 cursor-pointer">
-              Continue to Confirmation
+              {labels.continue}
             </button>
           </div>
         </div>
@@ -116,36 +119,36 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
 
       <div>
         <div className="bg-white rounded-xl p-5 shadow-md sticky top-24">
-          <h4 className="font-semibold text-forest-dark mb-3">Booking Summary</h4>
+          <h4 className="font-semibold text-forest-dark mb-3">{labels.summary}</h4>
           <div className="relative h-32 rounded-lg overflow-hidden mb-3">
             <Image src={props.room.coverImageUrl} alt={props.room.name} fill className="object-cover" sizes="300px" />
           </div>
           <p className="font-[family-name:var(--font-serif)] text-lg font-semibold text-forest-dark">{props.room.name}</p>
           <div className="mt-3 space-y-2 text-sm text-earth">
             <div className="flex justify-between">
-              <span>Check-in</span>
+              <span>{props.labels.shared.checkIn}</span>
               <span className="font-medium text-forest-dark">{props.checkIn}</span>
             </div>
             <div className="flex justify-between">
-              <span>Check-out</span>
+              <span>{props.labels.shared.checkOut}</span>
               <span className="font-medium text-forest-dark">{props.checkOut}</span>
             </div>
             <div className="flex justify-between">
-              <span>Guests</span>
-              <span className="font-medium text-forest-dark">{String(props.adults) + " Adults, " + String(props.childrenCount) + " Children"}</span>
+              <span>{labels.guests}</span>
+              <span className="font-medium text-forest-dark">{labels.guestCount(props.adults, props.childrenCount)}</span>
             </div>
             <div className="flex justify-between">
-              <span>Duration</span>
-              <span className="font-medium text-forest-dark">{String(props.totalNights) + " night(s)"}</span>
+              <span>{labels.duration}</span>
+              <span className="font-medium text-forest-dark">{labels.nights(props.totalNights)}</span>
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-stone-light">
             <div className="flex justify-between text-sm text-earth">
-              <span>{"THB " + formatPrice(props.room.basePrice) + " x " + String(props.totalNights) + " nights"}</span>
+              <span>{props.labels.shared.thb + formatPrice(props.room.basePrice) + " x " + labels.nights(props.totalNights)}</span>
             </div>
             <div className="flex justify-between mt-2 text-lg font-bold text-forest-dark">
-              <span>Total</span>
-              <span>{"THB " + formatPrice(totalAmount)}</span>
+              <span>{labels.total}</span>
+              <span>{props.labels.shared.thb + formatPrice(totalAmount)}</span>
             </div>
           </div>
         </div>

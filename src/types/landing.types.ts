@@ -42,6 +42,7 @@ export interface RoomTypeDisplay {
   roomSize: number;
   amenities: RoomAmenity[];
   isActive: boolean;
+  availableRoomsCount: number;
 }
 
 export interface ContactInfo {

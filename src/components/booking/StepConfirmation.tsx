@@ -1,5 +1,6 @@
 import Link from "next/link";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
+import type { BookingLabels } from "./booking-i18n";
 
 interface StepConfirmationProps {
   room: RoomTypeDisplay;
@@ -11,6 +12,7 @@ interface StepConfirmationProps {
   guest: GuestInfo;
   bookingRef: string;
   slipUrl?: string;
+  labels: BookingLabels;
 }
 
 function formatPrice(price: number): string {
@@ -18,6 +20,7 @@ function formatPrice(price: number): string {
 }
 
 export default function StepConfirmation(props: StepConfirmationProps) {
+  const labels = props.labels.confirmation;
   const totalAmount = props.room.basePrice * props.totalNights;
 
   return (
@@ -29,59 +32,57 @@ export default function StepConfirmation(props: StepConfirmationProps) {
           </svg>
         </div>
         <h2 className="font-[family-name:var(--font-serif)] text-3xl font-bold text-forest-dark">
-          Booking Confirmed!
+          {labels.title}
         </h2>
-        <p className="mt-2 text-earth">
-          Thank you for choosing Valley Retreat
-        </p>
+        <p className="mt-2 text-earth">{labels.subtitle}</p>
 
         <div className="mt-6 bg-cream rounded-xl p-4 inline-block">
-          <p className="text-xs text-earth uppercase tracking-wider">Booking Reference</p>
+          <p className="text-xs text-earth uppercase tracking-wider">{labels.reference}</p>
           <p className="text-2xl font-bold text-gold tracking-widest mt-1">{props.bookingRef}</p>
         </div>
 
         <div className="mt-8 text-left">
-          <h3 className="font-semibold text-forest-dark border-b border-stone-light pb-2 mb-4">Booking Details</h3>
+          <h3 className="font-semibold text-forest-dark border-b border-stone-light pb-2 mb-4">{labels.bookingDetails}</h3>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-earth">Room</span>
+              <span className="text-earth">{labels.room}</span>
               <span className="font-medium text-forest-dark">{props.room.name}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-earth">Check-in</span>
+              <span className="text-earth">{props.labels.shared.checkIn}</span>
               <span className="font-medium text-forest-dark">{props.checkIn}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-earth">Check-out</span>
+              <span className="text-earth">{props.labels.shared.checkOut}</span>
               <span className="font-medium text-forest-dark">{props.checkOut}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-earth">Duration</span>
-              <span className="font-medium text-forest-dark">{String(props.totalNights) + " night(s)"}</span>
+              <span className="text-earth">{labels.duration}</span>
+              <span className="font-medium text-forest-dark">{props.labels.guestInfo.nights(props.totalNights)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-earth">Guests</span>
-              <span className="font-medium text-forest-dark">{String(props.adults) + " Adults, " + String(props.childrenCount) + " Children"}</span>
+              <span className="text-earth">{labels.guests}</span>
+              <span className="font-medium text-forest-dark">{props.labels.guestInfo.guestCount(props.adults, props.childrenCount)}</span>
             </div>
           </div>
 
-          <h3 className="font-semibold text-forest-dark border-b border-stone-light pb-2 mb-4 mt-6">Guest Information</h3>
+          <h3 className="font-semibold text-forest-dark border-b border-stone-light pb-2 mb-4 mt-6">{labels.guestInfo}</h3>
           <div className="space-y-3 text-sm">
             <div className="flex justify-between">
-              <span className="text-earth">Name</span>
+              <span className="text-earth">{labels.name}</span>
               <span className="font-medium text-forest-dark">{props.guest.fullName}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-earth">Phone</span>
+              <span className="text-earth">{labels.phone}</span>
               <span className="font-medium text-forest-dark">{props.guest.phone}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-earth">Email</span>
+              <span className="text-earth">{labels.email}</span>
               <span className="font-medium text-forest-dark">{props.guest.email}</span>
             </div>
             {props.guest.specialRequests && (
               <div className="flex justify-between">
-                <span className="text-earth">Requests</span>
+                <span className="text-earth">{labels.requests}</span>
                 <span className="font-medium text-forest-dark text-right max-w-[60%]">{props.guest.specialRequests}</span>
               </div>
             )}
@@ -89,33 +90,33 @@ export default function StepConfirmation(props: StepConfirmationProps) {
 
           <div className="mt-6 pt-4 border-t-2 border-gold/30">
             <div className="flex justify-between text-lg font-bold text-forest-dark">
-              <span>Total Amount</span>
-              <span className="text-gold">{"THB " + formatPrice(totalAmount)}</span>
+              <span>{labels.totalAmount}</span>
+              <span className="text-gold">{props.labels.shared.thb + formatPrice(totalAmount)}</span>
             </div>
           </div>
         </div>
 
         {props.slipUrl && (
           <div className="mt-6 text-left">
-            <h3 className="font-semibold text-forest-dark border-b border-stone-light pb-2 mb-4">Payment</h3>
+            <h3 className="font-semibold text-forest-dark border-b border-stone-light pb-2 mb-4">{labels.payment}</h3>
             <div className="flex items-center gap-3">
               <div className="w-3 h-3 rounded-full bg-gold animate-pulse" />
-              <span className="text-sm text-earth">Payment slip submitted — awaiting verification</span>
+              <span className="text-sm text-earth">{labels.slipSubmitted}</span>
             </div>
           </div>
         )}
 
         <div className="mt-8 p-4 bg-champagne/50 rounded-xl text-sm text-earth">
-          <p>A confirmation email will be sent to <strong>{props.guest.email}</strong></p>
-          <p className="mt-1">Please save your booking reference for check-in.</p>
+          <p>{labels.emailNotice(props.guest.email)}</p>
+          <p className="mt-1">{labels.saveReference}</p>
         </div>
 
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
           <Link href="/" className="inline-block px-8 py-3 bg-forest text-white rounded-lg hover:bg-forest-light transition-colors font-semibold cursor-pointer text-center">
-            Back to Home
+            {labels.backHome}
           </Link>
           <Link href="/check-booking" className="inline-block px-8 py-3 border-2 border-gold text-gold rounded-lg hover:bg-gold hover:text-white transition-colors font-semibold cursor-pointer text-center">
-            Check Booking Status
+            {labels.checkStatus}
           </Link>
         </div>
       </div>

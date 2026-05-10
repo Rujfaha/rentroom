@@ -4,9 +4,10 @@ import type { ContactInfo } from "@/types/landing.types";
 interface ContactSectionProps {
   contacts: ContactInfo[];
   address: string;
+  mapUrl?: string;
 }
 
-export default function ContactSection({ contacts, address }: ContactSectionProps) {
+export default function ContactSection({ contacts, address, mapUrl }: ContactSectionProps) {
   return (
     <section id="contact" className="py-20 md:py-28 bg-stone-light/30 px-4">
       <div className="max-w-4xl mx-auto">
@@ -40,8 +41,23 @@ export default function ContactSection({ contacts, address }: ContactSectionProp
             </h3>
             <div className="bg-white rounded-xl p-6 shadow-md">
               <p className="text-earth leading-relaxed">{address}</p>
-              <div className="mt-4 w-full h-48 bg-stone-light rounded-lg flex items-center justify-center">
-                <span className="text-earth-light text-sm">Map placeholder</span>
+              <div className="mt-4 w-full h-48 bg-stone-light rounded-lg overflow-hidden">
+                {mapUrl ? (
+                  <iframe
+                    src={mapUrl}
+                    width="100%"
+                    height="100%"
+                    style={{ border: 0 }}
+                    allowFullScreen
+                    loading="lazy"
+                    referrerPolicy="no-referrer-when-downgrade"
+                    title="Google Maps"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <span className="text-earth-light text-sm">Map placeholder</span>
+                  </div>
+                )}
               </div>
             </div>
           </div>

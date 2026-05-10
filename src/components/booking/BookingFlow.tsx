@@ -1,29 +1,52 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import StepSelectRoom from "./StepSelectRoom";
 import StepGuestInfo from "./StepGuestInfo";
 import StepPayment from "./StepPayment";
 import StepConfirmation from "./StepConfirmation";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
-import { getLandingPageData, generateBookingReference, calculateNights } from "@/services/mock-data";
+import { createWebsiteBooking, searchAvailableRoomTypes } from "@/app/actions/booking";
+import { calculateNights } from "@/services/mock-data";
+import { createClient } from "@/lib/supabase/client";
+import { bookingMessages, type BookingLocale } from "./booking-i18n";
 
-const STEPS = ["Select Room", "Guest Info", "Payment", "Confirmation"];
+interface BookingFlowProps {
+  hotelId: string;
+  initialRoomTypes: RoomTypeDisplay[];
+  initialCheckIn: string;
+  initialCheckOut: string;
+  initialAdults: number;
+  initialChildren: number;
+  locale: BookingLocale;
+}
 
-export default function BookingFlow() {
+export default function BookingFlow({
+  hotelId,
+  initialRoomTypes,
+  initialCheckIn,
+  initialCheckOut,
+  initialAdults,
+  initialChildren,
+  locale,
+}: BookingFlowProps) {
   const searchParams = useSearchParams();
-  const data = getLandingPageData();
+  const labels = bookingMessages[locale];
+  const supabase = useMemo(() => createClient(), []);
+  const searchRequestIdRef = useRef(0);
 
   const preselectedRoom = searchParams.get("room") || "";
-  const preCheckIn = searchParams.get("checkIn") || new Date().toISOString().split("T")[0];
-  const preCheckOut = searchParams.get("checkOut") || new Date(Date.now() + 86400000).toISOString().split("T")[0];
-  const preAdults = Number(searchParams.get("adults")) || 2;
-  const preChildren = Number(searchParams.get("children")) || 0;
+  const preCheckIn = searchParams.get("checkIn") || initialCheckIn;
+  const preCheckOut = searchParams.get("checkOut") || initialCheckOut;
+  const preAdults = Number(searchParams.get("adults")) || initialAdults;
+  const preChildren = Number(searchParams.get("children")) || initialChildren;
 
   const [step, setStep] = useState(preselectedRoom ? 1 : 0);
+  const [roomTypes, setRoomTypes] = useState<RoomTypeDisplay[]>(initialRoomTypes);
+  const [isSearching, setIsSearching] = useState(false);
   const [selectedRoom, setSelectedRoom] = useState<RoomTypeDisplay | null>(
-    preselectedRoom ? data.roomTypes.find(function (r) { return r.id === preselectedRoom; }) || null : null
+    preselectedRoom ? initialRoomTypes.find(function (r) { return r.id === preselectedRoom; }) || null : null
   );
   const [checkIn, setCheckIn] = useState(preCheckIn);
   const [checkOut, setCheckOut] = useState(preCheckOut);
@@ -31,6 +54,8 @@ export default function BookingFlow() {
   const [children, setChildren] = useState(preChildren);
   const [guestInfo, setGuestInfo] = useState<GuestInfo | null>(null);
   const [bookingRef, setBookingRef] = useState("");
+  const [paymentError, setPaymentError] = useState("");
+  const [isCreatingBooking, setIsCreatingBooking] = useState(false);
 
   function handleSelectRoom(room: RoomTypeDisplay) {
     setSelectedRoom(room);
@@ -44,9 +69,31 @@ export default function BookingFlow() {
     setStep(2);
   }
 
-  function handlePaymentConfirm(uploadedSlipUrl: string) {
+  async function handlePaymentConfirm(uploadedSlipUrl: string) {
+    if (!selectedRoom || !guestInfo) return;
+    setPaymentError("");
+    setIsCreatingBooking(true);
+    const result = await createWebsiteBooking({
+      hotelId,
+      roomTypeId: selectedRoom.id,
+      checkIn,
+      checkOut,
+      adults,
+      children,
+      guest: guestInfo,
+      slipUrl: uploadedSlipUrl,
+      pricePerNight: selectedRoom.basePrice,
+    });
+    setIsCreatingBooking(false);
+
+    if (!result.success || !result.bookingNumber) {
+      setPaymentError(result.error || "ไม่สามารถสร้างการจองได้");
+      void refreshRoomTypes({ silent: true });
+      return;
+    }
+
     setSlipUrl(uploadedSlipUrl);
-    setBookingRef(generateBookingReference());
+    setBookingRef(result.bookingNumber);
     setStep(3);
   }
 
@@ -55,11 +102,109 @@ export default function BookingFlow() {
   }
 
   const totalNights = calculateNights(checkIn, checkOut);
+  const totalGuests = adults + children;
+
+  const canSearch = useMemo(function () {
+    return Boolean(hotelId && checkIn && checkOut && new Date(checkOut).getTime() > new Date(checkIn).getTime());
+  }, [checkIn, checkOut, hotelId]);
+
+  const refreshRoomTypes = useCallback(async function (options?: { silent?: boolean }) {
+    const requestId = searchRequestIdRef.current + 1;
+    searchRequestIdRef.current = requestId;
+
+    if (!canSearch) {
+      setRoomTypes([]);
+      setSelectedRoom(null);
+      return;
+    }
+
+    if (!options?.silent) {
+      setIsSearching(true);
+    }
+
+    const nextRoomTypes = await searchAvailableRoomTypes({
+      hotelId,
+      checkIn,
+      checkOut,
+      adults,
+      children,
+    });
+
+    if (requestId !== searchRequestIdRef.current) {
+      return;
+    }
+
+    setRoomTypes(nextRoomTypes);
+    setSelectedRoom(function (current) {
+      if (!current) return current;
+      return nextRoomTypes.find(function (room) { return room.id === current.id; }) || null;
+    });
+
+    if (!options?.silent) {
+      setIsSearching(false);
+    }
+  }, [adults, canSearch, checkIn, checkOut, children, hotelId]);
+
+  useEffect(function () {
+    const timeoutId = window.setTimeout(function () {
+      void refreshRoomTypes();
+    }, 250);
+
+    return function () {
+      window.clearTimeout(timeoutId);
+    };
+  }, [refreshRoomTypes]);
+
+  useEffect(function () {
+    if (!hotelId) return;
+
+    const roomsChannel = supabase
+      .channel("booking-rooms-" + hotelId)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "rooms",
+          filter: "hotel_id=eq." + hotelId,
+        },
+        function () {
+          void refreshRoomTypes({ silent: true });
+        }
+      )
+      .subscribe();
+
+    const bookingsChannel = supabase
+      .channel("booking-bookings-" + hotelId)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "bookings",
+          filter: "hotel_id=eq." + hotelId,
+        },
+        function () {
+          void refreshRoomTypes({ silent: true });
+        }
+      )
+      .subscribe();
+
+    const intervalId = window.setInterval(function () {
+      void refreshRoomTypes({ silent: true });
+    }, 5000);
+
+    return function () {
+      window.clearInterval(intervalId);
+      supabase.removeChannel(roomsChannel);
+      supabase.removeChannel(bookingsChannel);
+    };
+  }, [hotelId, refreshRoomTypes, supabase]);
 
   return (
     <div>
       <div className="flex items-center justify-center mb-10">
-        {STEPS.map(function (label, i) {
+        {labels.steps.map(function (label, i) {
           const isActive = i === step;
           const isDone = i < step;
           const circleClass = isActive
@@ -86,16 +231,19 @@ export default function BookingFlow() {
 
       {step === 0 && (
         <StepSelectRoom
-          roomTypes={data.roomTypes}
+          roomTypes={roomTypes}
           checkIn={checkIn}
           checkOut={checkOut}
           adults={adults}
           childrenCount={children}
+          isSearching={isSearching}
+          totalGuests={totalGuests}
           onCheckInChange={setCheckIn}
           onCheckOutChange={setCheckOut}
           onAdultsChange={setAdults}
           onChildrenChange={setChildren}
           onSelect={handleSelectRoom}
+          labels={labels}
         />
       )}
 
@@ -109,6 +257,7 @@ export default function BookingFlow() {
           childrenCount={children}
           onSubmit={handleGuestSubmit}
           onBack={handleBack}
+          labels={labels}
         />
       )}
 
@@ -123,6 +272,9 @@ export default function BookingFlow() {
           guest={guestInfo}
           onConfirm={handlePaymentConfirm}
           onBack={handleBack}
+          labels={labels}
+          error={paymentError}
+          isConfirming={isCreatingBooking}
         />
       )}
 
@@ -137,6 +289,7 @@ export default function BookingFlow() {
           guest={guestInfo}
           bookingRef={bookingRef}
           slipUrl={slipUrl}
+          labels={labels}
         />
       )}
     </div>

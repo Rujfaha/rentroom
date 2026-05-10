@@ -1,9 +1,11 @@
-// Placeholder — Login page
-export default function LoginPage() {
-  return (
-    <div>
-      <h1>Login</h1>
-      <p>Login page will be implemented here.</p>
-    </div>
-  );
+import { createClient } from "@/lib/supabase/server";
+import { LoginFormClient } from "./ClientLoginForm";
+
+export default async function LoginPage() {
+  const supabase = await createClient();
+  const { data: hotelData } = await supabase.from("hotels").select("name").limit(1).single();
+  const hotel = hotelData as any;
+  const hotelName = hotel?.name || "Valley Retreat";
+
+  return <LoginFormClient hotelName={hotelName} />;
 }
