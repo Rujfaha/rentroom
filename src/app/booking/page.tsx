@@ -1,34 +1,57 @@
 import { Suspense } from "react";
 import BookingFlow from "@/components/booking/BookingFlow";
 import Link from "next/link";
-import { getHotelConfig } from "@/services/mock-data";
+import LoadingLink from "@/components/ui/LoadingLink";
 import { getBookingPageData } from "@/app/actions/booking";
 import { bookingMessages, getBookingLocale, type BookingLocale } from "@/components/booking/booking-i18n";
 import { buildHotelMetadata } from "@/lib/seo";
+import { getHotelConfig } from "@/services/mock-data";
 
 const hotel = getHotelConfig();
+
+interface BookingMetadataHotelRow {
+  id: string;
+  name: string | null;
+  description: string | null;
+  address: string | null;
+  province: string | null;
+  district: string | null;
+  sub_district: string | null;
+  postal_code: string | null;
+  logo_url: string | null;
+  cover_image_url: string | null;
+  settings: Record<string, unknown> | null;
+}
+
+interface BookingMetadataRoomRow {
+  name: string | null;
+  description: string | null;
+  base_price: number | string | null;
+}
 
 export async function generateMetadata() {
   const { createServiceClient } = await import("@/lib/supabase/service");
   const supabase = await createServiceClient();
-  const { data: hotelRow } = await (supabase
-    .from("hotels") as any)
+  const { data: hotelData } = await supabase
+    .from("hotels")
     .select("id, name, description, address, province, district, sub_district, postal_code, logo_url, cover_image_url, settings")
     .eq("is_active", true)
     .limit(1)
     .single();
-  const { data: rooms } = hotelRow?.id
-    ? await (supabase
-        .from("room_types") as any)
+  const hotelRow = hotelData as unknown as BookingMetadataHotelRow | null;
+  const { data: roomsData } = hotelRow?.id
+    ? await supabase
+        .from("room_types")
         .select("name, description, base_price")
         .eq("hotel_id", hotelRow.id)
         .eq("is_active", true)
         .limit(8)
     : { data: [] };
+  const rooms = (roomsData ?? []) as unknown as BookingMetadataRoomRow[];
 
   return buildHotelMetadata({
     hotel: hotelRow,
-    rooms: rooms ?? [],
+    rooms,
     pathname: "/booking",
     pageTitle: `จองห้องพัก - ${hotelRow?.name || hotel.name}`,
     pageDescription: `จองห้องพักออนไลน์สำหรับ ${hotelRow?.name || hotel.name} ดูห้องว่าง ราคา และยืนยันการจองได้สะดวก`,
@@ -103,9 +126,9 @@ export default async function BookingPage({
                 ENG
               </Link>
             </div>
-            <Link href="/" className="text-sm text-stone-light hover:text-gold transition-colors cursor-pointer">
+            <LoadingLink href="/" className="inline-flex items-center gap-1.5 text-sm text-stone-light hover:text-gold transition-colors cursor-pointer" loadingLabel="กำลังกลับหน้าแรก...">
               {labels.header.backHome}
-            </Link>
+            </LoadingLink>
           </div>
         </div>
       </header>

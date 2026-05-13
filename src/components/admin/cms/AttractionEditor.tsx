@@ -15,6 +15,7 @@ import {
   X,
   Landmark,
 } from "lucide-react";
+import type { CmsAttraction } from "./content-editor-types";
 
 function AttractionImageInput({
   defaultUrl,
@@ -236,7 +237,7 @@ function AttractionImageInput({
 export function AttractionEditor({
   initialAttractions,
 }: {
-  initialAttractions: any[];
+  initialAttractions: CmsAttraction[];
 }) {
   const [attractions, setAttractions] = useState(initialAttractions ?? []);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -284,7 +285,7 @@ export function AttractionEditor({
       <div className="flex justify-end">
         <button
           onClick={() => {
-            const newAttraction = {
+            const newAttraction: CmsAttraction = {
               id: "new",
               name: "",
               description: "",
@@ -419,7 +420,7 @@ export function AttractionEditor({
                   <div className="h-32 bg-slate-100 overflow-hidden shrink-0 border-b border-[#e8e2d6]">
                     <img
                       src={attraction.image_url}
-                      alt={attraction.name}
+                      alt={attraction.name || ""}
                       className="w-full h-full object-cover"
                     />
                   </div>

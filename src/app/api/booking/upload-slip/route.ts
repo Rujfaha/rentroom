@@ -1,9 +1,9 @@
-import { mkdir, writeFile } from "fs/promises";
-import { join } from "path";
 import { NextRequest, NextResponse } from "next/server";
+import { createServiceClient } from "@/lib/supabase/service";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const BUCKET_NAME = "booking-slips";
 
 function getExtension(file: File): string {
   const nameExtension = file.name.split(".").pop()?.toLowerCase();
@@ -46,13 +46,37 @@ export async function POST(request: NextRequest) {
     const ext = getExtension(file);
     const safeOriginalName = sanitizeFilePart(file.name.replace(/\.[^.]+$/, "")) || "payment-slip";
     const filename = `${Date.now()}_${safeOriginalName}.${ext}`;
-    const folder = "slips";
-    const dir = join(process.cwd(), "public", "uploads", folder);
+    const storagePath = `slips/${filename}`;
 
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, filename), buffer);
+    const supabase = await createServiceClient();
 
-    return NextResponse.json({ url: `/uploads/${folder}/${filename}` });
+    // Ensure bucket exists (idempotent - won't error if already exists)
+    // Note: This requires service_role key
+    await supabase.storage.createBucket(BUCKET_NAME, {
+      public: true,
+      fileSizeLimit: MAX_FILE_SIZE,
+      allowedMimeTypes: ["image/jpeg", "image/png", "image/webp"],
+    });
+
+    // Upload file to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(storagePath, buffer, {
+        contentType: file.type,
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Supabase storage upload error:", uploadError);
+      return NextResponse.json({ error: "Unable to upload payment slip" }, { status: 500 });
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(storagePath);
+
+    return NextResponse.json({ url: urlData.publicUrl });
   } catch (error) {
     console.error("upload booking slip error:", error);
     return NextResponse.json({ error: "Unable to upload payment slip" }, { status: 500 });

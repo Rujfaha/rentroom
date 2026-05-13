@@ -1,6 +1,7 @@
 "use client";
 
 import { Edit2, Trash2 } from "lucide-react";
+import type { CmsPhysicalRoom } from "./physical-room-types";
 
 const STATUS_LABELS: Record<string, string> = {
   available: "ว่าง",
@@ -33,7 +34,7 @@ const HK_COLORS: Record<string, string> = {
 };
 
 interface PhysicalRoomCardProps {
-  room: any;
+  room: CmsPhysicalRoom;
   roomTypeName?: string;
   onEdit: () => void;
   onDelete: () => void;

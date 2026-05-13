@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ContactEditor } from "./ContactEditor";
+import { ContactEditor, type CmsContactRow } from "./ContactEditor";
 import { PromptPayEditor } from "./PromptPayEditor";
 import { Phone, QrCode } from "lucide-react";
 
 interface ContactsTabsProps {
-  contacts: any[];
+  contacts: CmsContactRow[];
   promptpay: {
     accountId: string;
     accountName: string;

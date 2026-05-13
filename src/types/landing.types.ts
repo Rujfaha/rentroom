@@ -78,6 +78,7 @@ export interface GuestInfo {
   phone: string;
   email: string;
   specialRequests: string;
+  companyName?: string;
 }
 
 export interface BookingSummary {

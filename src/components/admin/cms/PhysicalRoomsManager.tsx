@@ -5,18 +5,19 @@ import { PhysicalRoomCard } from "./PhysicalRoomCard";
 import { PhysicalRoomForm } from "./PhysicalRoomForm";
 import { createRoom, updateRoom, deleteRoom } from "@/app/actions/rooms";
 import { Plus, DoorOpen } from "lucide-react";
+import type { CmsPhysicalRoom, CmsRoomTypeOption } from "./physical-room-types";
 
 interface PhysicalRoomsManagerProps {
   roomTypeId: string;
-  roomTypes: any[];
-  initialRooms: any[];
-  onRoomsChange: (rooms: any[]) => void;
+  roomTypes: CmsRoomTypeOption[];
+  initialRooms: CmsPhysicalRoom[];
+  onRoomsChange: (rooms: CmsPhysicalRoom[]) => void;
 }
 
 export function PhysicalRoomsManager({ roomTypeId, roomTypes, initialRooms, onRoomsChange }: PhysicalRoomsManagerProps) {
   const [rooms, setRooms] = useState(initialRooms);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [error, setError] = useState("");
 
   const sortedRooms = [...rooms].sort((a, b) => a.room_number.localeCompare(b.room_number, undefined, { numeric: true }));
@@ -33,12 +34,19 @@ export function PhysicalRoomsManager({ roomTypeId, roomTypes, initialRooms, onRo
         setEditingId(null);
         if (!id) {
           // Create: remove "new" placeholder and prepend real data
-          setRooms((prev) => [result.data, ...prev.filter((r) => r.id !== "new")]);
+          setRooms((prev) => {
+            const updated = [result.data, ...prev.filter((r) => r.id !== "new")];
+            onRoomsChange(updated);
+            return updated;
+          });
         } else {
           // Update: replace existing room
-          setRooms((prev) => prev.map((r) => (r.id === id ? result.data : r)));
+          setRooms((prev) => {
+            const updated = prev.map((r) => (r.id === id ? result.data : r));
+            onRoomsChange(updated);
+            return updated;
+          });
         }
-        onRoomsChange(rooms);
       }
     });
   };
@@ -68,7 +76,7 @@ export function PhysicalRoomsManager({ roomTypeId, roomTypes, initialRooms, onRo
         </div>
         <button
           onClick={() => {
-            const newRoom = {
+            const newRoom: CmsPhysicalRoom = {
               id: "new",
               room_type_id: roomTypeId,
               room_number: "",
@@ -142,7 +150,7 @@ export function PhysicalRoomsManager({ roomTypeId, roomTypes, initialRooms, onRo
           <p>ยังไม่มีห้องพักสำหรับประเภทนี้</p>
           <button
             onClick={() => {
-              const newRoom = {
+              const newRoom: CmsPhysicalRoom = {
                 id: "new",
                 room_type_id: roomTypeId,
                 room_number: "",

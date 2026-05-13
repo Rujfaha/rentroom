@@ -3,9 +3,12 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
+import { evaluateBookingPromotion } from "@/app/actions/promotion-engine";
+import { sendBookingStatusEmail, type BookingEmailData } from "@/lib/email/booking-notifications";
 import type { RoomStatus } from "@/types/database.types";
 import type { BookingStatus, PaymentStatus } from "@/types/database.types";
 import type { GuestInfo, RoomAmenity, RoomTypeDisplay } from "@/types/landing.types";
+import type { PromotionBreakdown } from "@/lib/promotions/types";
 
 type BlockingBookingStatus = "pending" | "confirmed" | "checked_in";
 
@@ -81,6 +84,7 @@ interface PublicBookingLookupRow {
     status: PaymentStatus;
     amount: number | string | null;
     slip_image_url: string | null;
+    created_at: string;
   }[] | null;
 }
 
@@ -120,6 +124,22 @@ interface CreateWebsiteBookingInput {
   guest: GuestInfo;
   slipUrl: string;
   promotionCode?: string;
+  antiSpam?: {
+    companyName?: string;
+    formStartedAt?: number;
+  };
+}
+
+interface NormalizedGuestInfo {
+  fullName: string;
+  phone: string;
+  email: string;
+  specialRequests: string;
+}
+
+interface BookingDuplicateRow {
+  id: string;
+  booking_number: string;
 }
 
 interface CustomerInsert {
@@ -161,6 +181,27 @@ interface PaymentInsert {
   method: "promptpay";
   status: "pending";
   slip_image_url: string | null;
+}
+
+interface BookingPromotionInsert {
+  booking_id: string;
+  promotion_id: string;
+  promotion_name: string;
+  promotion_code: string | null;
+  discount_type: string;
+  discount_value: number;
+  discount_amount: number;
+  conditions_snapshot: Record<string, unknown>;
+  benefits_snapshot: Record<string, unknown>;
+}
+
+interface PromotionUsageInsert {
+  promotion_id: string;
+  promotion_code_id: string | null;
+  booking_id: string;
+  customer_phone: string;
+  customer_email: string;
+  discount_amount: number;
 }
 
 interface InsertResult<T> {
@@ -227,6 +268,34 @@ interface SelectMaybeSingleTable<TResult> {
   };
 }
 
+interface SelectPromotionCountTable {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      maybeSingle(): Promise<{ data: { used_count: number | string | null } | null; error: { message?: string } | null }>;
+    };
+  };
+}
+
+interface UpdatePromotionCountTable {
+  update(value: { used_count: number }): {
+    eq(column: string, value: string): Promise<UpdateResult>;
+  };
+}
+
+interface SelectPromotionCodeCountTable {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      maybeSingle(): Promise<{ data: { used_count: number | string | null } | null; error: { message?: string } | null }>;
+    };
+  };
+}
+
+interface UpdatePromotionCodeCountTable {
+  update(value: { used_count: number }): {
+    eq(column: string, value: string): Promise<UpdateResult>;
+  };
+}
+
 interface BookingAdminUpdate {
   status: "confirmed" | "checked_in" | "checked_out" | "cancelled" | "no_show";
   confirmed_at?: string;
@@ -250,6 +319,30 @@ interface BookingAdminRow {
   id: string;
   room_id: string;
   status: BlockingBookingStatus | "cancelled" | "checked_out" | "no_show";
+}
+
+interface BookingEmailLookupRow {
+  booking_number: string;
+  check_in_date: string;
+  check_out_date: string;
+  num_guests: number;
+  status: BookingStatus;
+  net_amount: number | string | null;
+  total_amount: number | string | null;
+  customers: {
+    full_name: string;
+    email: string | null;
+  } | null;
+  rooms: {
+    room_number: string;
+    room_types: {
+      name: string;
+    } | null;
+  } | null;
+  payments: {
+    status: PaymentStatus;
+    created_at: string;
+  }[] | null;
 }
 
 interface BookingPageData {
@@ -279,6 +372,10 @@ interface PromotionDiscountResult {
 }
 
 const BLOCKING_BOOKING_STATUSES: BlockingBookingStatus[] = ["pending", "confirmed", "checked_in"];
+const BOOKABLE_ROOM_STATUSES: RoomStatus[] = ["available", "occupied"];
+const MIN_BOOKING_FORM_TIME_MS = 3000;
+const MAX_BOOKING_NIGHTS = 30;
+const DUPLICATE_BOOKING_WINDOW_MINUTES = 30;
 
 const amenityIconMap: Record<string, string> = {
   WiFi: "wifi",
@@ -363,7 +460,7 @@ export async function searchAvailableRoomTypes(input: BookingRoomSearchInput): P
       .select("id, room_type_id, status, is_active")
       .eq("hotel_id", input.hotelId)
       .eq("is_active", true)
-      .eq("status", "available")
+      .in("status", BOOKABLE_ROOM_STATUSES)
       .returns<RoomRow[]>(),
     getPricingContext(input.hotelId),
     supabase
@@ -413,15 +510,38 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
   bookingNumber?: string;
   error?: string;
 }> {
+  const normalizedGuest = normalizeGuestInfo(input.guest);
+  const validationError = validateWebsiteBookingInput(input, normalizedGuest);
+
+  if (validationError) {
+    return { success: false, error: validationError };
+  }
+
+  if (input.antiSpam?.companyName?.trim()) {
+    return { success: false, error: "กรุณาตรวจสอบข้อมูลการจองอีกครั้ง" };
+  }
+
+  if (!isValidFormTiming(input.antiSpam?.formStartedAt)) {
+    return { success: false, error: "กรุณาตรวจสอบข้อมูลการจองอีกครั้ง" };
+  }
+
   if (!input.hotelId || !input.roomTypeId || !isValidDateRange(input.checkIn, input.checkOut)) {
     return { success: false, error: "ข้อมูลการจองไม่ครบถ้วน" };
   }
 
-  if (!input.guest.fullName.trim() || !input.guest.phone.trim() || !input.guest.email.trim()) {
-    return { success: false, error: "กรุณากรอกข้อมูลผู้เข้าพักให้ครบถ้วน" };
+  const supabase = await createServiceClient();
+  const hasDuplicateBooking = await findRecentDuplicateBooking(supabase, {
+    hotelId: input.hotelId,
+    roomTypeId: input.roomTypeId,
+    checkIn: input.checkIn,
+    checkOut: input.checkOut,
+    guest: normalizedGuest,
+  });
+
+  if (hasDuplicateBooking) {
+    return { success: false, error: "พบรายการจองที่คล้ายกันแล้ว กรุณาตรวจสอบสถานะการจอง หรือรอสักครู่ก่อนทำรายการใหม่" };
   }
 
-  const supabase = await createServiceClient();
   const availableRoomId = await findAvailableRoomId({
     hotelId: input.hotelId,
     roomTypeId: input.roomTypeId,
@@ -440,15 +560,27 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
 
   const pricing = await getPricingContext(input.hotelId);
   const totalAmount = getStayTotal(roomType, input.checkIn, input.checkOut, pricing);
-  const promotion = await validatePromotionCode({
+  const promotion = await evaluateBookingPromotion({
     hotelId: input.hotelId,
-    code: input.promotionCode || "",
+    roomTypeId: input.roomTypeId,
+    checkInDate: input.checkIn,
+    checkOutDate: input.checkOut,
+    nights: calculateNights(input.checkIn, input.checkOut),
+    quantity: 1,
+    guests: Math.max(1, input.adults + input.children),
     subtotal: totalAmount,
+    bookingChannel: "website",
+    promotionCode: input.promotionCode || "",
+    customer: {
+      phone: normalizedGuest.phone,
+      email: normalizedGuest.email,
+    },
   });
   if (input.promotionCode?.trim() && !promotion.valid) {
     return { success: false, error: promotion.message || "code ส่วนลดไม่ถูกต้อง" };
   }
-  const discountAmount = promotion.valid ? promotion.discountAmount : 0;
+  const selectedPromotion = promotion.selectedPromotion;
+  const discountAmount = selectedPromotion ? promotion.discountAmount : 0;
   const netAmount = Math.max(0, totalAmount - discountAmount);
   const bookingNumber = await generateBookingNumber(input.hotelId);
 
@@ -456,10 +588,10 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
   const { data: customer, error: customerError } = await customersTable
     .insert({
       hotel_id: input.hotelId,
-      full_name: input.guest.fullName.trim(),
-      phone: input.guest.phone.trim(),
-      email: input.guest.email.trim(),
-      notes: input.guest.specialRequests.trim() || null,
+      full_name: normalizedGuest.fullName,
+      phone: normalizedGuest.phone,
+      email: normalizedGuest.email,
+      notes: normalizedGuest.specialRequests || null,
     })
     .select("id")
     .single();
@@ -484,7 +616,7 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
       total_amount: totalAmount,
       discount_amount: discountAmount,
       net_amount: netAmount,
-      special_requests: input.guest.specialRequests.trim() || null,
+      special_requests: normalizedGuest.specialRequests || null,
     })
     .select("id, booking_number")
     .single();
@@ -494,12 +626,22 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
     return { success: false, error: "ไม่สามารถสร้างการจองได้" };
   }
 
+  if (selectedPromotion) {
+    await recordPromotionUsage(
+      supabase,
+      booking.id,
+      selectedPromotion,
+      normalizedGuest.phone,
+      normalizedGuest.email
+    );
+  }
+
   const bookingGuestsTable = supabase.from("booking_guests") as unknown as InsertOnlyTable<BookingGuestInsert>;
   await bookingGuestsTable.insert({
     booking_id: booking.id,
     hotel_id: input.hotelId,
-    full_name: input.guest.fullName.trim(),
-    phone: input.guest.phone.trim(),
+    full_name: normalizedGuest.fullName,
+    phone: normalizedGuest.phone,
     is_primary: true,
   });
 
@@ -516,6 +658,8 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
   if (paymentError) {
     console.error("createWebsiteBooking payment error:", paymentError);
   }
+
+  await sendBookingStatusEmailForBooking(supabase, booking.id, input.hotelId, "createWebsiteBooking");
 
   return { success: true, bookingNumber: booking.booking_number };
 }
@@ -600,7 +744,7 @@ export async function lookupPublicBooking(input: {
       created_at,
       customers!inner(full_name, phone, email),
       rooms(room_number, room_types(name)),
-      payments(status, amount, slip_image_url)
+      payments(status, amount, slip_image_url, created_at)
     `)
     .eq("booking_number", bookingRef)
     .ilike("customers.email", email)
@@ -616,7 +760,10 @@ export async function lookupPublicBooking(input: {
     return null;
   }
 
-  const latestPayment = booking.payments?.[0] ?? null;
+  const latestPayment = (booking.payments ?? [])
+    .toSorted(function (a, b) {
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    })[0] ?? null;
   const roomTypeName = booking.rooms?.room_types?.name || "Room";
   const roomNumber = booking.rooms?.room_number || "";
   const totalAmount = Number(booking.net_amount ?? booking.total_amount) || 0;
@@ -638,6 +785,87 @@ export async function lookupPublicBooking(input: {
     slipUrl: latestPayment?.slip_image_url || null,
     createdAt: booking.created_at,
   };
+}
+
+async function recordPromotionUsage(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  bookingId: string,
+  promotion: PromotionBreakdown,
+  customerPhone: string,
+  customerEmail: string
+) {
+  const bookingPromotionsTable = supabase.from("booking_promotions") as unknown as InsertOnlyTable<BookingPromotionInsert>;
+  const { error: snapshotError } = await bookingPromotionsTable.insert({
+    booking_id: bookingId,
+    promotion_id: promotion.promotionId,
+    promotion_name: promotion.promotionName,
+    promotion_code: promotion.promotionCode || null,
+    discount_type: promotion.discountType,
+    discount_value: promotion.discountValue,
+    discount_amount: promotion.discountAmount,
+    conditions_snapshot: promotion.conditionsSnapshot as unknown as Record<string, unknown>,
+    benefits_snapshot: promotion.benefitsSnapshot as unknown as Record<string, unknown>,
+  });
+
+  if (snapshotError) {
+    console.error("recordPromotionUsage snapshot error:", snapshotError);
+  }
+
+  const usageTable = supabase.from("promotion_usages") as unknown as InsertOnlyTable<PromotionUsageInsert>;
+  const { error: usageError } = await usageTable.insert({
+    promotion_id: promotion.promotionId,
+    promotion_code_id: promotion.promotionCodeId || null,
+    booking_id: bookingId,
+    customer_phone: customerPhone,
+    customer_email: customerEmail,
+    discount_amount: promotion.discountAmount,
+  });
+
+  if (usageError) {
+    console.error("recordPromotionUsage usage error:", usageError);
+  }
+
+  const promotionsCountSelectTable = supabase.from("promotions") as unknown as SelectPromotionCountTable;
+  const { data: currentPromotion, error: countFetchError } = await promotionsCountSelectTable
+    .select("used_count")
+    .eq("id", promotion.promotionId)
+    .maybeSingle();
+
+  if (countFetchError) {
+    console.error("recordPromotionUsage count fetch error:", countFetchError);
+    return;
+  }
+
+  const promotionsCountUpdateTable = supabase.from("promotions") as unknown as UpdatePromotionCountTable;
+  const { error: countError } = await promotionsCountUpdateTable
+    .update({ used_count: (Number(currentPromotion?.used_count) || 0) + 1 })
+    .eq("id", promotion.promotionId);
+
+  if (countError) {
+    console.error("recordPromotionUsage count update error:", countError);
+  }
+
+  if (promotion.promotionCodeId) {
+    const promotionCodesCountSelectTable = supabase.from("promotion_codes") as unknown as SelectPromotionCodeCountTable;
+    const { data: currentPromotionCode, error: codeCountFetchError } = await promotionCodesCountSelectTable
+      .select("used_count")
+      .eq("id", promotion.promotionCodeId)
+      .maybeSingle();
+
+    if (codeCountFetchError) {
+      console.error("recordPromotionUsage code count fetch error:", codeCountFetchError);
+      return;
+    }
+
+    const promotionCodesCountUpdateTable = supabase.from("promotion_codes") as unknown as UpdatePromotionCodeCountTable;
+    const { error: codeCountError } = await promotionCodesCountUpdateTable
+      .update({ used_count: (Number(currentPromotionCode?.used_count) || 0) + 1 })
+      .eq("id", promotion.promotionCodeId);
+
+    if (codeCountError) {
+      console.error("recordPromotionUsage code count update error:", codeCountError);
+    }
+  }
 }
 
 export async function approveBooking(formData: FormData): Promise<void> {
@@ -671,17 +899,6 @@ export async function approveBooking(formData: FormData): Promise<void> {
     return;
   }
 
-  const roomsTable = supabase.from("rooms") as unknown as UpdateScopedTable<RoomAdminUpdate>;
-  const { error: roomError } = await roomsTable
-    .update({ status: "occupied" })
-    .eq("id", bookingRow.room_id)
-    .eq("hotel_id", session.hotelId);
-
-  if (roomError) {
-    console.error("approveBooking room status error:", roomError);
-    return;
-  }
-
   const paymentsTable = supabase.from("payments") as unknown as UpdateScopedTable<PaymentAdminUpdate>;
   const { error: paymentError } = await paymentsTable
     .update({ status: "verified", verified_by: session.userId, verified_at: new Date().toISOString() })
@@ -693,6 +910,7 @@ export async function approveBooking(formData: FormData): Promise<void> {
     return;
   }
 
+  await sendBookingStatusEmailForBooking(supabase, bookingId, session.hotelId, "approveBooking");
   revalidateBookingPages();
 }
 
@@ -730,6 +948,7 @@ export async function rejectBooking(formData: FormData): Promise<void> {
     return;
   }
 
+  await sendBookingStatusEmailForBooking(supabase, bookingId, session.hotelId, "rejectBooking");
   revalidateBookingPages();
 }
 
@@ -741,6 +960,9 @@ export async function checkInBooking(formData: FormData): Promise<void> {
   if (!bookingId) return;
 
   const supabase = await createServiceClient();
+  const bookingRow = await getAdminBookingRow(supabase, bookingId, session.hotelId);
+  if (!bookingRow?.room_id) return;
+
   const bookingsTable = supabase.from("bookings") as unknown as UpdateScopedTable<BookingAdminUpdate>;
   const { error: bookingError } = await bookingsTable
     .update({ status: "checked_in", checked_in_at: new Date().toISOString() })
@@ -752,6 +974,8 @@ export async function checkInBooking(formData: FormData): Promise<void> {
     return;
   }
 
+  await updateBookingRoomStatus(supabase, bookingRow.room_id, session.hotelId, "occupied", "checkInBooking");
+  await sendBookingStatusEmailForBooking(supabase, bookingId, session.hotelId, "checkInBooking");
   revalidateBookingPages();
 }
 
@@ -778,6 +1002,7 @@ export async function checkOutBooking(formData: FormData): Promise<void> {
   }
 
   await updateBookingRoomStatus(supabase, bookingRow.room_id, session.hotelId, "available", "checkOutBooking");
+  await sendBookingStatusEmailForBooking(supabase, bookingId, session.hotelId, "checkOutBooking");
   revalidateBookingPages();
 }
 
@@ -808,6 +1033,7 @@ export async function markNoShowBooking(formData: FormData): Promise<void> {
   }
 
   await updateBookingRoomStatus(supabase, bookingRow.room_id, session.hotelId, "available", "markNoShowBooking");
+  await sendBookingStatusEmailForBooking(supabase, bookingId, session.hotelId, "markNoShowBooking");
   revalidateBookingPages();
 }
 
@@ -849,6 +1075,67 @@ async function updateBookingRoomStatus(
   }
 }
 
+async function sendBookingStatusEmailForBooking(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  bookingId: string,
+  hotelId: string,
+  logPrefix: string
+) {
+  try {
+    const bookingsTable = supabase.from("bookings") as unknown as SelectScopedSingleTable<BookingEmailLookupRow>;
+    const { data, error } = await bookingsTable
+      .select(`
+        booking_number,
+        check_in_date,
+        check_out_date,
+        num_guests,
+        status,
+        total_amount,
+        net_amount,
+        customers(full_name, email),
+        rooms(room_number, room_types(name)),
+        payments(status, created_at)
+      `)
+      .eq("id", bookingId)
+      .eq("hotel_id", hotelId)
+      .single();
+
+    if (error || !data) {
+      console.error(`${logPrefix} booking email lookup error:`, error);
+      return;
+    }
+
+    if (!data.customers?.email) {
+      console.warn(`${logPrefix} booking email skipped: customer email is missing`);
+      return;
+    }
+
+    const latestPayment = (data.payments ?? [])
+      .toSorted(function (a, b) {
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      })[0] ?? null;
+    const roomTypeName = data.rooms?.room_types?.name || "Room";
+    const roomNumber = data.rooms?.room_number || "";
+    const emailData: BookingEmailData = {
+      bookingNumber: data.booking_number,
+      guestName: data.customers.full_name || "ลูกค้า",
+      guestEmail: data.customers.email,
+      roomName: roomNumber ? `${roomTypeName} (${roomNumber})` : roomTypeName,
+      checkIn: data.check_in_date,
+      checkOut: data.check_out_date,
+      nights: calculateNights(data.check_in_date, data.check_out_date),
+      guests: data.num_guests,
+      totalAmount: Number(data.net_amount ?? data.total_amount) || 0,
+      bookingStatus: data.status,
+      paymentStatus: latestPayment?.status || "pending",
+    };
+
+    await sendBookingStatusEmail(emailData);
+  } catch (error) {
+    console.error(`${logPrefix} booking email error:`, error);
+  }
+}
+
 function revalidateBookingPages() {
   revalidatePath("/admin/bookings");
   revalidatePath("/admin/rooms");
@@ -859,7 +1146,10 @@ function revalidateBookingPages() {
 
 function isValidDateRange(checkIn: string, checkOut: string) {
   if (!checkIn || !checkOut) return false;
-  return new Date(checkOut).getTime() > new Date(checkIn).getTime();
+  const checkInTime = new Date(checkIn).getTime();
+  const checkOutTime = new Date(checkOut).getTime();
+  if (!Number.isFinite(checkInTime) || !Number.isFinite(checkOutTime)) return false;
+  return checkOutTime > checkInTime;
 }
 
 function calculateNights(checkIn: string, checkOut: string): number {
@@ -867,6 +1157,102 @@ function calculateNights(checkIn: string, checkOut: string): number {
   const checkOutDate = new Date(checkOut);
   const diffTime = checkOutDate.getTime() - checkInDate.getTime();
   return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
+}
+
+function normalizeGuestInfo(guest: GuestInfo): NormalizedGuestInfo {
+  return {
+    fullName: guest.fullName.trim().replace(/\s+/g, " "),
+    phone: guest.phone.trim().replace(/[\s-]/g, ""),
+    email: guest.email.trim().toLowerCase(),
+    specialRequests: guest.specialRequests.trim(),
+  };
+}
+
+function validateWebsiteBookingInput(input: CreateWebsiteBookingInput, guest: NormalizedGuestInfo): string | null {
+  if (!input.hotelId || !input.roomTypeId || !isValidDateRange(input.checkIn, input.checkOut)) {
+    return "ข้อมูลการจองไม่ครบถ้วน";
+  }
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const checkInTime = new Date(input.checkIn).getTime();
+  if (checkInTime < today.getTime()) {
+    return "กรุณาเลือกวันที่เข้าพักให้ถูกต้อง";
+  }
+
+  if (calculateNights(input.checkIn, input.checkOut) > MAX_BOOKING_NIGHTS) {
+    return "ระยะเวลาการเข้าพักยาวเกินไป กรุณาติดต่อที่พักโดยตรง";
+  }
+
+  if (guest.fullName.length < 2 || guest.fullName.length > 100) {
+    return "กรุณากรอกชื่อผู้เข้าพักให้ถูกต้อง";
+  }
+
+  if (!/^\+?\d{8,20}$/.test(guest.phone)) {
+    return "กรุณากรอกเบอร์โทรให้ถูกต้อง";
+  }
+
+  if (guest.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guest.email)) {
+    return "กรุณากรอกอีเมลให้ถูกต้อง";
+  }
+
+  if (guest.specialRequests.length > 1000) {
+    return "รายละเอียดคำขอเพิ่มเติมยาวเกินไป";
+  }
+
+  if (!input.slipUrl.trim()) {
+    return "กรุณาแนบหลักฐานการชำระเงิน";
+  }
+
+  return null;
+}
+
+function isValidFormTiming(formStartedAt?: number): boolean {
+  if (!formStartedAt || !Number.isFinite(formStartedAt)) return false;
+  const elapsedMs = Date.now() - formStartedAt;
+  return elapsedMs >= MIN_BOOKING_FORM_TIME_MS && elapsedMs < 24 * 60 * 60 * 1000;
+}
+
+async function findRecentDuplicateBooking(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  input: {
+    hotelId: string;
+    roomTypeId: string;
+    checkIn: string;
+    checkOut: string;
+    guest: NormalizedGuestInfo;
+  }
+): Promise<boolean> {
+  const windowStart = new Date(Date.now() - DUPLICATE_BOOKING_WINDOW_MINUTES * 60 * 1000).toISOString();
+  const { data, error } = await supabase
+    .from("bookings")
+    .select(`
+      id,
+      booking_number,
+      customers!inner(email, phone),
+      rooms!inner(room_type_id)
+    `)
+    .eq("hotel_id", input.hotelId)
+    .eq("check_in_date", input.checkIn)
+    .eq("check_out_date", input.checkOut)
+    .in("status", ["pending", "confirmed"])
+    .gte("created_at", windowStart)
+    .returns<Array<BookingDuplicateRow & {
+      customers: { email: string | null; phone: string | null } | null;
+      rooms: { room_type_id: string | null } | null;
+    }>>();
+
+  if (error) {
+    console.error("findRecentDuplicateBooking error:", error);
+    return false;
+  }
+
+  return (data ?? []).some((booking) => {
+    const sameRoomType = booking.rooms?.room_type_id === input.roomTypeId;
+    const sameEmail = booking.customers?.email?.trim().toLowerCase() === input.guest.email;
+    const samePhone = booking.customers?.phone?.trim().replace(/[\s-]/g, "") === input.guest.phone;
+    return sameRoomType && (sameEmail || samePhone);
+  });
 }
 
 async function findAvailableRoomId(input: {
@@ -882,7 +1268,7 @@ async function findAvailableRoomId(input: {
     .eq("hotel_id", input.hotelId)
     .eq("room_type_id", input.roomTypeId)
     .eq("is_active", true)
-    .eq("status", "available")
+    .in("status", BOOKABLE_ROOM_STATUSES)
     .order("room_number", { ascending: true })
     .returns<{ id: string }[]>();
 

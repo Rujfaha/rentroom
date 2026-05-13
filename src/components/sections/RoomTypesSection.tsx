@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import Image from "next/image";
 import SectionTitle from "@/components/ui/SectionTitle";
 import Button from "@/components/ui/Button";
+import GalleryModal from "@/components/ui/GalleryModal";
 import type { RoomTypeDisplay } from "@/types/landing.types";
 import { getRoomAvailabilityCounts } from "@/app/actions/landing";
 import { createClient } from "@/lib/supabase/client";
@@ -41,14 +42,37 @@ function AmenityIcon({ icon }: { icon: string }) {
   );
 }
 
-function RoomCard({ room }: { room: RoomTypeDisplay }) {
+function buildGalleryImages(room: RoomTypeDisplay): { url: string; alt: string }[] {
+  const urls = [room.coverImageUrl, ...room.galleryUrls].filter(Boolean);
+  return Array.from(new Set(urls)).map((url, index) => ({
+    url,
+    alt: room.name + " รูปที่ " + String(index + 1),
+  }));
+}
+
+function RoomCard({ room, onImageClick }: { room: RoomTypeDisplay; onImageClick: (room: RoomTypeDisplay) => void }) {
   const isFull = (room.availableRoomsCount || 0) <= 0;
+  const galleryCount = buildGalleryImages(room).length;
 
   return (
     <div
       className={"group bg-white rounded-2xl overflow-hidden shadow-lg shadow-forest-dark/5 hover:shadow-2xl hover:shadow-forest-dark/10 transition-all duration-500 hover:-translate-y-1 flex flex-col h-full " + (isFull ? "grayscale opacity-75" : "")}
     >
-      <div className="relative h-64 overflow-hidden flex-shrink-0">
+      <div
+        role="button"
+        tabIndex={0}
+        aria-label={"ดูแกลเลอรี่ " + room.name}
+        className="relative h-64 overflow-hidden flex-shrink-0 cursor-pointer"
+        onClick={function () {
+          onImageClick(room);
+        }}
+        onKeyDown={function (e) {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onImageClick(room);
+          }
+        }}
+      >
         <Image
           src={room.coverImageUrl}
           alt={room.name}
@@ -56,6 +80,19 @@ function RoomCard({ room }: { room: RoomTypeDisplay }) {
           className="object-cover group-hover:scale-105 transition-transform duration-700"
           sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
         />
+        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/15 transition-colors duration-500" />
+        {galleryCount > 1 && (
+          <div className="absolute bottom-4 left-4 z-10 bg-black/55 backdrop-blur-md text-white px-3 py-1.5 rounded-full border border-white/20 shadow-lg">
+            <span className="text-[10px] sm:text-xs font-semibold flex items-center gap-1.5 tracking-wide">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                <circle cx="9" cy="9" r="2" />
+                <path d="M21 15l-3.1-3.1a2 2 0 0 0-2.8 0L6 21" />
+              </svg>
+              {"ดูรูปภาพ " + String(galleryCount) + " รูป"}
+            </span>
+          </div>
+        )}
         {/* Info Tags - Top Right */}
         <div className="absolute top-4 right-4 flex flex-col items-end gap-2 z-10">
           {/* Price Tag */}
@@ -66,11 +103,7 @@ function RoomCard({ room }: { room: RoomTypeDisplay }) {
           </div>
 
           {/* Availability Badge */}
-          <div className={"backdrop-blur-md px-3 py-1.5 rounded-full border shadow-lg transition-all duration-300 " + 
-            (isFull 
-              ? "bg-red-500/60 border-red-400/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]" 
-              : "bg-forest-dark/60 border-forest-light/50 text-white shadow-[0_0_15px_rgba(26,60,42,0.4)]"
-            )}>
+          <div className={"backdrop-blur-md px-3 py-1.5 rounded-full border shadow-lg transition-all duration-300 " + (isFull ? "bg-red-500/60 border-red-400/50 text-white shadow-[0_0_15px_rgba(239,68,68,0.4)]" : "bg-forest-dark/60 border-forest-light/50 text-white shadow-[0_0_15px_rgba(26,60,42,0.4)]")}>
             <span className="text-[10px] sm:text-xs font-semibold flex items-center gap-1.5 tracking-wide">
               {isFull ? (
                 <>
@@ -131,6 +164,7 @@ function RoomCard({ room }: { room: RoomTypeDisplay }) {
             size="sm"
             className="w-full"
             disabled={isFull}
+            loadingLabel="กำลังโหลด..."
           >
             {isFull ? "จองเต็มแล้ว (Fully Booked)" : "Book This Room"}
           </Button>
@@ -142,7 +176,9 @@ function RoomCard({ room }: { room: RoomTypeDisplay }) {
 
 export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomTypesSectionProps) {
   const [showModal, setShowModal] = useState(false);
+  const [galleryRoom, setGalleryRoom] = useState<RoomTypeDisplay | null>(null);
   const [availabilityCounts, setAvailabilityCounts] = useState<Record<string, number>>({});
+
   const supabase = useMemo(() => createClient(), []);
 
   const refreshAvailability = useCallback(async () => {
@@ -163,9 +199,11 @@ export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomType
 
   useEffect(() => {
     if (!hotelId) return;
-    void refreshAvailability();
+    const initialRefreshId = window.setTimeout(() => {
+      void refreshAvailability();
+    }, 0);
 
-    const channel = supabase
+    const roomsChannel = supabase
       .channel("landing-rooms-" + hotelId)
       .on(
         "postgres_changes",
@@ -181,26 +219,45 @@ export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomType
       )
       .subscribe();
 
+    const bookingsChannel = supabase
+      .channel("landing-bookings-" + hotelId)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "bookings",
+          filter: "hotel_id=eq." + hotelId,
+        },
+        () => {
+          void refreshAvailability();
+        }
+      )
+      .subscribe();
+
     const intervalId = window.setInterval(() => {
       void refreshAvailability();
     }, 60000);
 
     return () => {
+      window.clearTimeout(initialRefreshId);
       window.clearInterval(intervalId);
-      supabase.removeChannel(channel);
+      supabase.removeChannel(roomsChannel);
+      supabase.removeChannel(bookingsChannel);
     };
   }, [hotelId, refreshAvailability, supabase]);
 
   useEffect(function () {
-    if (showModal) {
+    if (showModal || galleryRoom) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
+
     }
     return function () {
       document.body.style.overflow = "";
     };
-  }, [showModal]);
+  }, [showModal, galleryRoom]);
 
   if (!roomTypes || roomTypes.length === 0) {
     return (
@@ -231,7 +288,7 @@ export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomType
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {displayed.map(function (room) {
-            return <RoomCard key={room.id} room={room} />;
+            return <RoomCard key={room.id} room={room} onImageClick={setGalleryRoom} />;
           })}
         </div>
 
@@ -279,12 +336,19 @@ export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomType
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                 {remaining.map(function (room) {
-                  return <RoomCard key={room.id} room={room} />;
+                  return <RoomCard key={room.id} room={room} onImageClick={setGalleryRoom} />;
                 })}
               </div>
             </div>
           </div>
         </div>
+      )}
+      {galleryRoom && (
+        <GalleryModal
+          images={buildGalleryImages(galleryRoom)}
+          roomName={galleryRoom.name}
+          onClose={function () { setGalleryRoom(null); }}
+        />
       )}
     </section>
   );

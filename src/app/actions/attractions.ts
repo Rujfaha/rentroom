@@ -3,6 +3,25 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
+import type { LocalAttraction } from "@/types/database.types";
+
+type AttractionPayload = Pick<LocalAttraction, "hotel_id" | "name" | "description" | "image_url" | "distance_km" | "map_url" | "is_visible">;
+
+interface DbError {
+  message?: string;
+}
+
+interface InsertOnlyTable<TInsert> {
+  insert(value: TInsert): Promise<{ error: DbError | null }>;
+}
+
+interface UpdateScopedTable<TUpdate> {
+  update(value: TUpdate): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): Promise<{ error: DbError | null }>;
+    };
+  };
+}
 
 export async function updateAttraction(formData: FormData) {
   const session = await getSession();
@@ -23,7 +42,8 @@ export async function updateAttraction(formData: FormData) {
   const supabase = await createServiceClient();
 
   if (id === "new") {
-    const { error } = await (supabase.from("local_attractions") as any).insert({
+    const attractionsInsertTable = supabase.from("local_attractions") as unknown as InsertOnlyTable<AttractionPayload>;
+    const { error } = await attractionsInsertTable.insert({
       hotel_id: session.hotelId,
       name,
       description,
@@ -37,7 +57,8 @@ export async function updateAttraction(formData: FormData) {
       return { error: `Failed to create attraction: ${error.message}` };
     }
   } else {
-    const { error } = await (supabase.from("local_attractions") as any)
+    const attractionsUpdateTable = supabase.from("local_attractions") as unknown as UpdateScopedTable<Partial<AttractionPayload>>;
+    const { error } = await attractionsUpdateTable
       .update({
         name,
         description,

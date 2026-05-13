@@ -1,4 +1,4 @@
-import Link from "next/link";
+import LoadingLink from "@/components/ui/LoadingLink";
 
 interface ButtonProps {
   children: React.ReactNode;
@@ -9,6 +9,7 @@ interface ButtonProps {
   type?: "button" | "submit";
   disabled?: boolean;
   className?: string;
+  loadingLabel?: string;
 }
 
 const baseClasses =
@@ -40,14 +41,15 @@ export default function Button({
   type = "button",
   disabled = false,
   className = "",
+  loadingLabel,
 }: ButtonProps) {
   const classes = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;
 
   if (href) {
     return (
-      <Link href={href} className={classes}>
+      <LoadingLink href={href} className={classes} loadingLabel={loadingLabel}>
         {children}
-      </Link>
+      </LoadingLink>
     );
   }
 

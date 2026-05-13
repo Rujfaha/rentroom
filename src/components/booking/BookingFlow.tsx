@@ -41,6 +41,7 @@ export default function BookingFlow({
   const labels = bookingMessages[locale];
   const supabase = useMemo(() => createClient(), []);
   const searchRequestIdRef = useRef(0);
+  const [formStartedAt] = useState(function () { return Date.now(); });
 
   const preselectedRoom = searchParams.get("room") || "";
   const preCheckIn = searchParams.get("checkIn") || initialCheckIn;
@@ -89,6 +90,10 @@ export default function BookingFlow({
       guest: guestInfo,
       slipUrl: uploadedSlipUrl,
       promotionCode,
+      antiSpam: {
+        companyName: guestInfo.companyName || "",
+        formStartedAt: formStartedAt,
+      },
     });
     setIsCreatingBooking(false);
 

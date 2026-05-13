@@ -3,6 +3,25 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
+import type { Promotion } from "@/types/database.types";
+
+type PromotionPayload = Pick<Promotion, "hotel_id" | "title" | "description" | "image_url" | "discount_type" | "discount_percentage" | "discount_amount" | "discount_code" | "discount_text" | "valid_until" | "is_active">;
+
+interface DbError {
+  message?: string;
+}
+
+interface InsertOnlyTable<TInsert> {
+  insert(value: TInsert): Promise<{ error: DbError | null }>;
+}
+
+interface UpdateScopedTable<TUpdate> {
+  update(value: TUpdate): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): Promise<{ error: DbError | null }>;
+    };
+  };
+}
 
 export async function updatePromotion(formData: FormData) {
   const session = await getSession();
@@ -33,7 +52,8 @@ export async function updatePromotion(formData: FormData) {
   const supabase = await createServiceClient();
 
   if (id === "new") {
-    const { error } = await (supabase.from("promotions") as any).insert({
+    const promotionsInsertTable = supabase.from("promotions") as unknown as InsertOnlyTable<PromotionPayload>;
+    const { error } = await promotionsInsertTable.insert({
       hotel_id: session.hotelId,
       title,
       description,
@@ -51,7 +71,8 @@ export async function updatePromotion(formData: FormData) {
       return { error: "Failed to create promotion: " + (error.message || "Unknown error") };
     }
   } else {
-    const { error } = await (supabase.from("promotions") as any)
+    const promotionsUpdateTable = supabase.from("promotions") as unknown as UpdateScopedTable<Partial<PromotionPayload>>;
+    const { error } = await promotionsUpdateTable
       .update({
         title,
         description,

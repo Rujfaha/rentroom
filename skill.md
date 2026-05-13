@@ -1,0 +1,54 @@
+# การจัดการ Lint Error: `any` ใน TypeScript
+
+## สาเหตุของ Lint Error ที่เกี่ยวกับ `any`
+ใน TypeScript การใช้ type `any` ถือเป็นการปิดการตรวจสอบ type (Type Checking) ของตัวแปรนั้นๆ ซึ่งจะทำให้กฎของ Linter (เช่น `@typescript-eslint/no-explicit-any`) แจ้งเตือน error หรือ warning 
+
+## เมื่อใช้ `any` แล้วเกิดอะไรขึ้น?
+1. **สูญเสีย Type Safety:** ตัวแปรที่ถูกกำหนดเป็น `any` จะสามารถรับค่าอะไรก็ได้ และเรียกใช้ method หรือเข้าถึง property อะไรก็ได้ ทำให้มีโอกาสเกิด Runtime Error สูง (เช่น การเผลอเรียก `.map()` บนข้อมูลที่ไม่ได้เป็น Array)
+2. **ไม่ได้รับความช่วยเหลือจาก IDE:** Editor จะไม่สามารถ Auto-complete หรือแนะนำ property/method ที่ถูกต้องให้ได้
+3. **ขัดต่อจุดประสงค์ของ TypeScript:** TypeScript ถูกสร้างมาเพื่อป้องกันบั๊กจากการจัดการ Type ที่ผิดพลาด การใช้ `any` จำนวนมากจึงทำให้ประโยชน์ตรงนี้หายไป
+
+## วิธีแก้ไขไม่ให้เกิด Lint Error
+วิธีแก้ไขคือการเปลี่ยน `any` เป็น Type ที่เหมาะสมและเฉพาะเจาะจงมากขึ้น:
+
+1. **ใช้ Type หรือ Interface ที่กำหนดไว้ชัดเจน (Best Practice)**
+   ```typescript
+   // ❌ ผิด (Lint Error)
+   const userData: any = fetchUser();
+
+   // ✅ ถูกต้อง
+   interface User {
+     id: number;
+     name: string;
+   }
+   const userData: User = fetchUser();
+   ```
+
+2. **ใช้ `unknown` แทนเมื่อไม่ทราบ Type ล่วงหน้า**
+   `unknown` เป็น Type-safe counterpart ของ `any` ปลอดภัยกว่าเพราะบังคับให้เราต้องตรวจสอบ (Type Narrowing) ก่อนนำไปใช้งานเสมอ
+   ```typescript
+   // ❌ ผิด (Lint Error)
+   function processData(data: any) {
+     console.log(data.name); 
+   }
+
+   // ✅ ถูกต้อง
+   function processData(data: unknown) {
+     if (typeof data === 'object' && data !== null && 'name' in data) {
+       console.log((data as {name: string}).name);
+     }
+   }
+   ```
+
+3. **ใช้ Generics สำหรับฟังก์ชันหรือ Class ที่รับค่า/คืนค่าได้หลาย Type**
+   ```typescript
+   // ❌ ผิด (Lint Error)
+   function getFirstItem(arr: any[]) {
+     return arr[0];
+   }
+
+   // ✅ ถูกต้อง
+   function getFirstItem<T>(arr: T[]): T {
+     return arr[0];
+   }
+   ```

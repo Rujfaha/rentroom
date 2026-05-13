@@ -8,6 +8,7 @@ import {
   BedDouble, 
   Settings,
   Image as ImageIcon,
+  Tag,
   Menu,
   X,
   Crown,
@@ -37,6 +38,7 @@ export function Sidebar({ session }: SidebarProps) {
     { href: "/admin", label: "ภาพรวม", icon: LayoutDashboard, show: true },
     { href: "/admin/bookings", label: "การจอง", icon: CalendarDays, show: true },
     { href: "/admin/rooms", label: "ห้องพัก", icon: BedDouble, show: true },
+    { href: "/admin/promotions", label: "โปรโมชั่น", icon: Tag, show: isAdmin },
     { href: "/admin/cms", label: "จัดการหน้าเว็บ", icon: ImageIcon, show: isAdmin },
     { href: "/admin/pricing", label: "ราคา & ฤดูกาล", icon: Settings, show: isAdmin },
   ].filter(link => link.show);

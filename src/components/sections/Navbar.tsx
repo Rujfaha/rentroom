@@ -53,7 +53,7 @@ export default function Navbar({ hotelName, navLinks }: NavbarProps) {
             <Link href="/check-booking" className={"text-sm font-medium tracking-wide hover:text-gold transition-colors cursor-pointer " + textColor}>
               Check Booking
             </Link>
-            <Button href="/booking" size="sm">
+            <Button href="/booking" size="sm" loadingLabel="กำลังโหลด...">
               Book Now
             </Button>
           </div>
@@ -92,7 +92,7 @@ export default function Navbar({ hotelName, navLinks }: NavbarProps) {
             <Link href="/check-booking" onClick={function () { setIsMobileOpen(false); }} className="block text-forest-dark text-base font-medium hover:text-gold transition-colors cursor-pointer">
               Check Booking
             </Link>
-            <Button href="/booking" size="sm" className="w-full">
+            <Button href="/booking" size="sm" className="w-full" loadingLabel="กำลังโหลด...">
               Book Now
             </Button>
           </div>

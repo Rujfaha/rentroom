@@ -1,8 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/session";
+import { createServiceClient } from "@/lib/supabase/service";
+
+const BUCKET_NAME = "cms-uploads";
+
+interface CmsImageInsert {
+  hotel_id: string;
+  image_url: string;
+  alt_text: string | null;
+}
+
+interface InsertOnlyTable<TInsert> {
+  insert(value: TInsert): Promise<{ error: { message?: string } | null }>;
+}
 
 async function downloadExternalImage(imageUrl: string): Promise<{ buffer: Buffer; ext: string }> {
   try {
@@ -39,6 +49,17 @@ async function downloadExternalImage(imageUrl: string): Promise<{ buffer: Buffer
   }
 }
 
+function getContentType(ext: string): string {
+  const map: Record<string, string> = {
+    jpg: "image/jpeg",
+    jpeg: "image/jpeg",
+    png: "image/png",
+    gif: "image/gif",
+    webp: "image/webp",
+  };
+  return map[ext] || "image/jpeg";
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession();
@@ -72,23 +93,48 @@ export async function POST(request: NextRequest) {
     }
 
     const filename = `${session.hotelId}_${Date.now()}.${ext}`;
-    const dir = join(process.cwd(), "public", "uploads", folder);
+    const storagePath = `${folder}/${filename}`;
 
-    await mkdir(dir, { recursive: true });
-    await writeFile(join(dir, filename), buffer);
+    const supabase = await createServiceClient();
 
-    const imageUrl = `/uploads/${folder}/${filename}`;
+    // Ensure bucket exists (idempotent)
+    await supabase.storage.createBucket(BUCKET_NAME, {
+      public: true,
+    });
 
-    const supabase = await createClient();
-    await (supabase.from("cms_images") as any).insert({
+    // Upload file to Supabase Storage
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(storagePath, buffer, {
+        contentType: getContentType(ext),
+        upsert: false,
+      });
+
+    if (uploadError) {
+      console.error("Supabase storage upload error:", uploadError);
+      return NextResponse.json({ error: "Unable to upload image" }, { status: 500 });
+    }
+
+    // Get public URL
+    const { data: urlData } = supabase.storage
+      .from(BUCKET_NAME)
+      .getPublicUrl(storagePath);
+
+    const imageUrl = urlData.publicUrl;
+
+    // Save to cms_images table
+    const { createClient } = await import("@/lib/supabase/server");
+    const supabaseServer = await createClient();
+    const cmsImagesTable = supabaseServer.from("cms_images") as unknown as InsertOnlyTable<CmsImageInsert>;
+    await cmsImagesTable.insert({
       hotel_id: session.hotelId,
       image_url: imageUrl,
       alt_text: originalName,
     });
 
     return NextResponse.json({ url: imageUrl });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Upload error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unable to upload image" }, { status: 500 });
   }
 }

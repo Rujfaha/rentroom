@@ -8,17 +8,29 @@ interface SearchBarProps {
   labels: SearchBarLabels;
 }
 
+function getInitialDates(): { today: string; tomorrow: string } {
+  const todayDate = new Date();
+  const tomorrowDate = new Date(todayDate);
+  tomorrowDate.setDate(todayDate.getDate() + 1);
+  return {
+    today: todayDate.toISOString().split("T")[0],
+    tomorrow: tomorrowDate.toISOString().split("T")[0],
+  };
+}
+
 export default function SearchBar({ labels }: SearchBarProps) {
   const router = useRouter();
-  const today = new Date().toISOString().split("T")[0];
-  const tomorrow = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+  const [initialDates] = useState(getInitialDates);
+  const today = initialDates.today;
 
-  const [checkIn, setCheckIn] = useState(today);
-  const [checkOut, setCheckOut] = useState(tomorrow);
+  const [checkIn, setCheckIn] = useState(initialDates.today);
+  const [checkOut, setCheckOut] = useState(initialDates.tomorrow);
   const [adults, setAdults] = useState(2);
   const [children, setChildren] = useState(0);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   function handleSearch() {
+    setIsNavigating(true);
     const params = new URLSearchParams({
       checkIn: checkIn,
       checkOut: checkOut,
@@ -62,45 +74,37 @@ export default function SearchBar({ labels }: SearchBarProps) {
             <label className="text-xs font-semibold text-earth uppercase tracking-wider">
               {labels.adults}
             </label>
-            <select
+            <input
+              type="number"
+              min="1"
               value={adults}
-              onChange={function (e) { setAdults(Number(e.target.value)); }}
+              onChange={function (e) { setAdults(Number(e.target.value) || 1); }}
               className="w-full px-4 py-3 border border-stone rounded-lg text-charcoal focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors bg-white"
-            >
-              {[1, 2, 3, 4, 5, 6].map(function (n) {
-                return (
-                  <option key={n} value={n}>
-                    {String(n) + (n === 1 ? " Adult" : " Adults")}
-                  </option>
-                );
-              })}
-            </select>
+            />
           </div>
 
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-earth uppercase tracking-wider">
               {labels.children}
             </label>
-            <select
+            <input
+              type="number"
+              min="0"
               value={children}
-              onChange={function (e) { setChildren(Number(e.target.value)); }}
+              onChange={function (e) { setChildren(Math.max(0, Number(e.target.value) || 0)); }}
               className="w-full px-4 py-3 border border-stone rounded-lg text-charcoal focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors bg-white"
-            >
-              {[0, 1, 2, 3, 4].map(function (n) {
-                return (
-                  <option key={n} value={n}>
-                    {String(n) + (n === 1 ? " Child" : " Children")}
-                  </option>
-                );
-              })}
-            </select>
+            />
           </div>
 
           <button
             onClick={handleSearch}
-            className="w-full bg-gold text-white font-semibold py-3 px-6 rounded-lg hover:bg-gold-dark transition-all duration-300 shadow-lg shadow-gold/20 hover:shadow-xl hover:shadow-gold/30 tracking-wide cursor-pointer"
+            disabled={isNavigating}
+            className="w-full inline-flex items-center justify-center gap-2 bg-gold text-white font-semibold py-3 px-6 rounded-lg hover:bg-gold-dark transition-all duration-300 shadow-lg shadow-gold/20 hover:shadow-xl hover:shadow-gold/30 tracking-wide cursor-pointer disabled:opacity-70 disabled:cursor-wait"
           >
-            {labels.button}
+            {isNavigating && (
+              <span className="h-4 w-4 rounded-full border-2 border-current border-r-transparent animate-spin" aria-hidden="true" />
+            )}
+            <span>{isNavigating ? "กำลังโหลด..." : labels.button}</span>
           </button>
         </div>
       </div>

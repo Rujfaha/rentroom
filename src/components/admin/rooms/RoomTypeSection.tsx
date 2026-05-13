@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import {
   Plus,
   Edit2,
@@ -15,6 +16,7 @@ import {
 } from "lucide-react";
 import { RoomTypeImageGallery } from "../cms/RoomTypeImageGallery";
 import { createRoomType, updateRoomType, deleteRoomType } from "@/app/actions/rooms";
+import type { AdminRoom, AdminRoomType, AdminRoomTypeImage } from "./types";
 
 const PREDEFINED_AMENITIES = [
   "WiFi", "แอร์", "TV", "ตู้เย็น", "ระเบียง", "อ่างอาบน้ำ",
@@ -22,10 +24,20 @@ const PREDEFINED_AMENITIES = [
 ];
 
 interface RoomTypeSectionProps {
-  roomTypes: any[];
-  rooms: any[];
-  onRoomTypesChange: (types: any[]) => void;
-  onRoomsChange: (rooms: any[]) => void;
+  roomTypes: AdminRoomType[];
+  rooms: AdminRoom[];
+  onRoomTypesChange: (types: AdminRoomType[]) => void;
+  onRoomsChange: (rooms: AdminRoom[]) => void;
+}
+
+interface RoomTypeFormData {
+  name: string;
+  description: string;
+  base_price: string;
+  max_guests: string;
+  amenities: string[];
+  is_active: boolean;
+  id?: string;
 }
 
 function safeString(value: unknown, fallback = ""): string {
@@ -38,9 +50,10 @@ function safeBoolean(value: unknown, fallback = true): boolean {
   return fallback;
 }
 
-function normalizeRoomType(roomType: any) {
+function normalizeRoomType(roomType: Partial<AdminRoomType>): AdminRoomType {
   return {
     ...roomType,
+    id: safeString(roomType?.id),
     name: safeString(roomType?.name),
     description: safeString(roomType?.description),
     base_price: roomType?.base_price ?? "",
@@ -51,11 +64,15 @@ function normalizeRoomType(roomType: any) {
   };
 }
 
+function hasImageId(image: { id?: string }): image is AdminRoomTypeImage {
+  return typeof image.id === "string" && image.id.length > 0;
+}
+
 export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange, onRoomsChange }: RoomTypeSectionProps) {
   const safeRoomTypes = Array.isArray(roomTypes) ? roomTypes : [];
   const safeRooms = Array.isArray(rooms) ? rooms : [];
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingType, setEditingType] = useState<any | null>(null);
+  const [editingType, setEditingType] = useState<AdminRoomType | null>(null);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
 
@@ -67,7 +84,7 @@ export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange, onRoomsCh
     setError("");
   };
 
-  const openEdit = (rt: any) => {
+  const openEdit = (rt: AdminRoomType) => {
     setEditingType(rt);
     setModalOpen(true);
     setError("");
@@ -91,15 +108,7 @@ export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange, onRoomsCh
     });
   };
 
-  const handleSave = async (data: {
-    name: string;
-    description: string;
-    base_price: string;
-    max_guests: string;
-    amenities: string[];
-    is_active: boolean;
-    id?: string;
-  }) => {
+  const handleSave = async (data: RoomTypeFormData) => {
     setError("");
     const formData = new FormData();
     formData.set("name", data.name);
@@ -171,7 +180,7 @@ export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange, onRoomsCh
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {safeRoomTypes.map((rt) => {
-            const coverImage = rt.images?.find((img: any) => img.is_cover);
+            const coverImage = rt.images?.find((img) => img.is_cover);
             const roomCount = getRoomCount(rt.id);
             const displayAmenities = (rt.amenities || []).slice(0, 4);
             const moreCount = (rt.amenities || []).length - 4;
@@ -181,7 +190,7 @@ export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange, onRoomsCh
                 {/* Cover Image */}
                 <div className="relative h-40 bg-[#f0ece4] flex items-center justify-center overflow-hidden">
                   {coverImage?.image_url ? (
-                    <img src={coverImage.image_url} alt={rt.name} className="w-full h-full object-cover" />
+                    <Image src={coverImage.image_url} alt={rt.name} fill className="object-cover" sizes="(max-width: 768px) 100vw, 33vw" />
                   ) : (
                     <ImageIcon className="w-10 h-10 text-[#c4b9a8]" />
                   )}
@@ -256,12 +265,14 @@ export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange, onRoomsCh
       {modalOpen && (
         <RoomTypeModal
           roomType={editingType}
-          roomTypes={roomTypes}
           error={error}
           isPending={isPending}
           onSave={handleSave}
           onClose={() => { setModalOpen(false); setEditingType(null); setError(""); }}
           onImagesChange={(rtId, newImages) => {
+            setEditingType((current) =>
+              current?.id === rtId ? { ...current, images: newImages } : current
+            );
             onRoomTypesChange(
               safeRoomTypes.map((rt) => rt.id === rtId ? { ...rt, images: newImages } : rt)
             );
@@ -276,20 +287,18 @@ export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange, onRoomsCh
 
 function RoomTypeModal({
   roomType,
-  roomTypes,
   error,
   isPending,
   onSave,
   onClose,
   onImagesChange,
 }: {
-  roomType: any | null;
-  roomTypes: any[];
+  roomType: AdminRoomType | null;
   error: string;
   isPending: boolean;
-  onSave: (data: any) => Promise<void>;
+  onSave: (data: RoomTypeFormData) => Promise<void>;
   onClose: () => void;
-  onImagesChange: (rtId: string, images: any[]) => void;
+  onImagesChange: (rtId: string, images: AdminRoomTypeImage[]) => void;
 }) {
   const isEdit = !!roomType;
   const [name, setName] = useState(safeString(roomType?.name));
@@ -448,7 +457,7 @@ function RoomTypeModal({
               <RoomTypeImageGallery
                 roomTypeId={roomType.id}
                 images={roomType.images || []}
-                onImagesChange={(imgs) => onImagesChange(roomType.id, imgs)}
+                onImagesChange={(imgs) => onImagesChange(roomType.id, imgs.filter(hasImageId))}
               />
             </div>
           )}

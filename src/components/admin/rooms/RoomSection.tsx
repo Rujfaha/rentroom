@@ -14,6 +14,8 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { createRoom, updateRoom, deleteRoom, bulkCreateRooms } from "@/app/actions/rooms";
+import type { RoomStatus } from "@/types/database.types";
+import type { AdminRoom, AdminRoomType } from "./types";
 
 const ROOM_STATUS_OPTIONS = [
   { value: "available", label: "ว่าง", color: "bg-emerald-50 text-emerald-700 border-emerald-200" },
@@ -31,9 +33,30 @@ const HK_STATUS_OPTIONS = [
 ];
 
 interface RoomSectionProps {
-  rooms: any[];
-  roomTypes: any[];
-  onRoomsChange: (rooms: any[]) => void;
+  rooms: AdminRoom[];
+  roomTypes: AdminRoomType[];
+  onRoomsChange: (rooms: AdminRoom[]) => void;
+}
+
+interface RoomFormData {
+  room_type_id: string;
+  room_number: string;
+  floor: string;
+  status: string;
+  housekeeping: string;
+  notes: string;
+  is_active: boolean;
+  id?: string;
+}
+
+interface BulkRoomFormData {
+  room_type_id: string;
+  prefix: string;
+  start_number: string;
+  count: string;
+  floor: string;
+  status: string;
+  housekeeping: string;
 }
 
 function safeString(value: unknown, fallback = ""): string {
@@ -46,13 +69,20 @@ function safeBoolean(value: unknown, fallback = true): boolean {
   return fallback;
 }
 
-function normalizeRoom(room: any) {
+function safeRoomStatus(value: unknown): RoomStatus {
+  return value === "occupied" || value === "maintenance" || value === "out_of_order"
+    ? value
+    : "available";
+}
+
+function normalizeRoom(room: Partial<AdminRoom>): AdminRoom {
   return {
     ...room,
+    id: safeString(room?.id),
     room_type_id: safeString(room?.room_type_id),
     room_number: safeString(room?.room_number),
     floor: safeString(room?.floor),
-    status: safeString(room?.status, "available"),
+    status: safeRoomStatus(room?.status),
     housekeeping: safeString(room?.housekeeping, "clean"),
     notes: safeString(room?.notes),
     is_active: safeBoolean(room?.is_active, true),
@@ -62,14 +92,14 @@ function normalizeRoom(room: any) {
 }
 
 export function RoomSection({ rooms, roomTypes, onRoomsChange }: RoomSectionProps) {
-  const safeRooms = Array.isArray(rooms) ? rooms : [];
-  const safeRoomTypes = Array.isArray(roomTypes) ? roomTypes : [];
+  const safeRooms = useMemo(() => Array.isArray(rooms) ? rooms : [], [rooms]);
+  const safeRoomTypes = useMemo(() => Array.isArray(roomTypes) ? roomTypes : [], [roomTypes]);
   const [filterType, setFilterType] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [searchQuery, setSearchQuery] = useState("");
 
   const [modalMode, setModalMode] = useState<"single" | "bulk" | null>(null);
-  const [editingRoom, setEditingRoom] = useState<any | null>(null);
+  const [editingRoom, setEditingRoom] = useState<AdminRoom | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
@@ -97,7 +127,7 @@ export function RoomSection({ rooms, roomTypes, onRoomsChange }: RoomSectionProp
     return opt || HK_STATUS_OPTIONS[0];
   };
 
-  const openSingle = (room?: any) => {
+  const openSingle = (room?: AdminRoom) => {
     setEditingRoom(room || null);
     setModalMode("single");
     setError("");
@@ -122,16 +152,7 @@ export function RoomSection({ rooms, roomTypes, onRoomsChange }: RoomSectionProp
     });
   };
 
-  const handleSaveSingle = async (data: {
-    room_type_id: string;
-    room_number: string;
-    floor: string;
-    status: string;
-    housekeeping: string;
-    notes: string;
-    is_active: boolean;
-    id?: string;
-  }) => {
+  const handleSaveSingle = async (data: RoomFormData) => {
     setError("");
     const fd = new FormData();
     fd.set("room_type_id", data.room_type_id);
@@ -159,15 +180,7 @@ export function RoomSection({ rooms, roomTypes, onRoomsChange }: RoomSectionProp
     });
   };
 
-  const handleBulkCreate = async (data: {
-    room_type_id: string;
-    prefix: string;
-    start_number: string;
-    count: string;
-    floor: string;
-    status: string;
-    housekeeping: string;
-  }) => {
+  const handleBulkCreate = async (data: BulkRoomFormData) => {
     setError("");
     const fd = new FormData();
     fd.set("room_type_id", data.room_type_id);
@@ -300,7 +313,7 @@ export function RoomSection({ rooms, roomTypes, onRoomsChange }: RoomSectionProp
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
           {filteredRooms.map((room) => {
             const statusBadge = getStatusBadge(room.status);
-            const hkBadge = getHKBadge(room.housekeeping);
+            const hkBadge = getHKBadge(safeString(room.housekeeping, "clean"));
             return (
               <div
                 key={room.id}
@@ -343,7 +356,7 @@ export function RoomSection({ rooms, roomTypes, onRoomsChange }: RoomSectionProp
                     </div>
                     <div className="flex items-center justify-between text-[10px] text-[#8b7355]">
                       <span className="flex items-center gap-1">
-                        ออก: {new Date(room.currentBooking.check_out).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
+                        ออก: {new Date(room.currentBooking.check_out || room.currentBooking.check_out_date).toLocaleDateString('th-TH', { day: 'numeric', month: 'short' })}
                       </span>
                       <span className="px-1 bg-white border border-[#e8e2d6] rounded-sm text-[9px] font-medium text-amber-600">
                         {room.currentBooking.status === 'checked_in' ? 'เข้าพัก' : 'ยืนยันแล้ว'}
@@ -417,11 +430,11 @@ function SingleRoomModal({
   onSave,
   onClose,
 }: {
-  room: any | null;
-  roomTypes: any[];
+  room: AdminRoom | null;
+  roomTypes: AdminRoomType[];
   error: string;
   isPending: boolean;
-  onSave: (data: any) => Promise<void>;
+  onSave: (data: RoomFormData) => Promise<void>;
   onClose: () => void;
 }) {
   const isEdit = !!room;
@@ -561,11 +574,11 @@ function BulkCreateModal({
   onSave,
   onClose,
 }: {
-  roomTypes: any[];
+  roomTypes: AdminRoomType[];
   existingRoomNumbers: string[];
   error: string;
   isPending: boolean;
-  onSave: (data: any) => Promise<void>;
+  onSave: (data: BulkRoomFormData) => Promise<void>;
   onClose: () => void;
 }) {
   const [roomTypeId, setRoomTypeId] = useState("");

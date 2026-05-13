@@ -2,11 +2,21 @@
 
 import { useState, useTransition } from "react";
 import { updateContact, deleteContact } from "@/app/actions/cms";
-import { Plus, Save, Trash2, Edit2, X, Check, Eye, EyeOff, Phone, Mail, MapPin, Globe, Camera, MessageCircle } from "lucide-react";
+import { Plus, Save, Trash2, Edit2, Phone, Mail, MapPin, Globe, Camera, MessageCircle } from "lucide-react";
 import type { ContactType } from "@/types/database.types";
 
-export function ContactEditor({ initialContacts }: { initialContacts: any[] }) {
-  const [contacts, setContacts] = useState(initialContacts);
+export interface CmsContactRow {
+  id: string;
+  contact_type: ContactType;
+  label: string | null;
+  value: string;
+  icon_url?: string | null;
+  sort_order?: number | null;
+  is_visible: boolean;
+}
+
+export function ContactEditor({ initialContacts }: { initialContacts: CmsContactRow[] }) {
+  const contacts = initialContacts;
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
 

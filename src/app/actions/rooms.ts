@@ -3,10 +3,223 @@
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
+import type { BookingStatus, HousekeepingStatus, Room, RoomStatus, RoomType, RoomTypeImage } from "@/types/database.types";
 
 // ─── Types ─────────────────────────────────────────────────
 
-type ActionResult = { success?: boolean; data?: any; error?: string };
+type ActionResult<T = undefined> = T extends undefined
+  ? { success?: boolean; error?: string }
+  : { success: true; data: T; error?: never } | { success?: false; error: string; data?: never };
+
+type RoomTypePayload = Pick<RoomType, "hotel_id" | "name" | "description" | "base_price" | "max_guests" | "amenities" | "is_active">;
+type RoomPayload = Pick<Room, "hotel_id" | "room_type_id" | "room_number" | "floor" | "status" | "housekeeping" | "notes" | "is_active">;
+type RoomTypeImagePayload = Pick<RoomTypeImage, "room_type_id" | "hotel_id" | "image_url" | "is_cover" | "sort_order">;
+type RoomTypeActionData = Omit<RoomType, "amenities"> & { amenities: string[]; images?: RoomTypeImage[] };
+
+interface DbError {
+  message?: string;
+}
+
+interface InsertResult<T> {
+  data: T | null;
+  error: DbError | null;
+}
+
+interface UpdateResult {
+  error: DbError | null;
+}
+
+interface SelectSingleResult<T> {
+  data: T | null;
+  error: DbError | null;
+}
+
+interface SelectListResult<T> {
+  data: T[] | null;
+  error: DbError | null;
+}
+
+interface InsertSelectTable<TInsert, TResult> {
+  insert(value: TInsert | TInsert[]): {
+    select(columns?: string): {
+      single(): Promise<InsertResult<TResult>>;
+    };
+  };
+}
+
+interface InsertListTable<TInsert, TResult> {
+  insert(value: TInsert | TInsert[]): {
+    select(columns?: string): Promise<InsertResult<TResult[]>>;
+  };
+}
+
+interface UpdateSelectTable<TUpdate, TResult> {
+  update(value: TUpdate): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): {
+        select(columns?: string): {
+          single(): Promise<InsertResult<TResult>>;
+        };
+      };
+    };
+  };
+}
+
+interface UpdateScopedTable<TUpdate> {
+  update(value: TUpdate): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): Promise<UpdateResult>;
+    };
+  };
+}
+
+interface DeleteScopedTable {
+  delete(): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): Promise<UpdateResult>;
+    };
+  };
+}
+
+interface SelectIdByHotelTable {
+  select(columns: string, options?: { count?: "exact"; head?: boolean }): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): {
+        neq(column: string, value: string): {
+          maybeSingle(): Promise<SelectSingleResult<IdRow>>;
+        };
+        maybeSingle(): Promise<SelectSingleResult<IdRow>>;
+      };
+      in(column: string, values: string[]): Promise<{ count: number | null; error: DbError | null }>;
+    };
+  };
+}
+
+interface SelectRoomsByTypeTable {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): Promise<SelectListResult<IdRow>>;
+    };
+  };
+}
+
+interface SelectImageSortTable {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): {
+        order(column: string, options: { ascending: boolean }): {
+          limit(count: number): {
+            single(): Promise<SelectSingleResult<RoomTypeImageSortRow>>;
+          };
+        };
+      };
+    };
+  };
+}
+
+interface SelectImageListTable {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): {
+        limit(count: number): Promise<SelectListResult<IdRow>>;
+      };
+    };
+  };
+}
+
+interface SelectImageCoverTable {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): {
+        single(): Promise<SelectSingleResult<RoomTypeImageCoverRow>>;
+      };
+    };
+  };
+}
+
+interface SelectRemainingImageTable {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): {
+        order(column: string, options: { ascending: boolean }): {
+          limit(count: number): {
+            single(): Promise<SelectSingleResult<IdRow>>;
+          };
+        };
+      };
+    };
+  };
+}
+
+interface SelectIdLimitTable {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): {
+        limit(count: number): Promise<SelectListResult<IdRow>>;
+      };
+    };
+  };
+}
+
+interface SelectAdminRoomsTable {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      order(column: string, options: { ascending: boolean }): Promise<SelectListResult<AdminRoomRow>>;
+    };
+  };
+}
+
+interface SelectRoomNumbersTable {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      in(column: string, values: string[]): Promise<SelectListResult<RoomNumberRow>>;
+    };
+  };
+}
+
+interface IdRow {
+  id: string;
+}
+
+interface RoomNumberRow {
+  room_number: string;
+}
+
+interface RoomTypeImageSortRow {
+  sort_order: number | null;
+}
+
+interface RoomTypeImageCoverRow {
+  room_type_id: string;
+  is_cover: boolean;
+}
+
+interface AdminBookingRow {
+  id: string;
+  check_in_date: string;
+  check_out_date: string;
+  status: BookingStatus;
+  customers: {
+    full_name: string | null;
+  } | null;
+}
+
+interface AdminRoomRow extends Room {
+  bookings?: AdminBookingRow[] | null;
+}
+
+interface AdminRoomDisplay extends AdminRoomRow {
+  bookings: Array<AdminBookingRow & {
+    guest_name: string;
+    check_in: string;
+    check_out: string;
+  }>;
+  currentBooking: (AdminBookingRow & {
+    guest_name: string;
+    check_in: string;
+    check_out: string;
+  }) | null;
+}
 
 // ─── Helpers ───────────────────────────────────────────────
 
@@ -16,9 +229,34 @@ async function getValidatedSession() {
   return session;
 }
 
+function parseAmenities(value: FormDataEntryValue | null): string[] {
+  if (typeof value !== "string" || !value) return [];
+
+  try {
+    const parsed: unknown = JSON.parse(value);
+    return Array.isArray(parsed)
+      ? parsed.filter((item): item is string => typeof item === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function toRoomStatus(value: FormDataEntryValue | null): RoomStatus {
+  return value === "occupied" || value === "maintenance" || value === "out_of_order"
+    ? value
+    : "available";
+}
+
+function toHousekeepingStatus(value: FormDataEntryValue | null): HousekeepingStatus {
+  return value === "dirty" || value === "inspected" || value === "in_progress" || value === "out_of_service"
+    ? value
+    : "clean";
+}
+
 // ─── Room Type Actions ───────────────────────────────────
 
-export async function createRoomType(formData: FormData): Promise<ActionResult> {
+export async function createRoomType(formData: FormData): Promise<ActionResult<RoomTypeActionData>> {
   const session = await getValidatedSession();
   if (!session) return { error: "Unauthorized" };
   const hotelId = session.hotelId!;
@@ -29,8 +267,7 @@ export async function createRoomType(formData: FormData): Promise<ActionResult> 
   const base_price = parseFloat(basePriceRaw ?? "0");
   const maxGuestsRaw = formData.get("max_guests") as string;
   const max_guests = parseInt(maxGuestsRaw ?? "0", 10);
-  const amenitiesRaw = formData.get("amenities") as string;
-  const amenities = amenitiesRaw ? JSON.parse(amenitiesRaw) : [];
+  const amenities = parseAmenities(formData.get("amenities"));
   const is_active = formData.get("is_active") === "true";
 
   if (!name) return { error: "กรุณากรอกชื่อประเภทห้อง" };
@@ -40,15 +277,16 @@ export async function createRoomType(formData: FormData): Promise<ActionResult> 
   const supabase = await createServiceClient();
 
   // Check uniqueness within hotel
-  const { data: existing } = await (supabase.from("room_types") as any)
+  const roomTypesSelectTable = supabase.from("room_types") as unknown as SelectIdByHotelTable;
+  const { data: existing } = await roomTypesSelectTable
     .select("id")
     .eq("hotel_id", hotelId)
     .eq("name", name)
-    .single();
+    .maybeSingle();
 
   if (existing) return { error: "ชื่อประเภทห้องนี้มีอยู่แล้ว" };
 
-  const { data, error } = await (supabase.from("room_types") as any).insert({
+  const payload: RoomTypePayload = {
     hotel_id: hotelId,
     name,
     description,
@@ -56,19 +294,26 @@ export async function createRoomType(formData: FormData): Promise<ActionResult> 
     max_guests,
     amenities,
     is_active,
-  }).select().single();
+  };
+
+  const roomTypesInsertTable = supabase.from("room_types") as unknown as InsertSelectTable<RoomTypePayload, RoomTypeActionData>;
+  const { data, error } = await roomTypesInsertTable
+    .insert(payload)
+    .select()
+    .single();
 
   if (error) {
     console.error("createRoomType insert error:", error);
     return { error: "ไม่สามารถสร้างประเภทห้องได้: " + (error.message || JSON.stringify(error)) };
   }
+  if (!data) return { error: "ไม่สามารถสร้างประเภทห้องได้" };
 
   revalidatePath("/admin/rooms");
   revalidatePath("/");
   return { success: true, data };
 }
 
-export async function updateRoomType(formData: FormData): Promise<ActionResult> {
+export async function updateRoomType(formData: FormData): Promise<ActionResult<RoomTypeActionData>> {
   const session = await getValidatedSession();
   if (!session) return { error: "Unauthorized" };
   const hotelId = session.hotelId!;
@@ -78,8 +323,7 @@ export async function updateRoomType(formData: FormData): Promise<ActionResult> 
   const description = (formData.get("description") as string)?.trim() || null;
   const base_price = parseFloat(formData.get("base_price") as string);
   const max_guests = parseInt(formData.get("max_guests") as string, 10);
-  const amenitiesRaw = formData.get("amenities") as string;
-  const amenities = amenitiesRaw ? JSON.parse(amenitiesRaw) : [];
+  const amenities = parseAmenities(formData.get("amenities"));
   const is_active = formData.get("is_active") === "true";
 
   if (!id) return { error: "ID is required" };
@@ -90,16 +334,18 @@ export async function updateRoomType(formData: FormData): Promise<ActionResult> 
   const supabase = await createServiceClient();
 
   // Check uniqueness excluding current record
-  const { data: existing } = await (supabase.from("room_types") as any)
+  const roomTypesSelectTable = supabase.from("room_types") as unknown as SelectIdByHotelTable;
+  const { data: existing } = await roomTypesSelectTable
     .select("id")
     .eq("hotel_id", hotelId)
     .eq("name", name)
     .neq("id", id)
-    .single();
+    .maybeSingle();
 
   if (existing) return { error: "ชื่อประเภทห้องนี้มีอยู่แล้ว" };
 
-  const { data, error } = await (supabase.from("room_types") as any)
+  const roomTypesUpdateTable = supabase.from("room_types") as unknown as UpdateSelectTable<Partial<RoomTypePayload>, RoomTypeActionData>;
+  const { data, error } = await roomTypesUpdateTable
     .update({ name, description, base_price, max_guests, amenities, is_active })
     .eq("id", id)
     .eq("hotel_id", hotelId)
@@ -110,13 +356,14 @@ export async function updateRoomType(formData: FormData): Promise<ActionResult> 
     console.error("updateRoomType error:", error);
     return { error: "ไม่สามารถอัปเดตประเภทห้องได้: " + (error.message || JSON.stringify(error)) };
   }
+  if (!data) return { error: "ไม่สามารถอัปเดตประเภทห้องได้" };
 
   revalidatePath("/admin/rooms");
   revalidatePath("/");
   return { success: true, data };
 }
 
-export async function deleteRoomType(id: string): Promise<ActionResult> {
+export async function deleteRoomType(id: string): Promise<ActionResult<{ deletedRooms: number }>> {
   const session = await getValidatedSession();
   if (!session) return { error: "Unauthorized" };
   const hotelId = session.hotelId!;
@@ -124,7 +371,8 @@ export async function deleteRoomType(id: string): Promise<ActionResult> {
 
   const supabase = await createServiceClient();
 
-  const { data: roomType, error: roomTypeCheckError } = await (supabase.from("room_types") as any)
+  const roomTypesSelectTable = supabase.from("room_types") as unknown as SelectIdByHotelTable;
+  const { data: roomType, error: roomTypeCheckError } = await roomTypesSelectTable
     .select("id")
     .eq("id", id)
     .eq("hotel_id", hotelId)
@@ -136,7 +384,8 @@ export async function deleteRoomType(id: string): Promise<ActionResult> {
   }
   if (!roomType) return { error: "ไม่พบประเภทห้องที่ต้องการลบ" };
 
-  const { data: roomsData, error: roomsError } = await (supabase.from("rooms") as any)
+  const roomsSelectTable = supabase.from("rooms") as unknown as SelectRoomsByTypeTable;
+  const { data: roomsData, error: roomsError } = await roomsSelectTable
     .select("id")
     .eq("room_type_id", id)
     .eq("hotel_id", hotelId);
@@ -146,10 +395,11 @@ export async function deleteRoomType(id: string): Promise<ActionResult> {
     return { error: "ไม่สามารถตรวจสอบห้องพักที่เกี่ยวข้องได้" };
   }
 
-  const roomIds = (roomsData || []).map((room: any) => room.id);
+  const roomIds = (roomsData || []).map((room) => room.id);
 
   if (roomIds.length > 0) {
-    const { count: bookingCount, error: bookingsError } = await (supabase.from("bookings") as any)
+    const bookingsCountTable = supabase.from("bookings") as unknown as SelectIdByHotelTable;
+    const { count: bookingCount, error: bookingsError } = await bookingsCountTable
       .select("id", { count: "exact", head: true })
       .eq("hotel_id", hotelId)
       .in("room_id", roomIds);
@@ -162,7 +412,8 @@ export async function deleteRoomType(id: string): Promise<ActionResult> {
       return { error: `ไม่สามารถลบประเภทห้องนี้ได้ เนื่องจากมีการจอง ${bookingCount} รายการที่เกี่ยวข้องกับห้องพักในประเภทนี้` };
     }
 
-    const { error: deleteRoomsError } = await (supabase.from("rooms") as any)
+    const roomsDeleteTable = supabase.from("rooms") as unknown as DeleteScopedTable;
+    const { error: deleteRoomsError } = await roomsDeleteTable
       .delete()
       .eq("room_type_id", id)
       .eq("hotel_id", hotelId);
@@ -173,7 +424,8 @@ export async function deleteRoomType(id: string): Promise<ActionResult> {
     }
   }
 
-  const { error } = await (supabase.from("room_types") as any)
+  const roomTypesDeleteTable = supabase.from("room_types") as unknown as DeleteScopedTable;
+  const { error } = await roomTypesDeleteTable
     .delete()
     .eq("id", id)
     .eq("hotel_id", hotelId);
@@ -190,7 +442,7 @@ export async function deleteRoomType(id: string): Promise<ActionResult> {
 
 // ─── Room Type Image Actions ───────────────────────────────
 
-export async function uploadRoomTypeImage(formData: FormData): Promise<ActionResult> {
+export async function uploadRoomTypeImage(formData: FormData): Promise<ActionResult<RoomTypeImage>> {
   const session = await getValidatedSession();
   if (!session) return { error: "Unauthorized" };
   const hotelId = session.hotelId!;
@@ -203,7 +455,8 @@ export async function uploadRoomTypeImage(formData: FormData): Promise<ActionRes
   const supabase = await createServiceClient();
 
   // Get max sort_order
-  const { data: maxData } = await (supabase.from("room_type_images") as any)
+  const imageSortTable = supabase.from("room_type_images") as unknown as SelectImageSortTable;
+  const { data: maxData } = await imageSortTable
     .select("sort_order")
     .eq("room_type_id", room_type_id)
     .eq("hotel_id", hotelId)
@@ -211,10 +464,11 @@ export async function uploadRoomTypeImage(formData: FormData): Promise<ActionRes
     .limit(1)
     .single();
 
-  const sort_order = maxData ? (maxData as any).sort_order + 1 : 0;
+  const sort_order = (maxData?.sort_order ?? -1) + 1;
 
   // Check if this is the first image -> set as cover
-  const { data: existingImages } = await (supabase.from("room_type_images") as any)
+  const imageListTable = supabase.from("room_type_images") as unknown as SelectImageListTable;
+  const { data: existingImages } = await imageListTable
     .select("id")
     .eq("room_type_id", room_type_id)
     .eq("hotel_id", hotelId)
@@ -222,18 +476,25 @@ export async function uploadRoomTypeImage(formData: FormData): Promise<ActionRes
 
   const is_cover = !existingImages || existingImages.length === 0;
 
-  const { data, error } = await (supabase.from("room_type_images") as any).insert({
+  const imagePayload: RoomTypeImagePayload = {
     room_type_id,
     hotel_id: hotelId,
     image_url,
     is_cover,
     sort_order,
-  }).select().single();
+  };
+
+  const imageInsertTable = supabase.from("room_type_images") as unknown as InsertSelectTable<RoomTypeImagePayload, RoomTypeImage>;
+  const { data, error } = await imageInsertTable
+    .insert(imagePayload)
+    .select()
+    .single();
 
   if (error) {
     console.error("uploadRoomTypeImage error:", error);
     return { error: "ไม่สามารถบันทึกรูปภาพได้: " + (error.message || JSON.stringify(error)) };
   }
+  if (!data) return { error: "ไม่สามารถบันทึกรูปภาพได้" };
 
   revalidatePath("/admin/rooms");
   revalidatePath("/");
@@ -248,13 +509,14 @@ export async function setCoverImage(roomTypeId: string, imageId: string): Promis
   const supabase = await createServiceClient();
 
   // Unset all covers for this room type
-  await (supabase.from("room_type_images") as any)
+  const imageUpdateTable = supabase.from("room_type_images") as unknown as UpdateScopedTable<Partial<RoomTypeImage>>;
+  await imageUpdateTable
     .update({ is_cover: false })
     .eq("room_type_id", roomTypeId)
     .eq("hotel_id", hotelId);
 
   // Set new cover
-  const { error } = await (supabase.from("room_type_images") as any)
+  const { error } = await imageUpdateTable
     .update({ is_cover: true })
     .eq("id", imageId)
     .eq("hotel_id", hotelId);
@@ -277,16 +539,17 @@ export async function deleteRoomTypeImage(imageId: string): Promise<ActionResult
   const supabase = await createServiceClient();
 
   // Get image details first
-  const { data: imageData } = await (supabase.from("room_type_images") as any)
+  const imageCoverTable = supabase.from("room_type_images") as unknown as SelectImageCoverTable;
+  const { data: image } = await imageCoverTable
     .select("room_type_id, is_cover")
     .eq("id", imageId)
     .eq("hotel_id", hotelId)
     .single();
 
-  const image = imageData as any;
   if (!image) return { error: "ไม่พบรูปภาพ" };
 
-  const { error } = await (supabase.from("room_type_images") as any)
+  const imageDeleteTable = supabase.from("room_type_images") as unknown as DeleteScopedTable;
+  const { error } = await imageDeleteTable
     .delete()
     .eq("id", imageId)
     .eq("hotel_id", hotelId);
@@ -298,7 +561,8 @@ export async function deleteRoomTypeImage(imageId: string): Promise<ActionResult
 
   // If deleted image was cover, set first remaining as cover
   if (image.is_cover) {
-    const { data: remaining } = await (supabase.from("room_type_images") as any)
+    const remainingImageTable = supabase.from("room_type_images") as unknown as SelectRemainingImageTable;
+    const { data: remaining } = await remainingImageTable
       .select("id")
       .eq("room_type_id", image.room_type_id)
       .eq("hotel_id", hotelId)
@@ -307,9 +571,10 @@ export async function deleteRoomTypeImage(imageId: string): Promise<ActionResult
       .single();
 
     if (remaining) {
-      await (supabase.from("room_type_images") as any)
+      const imageUpdateTable = supabase.from("room_type_images") as unknown as UpdateScopedTable<Partial<RoomTypeImage>>;
+      await imageUpdateTable
         .update({ is_cover: true })
-        .eq("id", (remaining as any).id)
+        .eq("id", remaining.id)
         .eq("hotel_id", hotelId);
     }
   }
@@ -321,7 +586,7 @@ export async function deleteRoomTypeImage(imageId: string): Promise<ActionResult
 
 // ─── Physical Room Actions ─────────────────────────────────
 
-export async function createRoom(formData: FormData): Promise<ActionResult> {
+export async function createRoom(formData: FormData): Promise<ActionResult<Room>> {
   const session = await getValidatedSession();
   if (!session) return { error: "Unauthorized" };
   const hotelId = session.hotelId!;
@@ -329,8 +594,8 @@ export async function createRoom(formData: FormData): Promise<ActionResult> {
   const room_type_id = formData.get("room_type_id") as string;
   const room_number = (formData.get("room_number") as string)?.trim();
   const floor = (formData.get("floor") as string)?.trim() || null;
-  const status = (formData.get("status") as string) || "available";
-  const housekeeping = (formData.get("housekeeping") as string) || "clean";
+  const status = toRoomStatus(formData.get("status"));
+  const housekeeping = toHousekeepingStatus(formData.get("housekeeping"));
   const notes = (formData.get("notes") as string)?.trim() || null;
   const is_active = formData.get("is_active") === "true";
 
@@ -340,15 +605,16 @@ export async function createRoom(formData: FormData): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
   // Check room_number uniqueness within hotel
-  const { data: existing } = await (supabase.from("rooms") as any)
+  const roomsSelectTable = supabase.from("rooms") as unknown as SelectIdByHotelTable;
+  const { data: existing } = await roomsSelectTable
     .select("id")
     .eq("hotel_id", hotelId)
     .eq("room_number", room_number)
-    .single();
+    .maybeSingle();
 
   if (existing) return { error: "เลขห้องนี้มีอยู่แล้ว" };
 
-  const { data, error } = await (supabase.from("rooms") as any).insert({
+  const payload: RoomPayload = {
     hotel_id: hotelId,
     room_type_id,
     room_number,
@@ -357,19 +623,26 @@ export async function createRoom(formData: FormData): Promise<ActionResult> {
     housekeeping,
     notes,
     is_active,
-  }).select().single();
+  };
+
+  const roomsInsertTable = supabase.from("rooms") as unknown as InsertSelectTable<RoomPayload, Room>;
+  const { data, error } = await roomsInsertTable
+    .insert(payload)
+    .select()
+    .single();
 
   if (error) {
     console.error("createRoom error:", error);
     return { error: "ไม่สามารถสร้างห้องพักได้: " + (error.message || JSON.stringify(error)) };
   }
+  if (!data) return { error: "ไม่สามารถสร้างห้องพักได้" };
 
   revalidatePath("/admin/rooms");
   revalidatePath("/");
   return { success: true, data };
 }
 
-export async function updateRoom(formData: FormData): Promise<ActionResult> {
+export async function updateRoom(formData: FormData): Promise<ActionResult<Room>> {
   const session = await getValidatedSession();
   if (!session) return { error: "Unauthorized" };
   const hotelId = session.hotelId!;
@@ -378,8 +651,8 @@ export async function updateRoom(formData: FormData): Promise<ActionResult> {
   const room_type_id = formData.get("room_type_id") as string;
   const room_number = (formData.get("room_number") as string)?.trim();
   const floor = (formData.get("floor") as string)?.trim() || null;
-  const status = (formData.get("status") as string) || "available";
-  const housekeeping = (formData.get("housekeeping") as string) || "clean";
+  const status = toRoomStatus(formData.get("status"));
+  const housekeeping = toHousekeepingStatus(formData.get("housekeeping"));
   const notes = (formData.get("notes") as string)?.trim() || null;
   const is_active = formData.get("is_active") === "true";
 
@@ -390,16 +663,18 @@ export async function updateRoom(formData: FormData): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
   // Check room_number uniqueness excluding current record
-  const { data: existing } = await (supabase.from("rooms") as any)
+  const roomsSelectTable = supabase.from("rooms") as unknown as SelectIdByHotelTable;
+  const { data: existing } = await roomsSelectTable
     .select("id")
     .eq("hotel_id", hotelId)
     .eq("room_number", room_number)
     .neq("id", id)
-    .single();
+    .maybeSingle();
 
   if (existing) return { error: "เลขห้องนี้มีอยู่แล้ว" };
 
-  const { data, error } = await (supabase.from("rooms") as any)
+  const roomsUpdateTable = supabase.from("rooms") as unknown as UpdateSelectTable<Partial<RoomPayload>, Room>;
+  const { data, error } = await roomsUpdateTable
     .update({ room_type_id, room_number, floor, status, housekeeping, notes, is_active })
     .eq("id", id)
     .eq("hotel_id", hotelId)
@@ -410,6 +685,7 @@ export async function updateRoom(formData: FormData): Promise<ActionResult> {
     console.error("updateRoom error:", error);
     return { error: "ไม่สามารถอัปเดตห้องพักได้: " + (error.message || JSON.stringify(error)) };
   }
+  if (!data) return { error: "ไม่สามารถอัปเดตห้องพักได้" };
 
   revalidatePath("/admin/rooms");
   revalidatePath("/");
@@ -424,7 +700,8 @@ export async function deleteRoom(id: string): Promise<ActionResult> {
   const supabase = await createServiceClient();
 
   // Check if any bookings reference this room
-  const { data: bookingsData, error: bookingsError } = await (supabase.from("bookings") as any)
+  const bookingsSelectTable = supabase.from("bookings") as unknown as SelectIdLimitTable;
+  const { data: bookingsData, error: bookingsError } = await bookingsSelectTable
     .select("id")
     .eq("room_id", id)
     .eq("hotel_id", hotelId)
@@ -435,7 +712,8 @@ export async function deleteRoom(id: string): Promise<ActionResult> {
     return { error: "ไม่สามารถลบได้ เนื่องจากมีการจองที่เกี่ยวข้อง" };
   }
 
-  const { error } = await (supabase.from("rooms") as any)
+  const roomsDeleteTable = supabase.from("rooms") as unknown as DeleteScopedTable;
+  const { error } = await roomsDeleteTable
     .delete()
     .eq("id", id)
     .eq("hotel_id", hotelId);
@@ -452,14 +730,15 @@ export async function deleteRoom(id: string): Promise<ActionResult> {
 
 // ─── Fetch Rooms for Admin ───────────────────────────────
 
-export async function getAdminRooms(): Promise<ActionResult> {
+export async function getAdminRooms(): Promise<ActionResult<AdminRoomDisplay[]>> {
   const session = await getValidatedSession();
   if (!session) return { error: "Unauthorized" };
   const hotelId = session.hotelId!;
 
   const supabase = await createServiceClient();
 
-  const { data: rooms } = await (supabase.from("rooms") as any)
+  const adminRoomsTable = supabase.from("rooms") as unknown as SelectAdminRoomsTable;
+  const { data: rooms } = await adminRoomsTable
     .select(`
       *,
       bookings (
@@ -475,8 +754,8 @@ export async function getAdminRooms(): Promise<ActionResult> {
     .eq("hotel_id", hotelId)
     .order("room_number", { ascending: true });
 
-  const roomsWithBookings = (rooms || []).map((room: any) => {
-    const processedBookings = (room.bookings || []).map((b: any) => ({
+  const roomsWithBookings: AdminRoomDisplay[] = (rooms || []).map((room) => {
+    const processedBookings = (room.bookings || []).map((b) => ({
       ...b,
       guest_name: b.customers?.full_name || "Unknown Guest",
       check_in: b.check_in_date,
@@ -484,8 +763,8 @@ export async function getAdminRooms(): Promise<ActionResult> {
     }));
 
     const activeBooking =
-      processedBookings.find((b: any) => b.status === "checked_in") ||
-      processedBookings.find((b: any) => b.status === "confirmed");
+      processedBookings.find((b) => b.status === "checked_in") ||
+      processedBookings.find((b) => b.status === "confirmed");
     return {
       ...room,
       bookings: processedBookings,
@@ -498,7 +777,7 @@ export async function getAdminRooms(): Promise<ActionResult> {
 
 // ─── Bulk Create Rooms ──────────────────────────────────
 
-export async function bulkCreateRooms(formData: FormData): Promise<ActionResult> {
+export async function bulkCreateRooms(formData: FormData): Promise<ActionResult<{ created: Room[]; skipped: string[] }>> {
   const session = await getValidatedSession();
   if (!session) return { error: "Unauthorized" };
   const hotelId = session.hotelId!;
@@ -508,8 +787,8 @@ export async function bulkCreateRooms(formData: FormData): Promise<ActionResult>
   const startNumber = parseInt(formData.get("start_number") as string, 10);
   const count = parseInt(formData.get("count") as string, 10);
   const floor = (formData.get("floor") as string)?.trim() || null;
-  const status = (formData.get("status") as string) || "available";
-  const housekeeping = (formData.get("housekeeping") as string) || "clean";
+  const status = toRoomStatus(formData.get("status"));
+  const housekeeping = toHousekeepingStatus(formData.get("housekeeping"));
 
   if (!room_type_id) return { error: "กรุณาเลือกประเภทห้อง" };
   if (isNaN(startNumber) || startNumber < 0) return { error: "เลขเริ่มต้นไม่ถูกต้อง" };
@@ -521,12 +800,13 @@ export async function bulkCreateRooms(formData: FormData): Promise<ActionResult>
   const roomNumbers = Array.from({ length: count }, (_, i) => `${prefix}${startNumber + i}`);
 
   // Check which room numbers already exist
-  const { data: existingRooms } = await (supabase.from("rooms") as any)
+  const roomNumbersTable = supabase.from("rooms") as unknown as SelectRoomNumbersTable;
+  const { data: existingRooms } = await roomNumbersTable
     .select("room_number")
     .eq("hotel_id", hotelId)
     .in("room_number", roomNumbers);
 
-  const existingSet = new Set((existingRooms || []).map((r: any) => r.room_number));
+  const existingSet = new Set((existingRooms || []).map((r) => r.room_number));
   const newRoomNumbers = roomNumbers.filter((rn) => !existingSet.has(rn));
 
   if (newRoomNumbers.length === 0) {
@@ -540,10 +820,12 @@ export async function bulkCreateRooms(formData: FormData): Promise<ActionResult>
     floor,
     status,
     housekeeping,
+    notes: null,
     is_active: true,
   }));
 
-  const { data, error } = await (supabase.from("rooms") as any)
+  const roomsInsertTable = supabase.from("rooms") as unknown as InsertListTable<RoomPayload, Room>;
+  const { data, error } = await roomsInsertTable
     .insert(rows)
     .select();
 

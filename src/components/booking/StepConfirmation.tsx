@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
 import type { BookingLabels } from "./booking-i18n";
+import LoadingLink from "@/components/ui/LoadingLink";
 
 interface StepConfirmationProps {
   room: RoomTypeDisplay;
@@ -112,9 +113,9 @@ export default function StepConfirmation(props: StepConfirmationProps) {
         </div>
 
         <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-          <Link href="/" className="inline-block px-8 py-3 bg-forest text-white rounded-lg hover:bg-forest-light transition-colors font-semibold cursor-pointer text-center">
+          <LoadingLink href="/" className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-forest text-white rounded-lg hover:bg-forest-light transition-colors font-semibold cursor-pointer text-center" loadingLabel="กำลังกลับหน้าแรก...">
             {labels.backHome}
-          </Link>
+          </LoadingLink>
           <Link href="/check-booking" className="inline-block px-8 py-3 border-2 border-gold text-gold rounded-lg hover:bg-gold hover:text-white transition-colors font-semibold cursor-pointer text-center">
             {labels.checkStatus}
           </Link>

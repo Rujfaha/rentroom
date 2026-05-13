@@ -1,4 +1,5 @@
 import Link from "next/link";
+import LoadingLink from "@/components/ui/LoadingLink";
 import type { NavLink, FooterConfig } from "@/types/landing.types";
 
 interface FooterProps {
@@ -39,9 +40,9 @@ export default function Footer({ hotelName, navLinks, config }: FooterProps) {
             <p className="text-sm leading-relaxed">
               {config.bookCtaText}
             </p>
-            <Link href="/booking" className="inline-block mt-4 bg-gold text-white text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-gold-dark transition-colors cursor-pointer">
+            <LoadingLink href="/booking" className="inline-flex items-center justify-center gap-2 mt-4 bg-gold text-white text-sm font-semibold px-5 py-2.5 rounded-lg hover:bg-gold-dark transition-colors cursor-pointer" loadingLabel="กำลังโหลด...">
               {config.bookCtaButton}
-            </Link>
+            </LoadingLink>
           </div>
         </div>
         <div className="mt-10 pt-8 border-t border-white/10 text-center text-xs">

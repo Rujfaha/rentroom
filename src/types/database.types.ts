@@ -16,6 +16,7 @@ export type HousekeepingStatus = "clean" | "dirty" | "inspected" | "in_progress"
 export type BookingSource = "website" | "walk_in" | "phone" | "ota" | "other";
 export type DayType = "weekday" | "weekend" | "holiday" | "special";
 export type ContactType = "phone" | "email" | "facebook" | "line" | "instagram" | "website" | "tiktok" | "whatsapp" | "map_url" | "other";
+export type PromotionType = "automatic" | "code_required" | "private";
 
 // ========================
 // Table Row Types
@@ -280,6 +281,88 @@ export interface Payment {
   updated_at: string;
 }
 
+export interface Promotion {
+  id: string;
+  hotel_id: string;
+  title: string;
+  description: string | null;
+  image_url: string | null;
+  discount_type: "percent" | "fixed";
+  discount_percentage: number | null;
+  discount_amount: number | null;
+  discount_code: string | null;
+  discount_text: string | null;
+  valid_until: string | null;
+  is_active: boolean;
+  sort_order: number;
+  promotion_type: PromotionType;
+  starts_at: string | null;
+  ends_at: string | null;
+  stay_start_date: string | null;
+  stay_end_date: string | null;
+  priority: number;
+  stackable: boolean;
+  exclusive: boolean;
+  max_uses: number | null;
+  used_count: number;
+  max_uses_per_customer: number | null;
+  applies_to_all_room_types: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromotionCode {
+  id: string;
+  promotion_id: string;
+  code: string;
+  max_uses: number | null;
+  used_count: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromotionRoomType {
+  id: string;
+  promotion_id: string;
+  room_type_id: string;
+  created_at: string;
+}
+
+export interface PromotionRule {
+  id: string;
+  promotion_id: string;
+  conditions_json: Record<string, unknown>;
+  benefits_json: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromotionUsage {
+  id: string;
+  promotion_id: string;
+  promotion_code_id: string | null;
+  booking_id: string | null;
+  customer_phone: string | null;
+  customer_email: string | null;
+  discount_amount: number;
+  used_at: string;
+}
+
+export interface BookingPromotion {
+  id: string;
+  booking_id: string;
+  promotion_id: string;
+  promotion_name: string;
+  promotion_code: string | null;
+  discount_type: string | null;
+  discount_value: number | null;
+  discount_amount: number;
+  conditions_snapshot: Record<string, unknown>;
+  benefits_snapshot: Record<string, unknown>;
+  created_at: string;
+}
+
 export interface ExpenseCategory {
   id: string;
   hotel_id: string;
@@ -330,6 +413,12 @@ export interface Database {
       seasons: { Row: Season; Insert: Partial<Season> & Pick<Season, "hotel_id" | "name" | "start_date" | "end_date">; Update: Partial<Season> };
       pricing_rules: { Row: PricingRule; Insert: Partial<PricingRule> & Pick<PricingRule, "hotel_id" | "room_type_id" | "price">; Update: Partial<PricingRule> };
       payments: { Row: Payment; Insert: Partial<Payment> & Pick<Payment, "hotel_id" | "booking_id" | "amount">; Update: Partial<Payment> };
+      promotions: { Row: Promotion; Insert: Partial<Promotion> & Pick<Promotion, "hotel_id" | "title">; Update: Partial<Promotion> };
+      promotion_codes: { Row: PromotionCode; Insert: Partial<PromotionCode> & Pick<PromotionCode, "promotion_id" | "code">; Update: Partial<PromotionCode> };
+      promotion_room_types: { Row: PromotionRoomType; Insert: Partial<PromotionRoomType> & Pick<PromotionRoomType, "promotion_id" | "room_type_id">; Update: Partial<PromotionRoomType> };
+      promotion_rules: { Row: PromotionRule; Insert: Partial<PromotionRule> & Pick<PromotionRule, "promotion_id">; Update: Partial<PromotionRule> };
+      promotion_usages: { Row: PromotionUsage; Insert: Partial<PromotionUsage> & Pick<PromotionUsage, "promotion_id" | "discount_amount">; Update: Partial<PromotionUsage> };
+      booking_promotions: { Row: BookingPromotion; Insert: Partial<BookingPromotion> & Pick<BookingPromotion, "booking_id" | "promotion_id" | "promotion_name">; Update: Partial<BookingPromotion> };
       expense_categories: { Row: ExpenseCategory; Insert: Partial<ExpenseCategory> & Pick<ExpenseCategory, "hotel_id" | "name">; Update: Partial<ExpenseCategory> };
       expenses: { Row: Expense; Insert: Partial<Expense> & Pick<Expense, "hotel_id" | "amount">; Update: Partial<Expense> };
     };
@@ -345,6 +434,7 @@ export interface Database {
       booking_source: BookingSource;
       day_type: DayType;
       contact_type: ContactType;
+      promotion_type: PromotionType;
     };
   };
 }

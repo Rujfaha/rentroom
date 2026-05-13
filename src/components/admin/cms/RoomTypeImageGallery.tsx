@@ -5,33 +5,60 @@ import { ImageUploadInput } from "./ImageUploadInput";
 import { uploadRoomTypeImage, setCoverImage, deleteRoomTypeImage } from "@/app/actions/rooms";
 import { Star, Trash2, Image as ImageIcon } from "lucide-react";
 
+interface RoomTypeImageItem {
+  id: string;
+  image_url: string;
+  is_cover?: boolean | null;
+  sort_order?: number | null;
+}
+
 interface RoomTypeImageGalleryProps {
   roomTypeId: string;
-  images: any[];
-  onImagesChange: (images: any[]) => void;
+  images: RoomTypeImageItem[];
+  onImagesChange: (images: RoomTypeImageItem[]) => void;
 }
 
 export function RoomTypeImageGallery({ roomTypeId, images, onImagesChange }: RoomTypeImageGalleryProps) {
   const [isPending, startTransition] = useTransition();
   const [uploadError, setUploadError] = useState("");
+  const [localState, setLocalState] = useState<{ roomTypeId: string; images: RoomTypeImageItem[] }>({
+    roomTypeId,
+    images,
+  });
 
-  const sortedImages = [...images].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
+  const currentImages = localState.roomTypeId === roomTypeId ? localState.images : images;
+  const sortedImages = [...currentImages].sort((a, b) => (a.sort_order || 0) - (b.sort_order || 0));
 
-  const handleUpload = async (url: string) => {
+  const handleUploadMultiple = async (urls: string[]) => {
     setUploadError("");
-    const fd = new FormData();
-    fd.append("room_type_id", roomTypeId);
-    fd.append("image_url", url);
 
     startTransition(async () => {
-      const result = await uploadRoomTypeImage(fd);
-      if (result.error) {
-        setUploadError(result.error as string);
-      } else if (result.data) {
-        // Append new image to existing images
-        onImagesChange([...sortedImages, result.data]);
+      const uploadedImages: RoomTypeImageItem[] = [];
+
+      for (const url of urls) {
+        const fd = new FormData();
+        fd.append("room_type_id", roomTypeId);
+        fd.append("image_url", url);
+
+        const result = await uploadRoomTypeImage(fd);
+        if (result.error) {
+          setUploadError(result.error as string);
+          break;
+        } else if (result.data) {
+          uploadedImages.push(result.data as RoomTypeImageItem);
+        }
+      }
+
+      if (uploadedImages.length > 0) {
+        const nextImages = [...sortedImages, ...uploadedImages];
+        setLocalState({ roomTypeId, images: nextImages });
+        onImagesChange(nextImages);
       }
     });
+  };
+
+  const handleUpload = async (url: string) => {
+    await handleUploadMultiple([url]);
   };
 
   const handleSetCover = (imageId: string) => {
@@ -44,6 +71,7 @@ export function RoomTypeImageGallery({ roomTypeId, images, onImagesChange }: Roo
           ...img,
           is_cover: img.id === imageId,
         }));
+        setLocalState({ roomTypeId, images: updated });
         onImagesChange(updated);
       }
     });
@@ -51,19 +79,37 @@ export function RoomTypeImageGallery({ roomTypeId, images, onImagesChange }: Roo
 
   const handleDelete = (imageId: string) => {
     if (!confirm("แน่ใจหรือไม่ว่าต้องการลบรูปภาพนี้?")) return;
+    const previousImages = sortedImages;
+    const deletedImage = sortedImages.find((img) => img.id === imageId);
+    const remainingImages = sortedImages.filter((img) => img.id !== imageId);
+    const nextImages = deletedImage?.is_cover && remainingImages.length > 0
+      ? remainingImages.map((img, index) => ({
+        ...img,
+        is_cover: index === 0,
+      }))
+      : remainingImages;
+
+    setLocalState({ roomTypeId, images: nextImages });
+    onImagesChange(nextImages);
+
     startTransition(async () => {
       const result = await deleteRoomTypeImage(imageId);
       if (result.error) {
+        setLocalState({ roomTypeId, images: previousImages });
+        onImagesChange(previousImages);
         alert(result.error);
-      } else {
-        onImagesChange(sortedImages.filter((img) => img.id !== imageId));
       }
     });
   };
 
   return (
     <div className="space-y-3">
-      <ImageUploadInput folder="room_types" onUploadSuccess={handleUpload} />
+      <ImageUploadInput
+        folder="room_types"
+        multiple
+        onUploadSuccess={handleUpload}
+        onUploadMultipleSuccess={handleUploadMultiple}
+      />
       {uploadError && <p className="text-xs text-red-500">{uploadError}</p>}
 
       {sortedImages.length === 0 ? (

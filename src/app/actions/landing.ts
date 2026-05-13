@@ -23,9 +23,14 @@ interface RoomTypeRow {
 }
 
 interface RoomAvailabilityRow {
+  id: string;
   room_type_id: string;
   status: RoomStatus | null;
   is_active: boolean;
+}
+
+interface BookingAvailabilityRow {
+  room_id: string;
 }
 
 interface SeasonPricingRow {
@@ -40,6 +45,9 @@ interface PricingRuleRow {
   day_type: "weekday" | "weekend" | "holiday" | "special";
   price: number | string;
 }
+
+const BLOCKING_BOOKING_STATUSES = ["pending", "confirmed", "checked_in"] as const;
+const BOOKABLE_ROOM_STATUSES: RoomStatus[] = ["available", "occupied"];
 
 /**
  * ดึงข้อมูล Room Types สำหรับแสดงในหน้า Landing Page
@@ -69,17 +77,17 @@ export async function getRoomTypesForLanding(hotelId: string): Promise<RoomTypeD
 
   const { data: allRoomsData } = await (supabase
     .from("rooms"))
-    .select("room_type_id, status, is_active")
+    .select("id, room_type_id, status, is_active")
     .eq("hotel_id", hotelId)
     .returns<RoomAvailabilityRow[]>();
 
-  const availableCounts = countAvailableRooms(allRoomsData ?? []);
-  const pricing = await getPricingContext(hotelId);
   const today = new Date();
   const tomorrow = new Date(today);
   tomorrow.setDate(today.getDate() + 1);
   const checkIn = today.toISOString().split("T")[0];
   const checkOut = tomorrow.toISOString().split("T")[0];
+  const availableCounts = await countAvailableRoomsForDateRange(hotelId, allRoomsData ?? [], checkIn, checkOut);
+  const pricing = await getPricingContext(hotelId);
 
   const amenityIconMap: Record<string, string> = {
     WiFi: "wifi",
@@ -222,10 +230,15 @@ function getStayDates(checkIn: string, checkOut: string): string[] {
 export async function getRoomAvailabilityCounts(hotelId: string): Promise<Record<string, number>> {
   const { createServiceClient } = await import("@/lib/supabase/service");
   const supabase = await createServiceClient();
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+  const checkIn = today.toISOString().split("T")[0];
+  const checkOut = tomorrow.toISOString().split("T")[0];
 
   const { data, error } = await (supabase
     .from("rooms"))
-    .select("room_type_id, status, is_active")
+    .select("id, room_type_id, status, is_active")
     .eq("hotel_id", hotelId)
     .returns<RoomAvailabilityRow[]>();
 
@@ -234,12 +247,46 @@ export async function getRoomAvailabilityCounts(hotelId: string): Promise<Record
     return {};
   }
 
-  return countAvailableRooms(data ?? []);
+  return countAvailableRoomsForDateRange(hotelId, data ?? [], checkIn, checkOut);
 }
 
-function countAvailableRooms(rooms: RoomAvailabilityRow[]): Record<string, number> {
+async function countAvailableRoomsForDateRange(
+  hotelId: string,
+  rooms: RoomAvailabilityRow[],
+  checkIn: string,
+  checkOut: string
+): Promise<Record<string, number>> {
+  const bookableRooms = rooms.filter((room) => (
+    room.is_active &&
+    room.status !== null &&
+    BOOKABLE_ROOM_STATUSES.includes(room.status)
+  ));
+
+  if (bookableRooms.length === 0) return {};
+
+  const { createServiceClient } = await import("@/lib/supabase/service");
+  const supabase = await createServiceClient();
+  const { data: bookings, error } = await supabase
+    .from("bookings")
+    .select("room_id")
+    .eq("hotel_id", hotelId)
+    .in("status", BLOCKING_BOOKING_STATUSES)
+    .lt("check_in_date", checkOut)
+    .gt("check_out_date", checkIn)
+    .returns<BookingAvailabilityRow[]>();
+
+  if (error) {
+    console.error("Error fetching booking availability counts:", error);
+  }
+
+  const blockedRoomIds = new Set((bookings ?? []).map((booking) => booking.room_id));
+
+  return countAvailableRooms(bookableRooms, blockedRoomIds);
+}
+
+function countAvailableRooms(rooms: RoomAvailabilityRow[], blockedRoomIds: Set<string>): Record<string, number> {
   return rooms.reduce<Record<string, number>>((counts, room) => {
-    if (room.status === "available" && room.is_active) {
+    if (!blockedRoomIds.has(room.id)) {
       counts[room.room_type_id] = (counts[room.room_type_id] || 0) + 1;
     }
 

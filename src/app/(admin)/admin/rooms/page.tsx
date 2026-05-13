@@ -2,10 +2,23 @@ import { getSession } from "@/lib/session";
 import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/service";
 import { RoomManagement } from "@/components/admin/rooms/RoomManagement";
+import type { AdminRoom, AdminRoomBooking, AdminRoomType } from "@/components/admin/rooms/types";
 
 export const metadata = {
   title: "ห้องพัก | Arkkarawin",
 };
+
+interface AdminRoomTypeRow extends AdminRoomType {
+  room_type_images?: AdminRoomType["images"] | null;
+}
+
+interface AdminRoomRow extends Omit<AdminRoom, "bookings" | "currentBooking"> {
+  bookings?: Array<AdminRoomBooking & {
+    customers?: {
+      full_name?: string | null;
+    } | null;
+  }> | null;
+}
 
 export default async function AdminRoomsPage() {
   const session = await getSession();
@@ -27,14 +40,17 @@ export default async function AdminRoomsPage() {
     { data: roomTypes, error: roomTypesError },
     { data: rooms, error: roomsError },
   ] = await Promise.all([
-    (supabase.from("room_types") as any)
+    supabase
+      .from("room_types")
       .select(`
         *,
         room_type_images (*)
       `)
       .eq("hotel_id", hotelId)
-      .order("created_at", { ascending: false }),
-    (supabase.from("rooms") as any)
+      .order("created_at", { ascending: false })
+      .returns<AdminRoomTypeRow[]>(),
+    supabase
+      .from("rooms")
       .select(`
         *,
         bookings (
@@ -48,7 +64,8 @@ export default async function AdminRoomsPage() {
         )
       `)
       .eq("hotel_id", hotelId)
-      .order("room_number", { ascending: true }),
+      .order("room_number", { ascending: true })
+      .returns<AdminRoomRow[]>(),
   ]);
 
   if (roomTypesError) console.error("[DEBUG admin/rooms] room_types error:", roomTypesError);
@@ -59,12 +76,13 @@ export default async function AdminRoomsPage() {
     console.log("[DEBUG admin/rooms] rooms raw result:", JSON.stringify(rooms, null, 2));
 
     // DEBUG: fallback query without hotel_id filter to verify data exists
-    const { data: allRoomsDebug, error: allRoomsError } = await (supabase.from("rooms") as any).select("id, room_number, hotel_id, status").limit(10);
+    const { data: allRoomsDebug, error: allRoomsError } = await supabase.from("rooms").select("id, room_number, hotel_id, status").limit(10);
     if (allRoomsError) console.error("[DEBUG admin/rooms] all rooms error:", JSON.stringify(allRoomsError));
     console.log("[DEBUG admin/rooms] all rooms (no filter):", allRoomsDebug?.length ?? 0, allRoomsDebug);
 
     // DEBUG: query rooms without bookings join to isolate issue
-    const { data: roomsSimple, error: roomsSimpleError } = await (supabase.from("rooms") as any)
+    const { data: roomsSimple, error: roomsSimpleError } = await supabase
+      .from("rooms")
       .select("id, room_number, hotel_id, status, is_active")
       .eq("hotel_id", hotelId)
       .order("room_number", { ascending: true });
@@ -76,14 +94,14 @@ export default async function AdminRoomsPage() {
   }
 
   // Transform room_types data to include images array
-  const roomTypesWithImages = (roomTypes || []).map((rt: any) => ({
+  const roomTypesWithImages: AdminRoomType[] = (roomTypes || []).map((rt) => ({
     ...rt,
     images: rt.room_type_images || [],
   }));
 
   // Process rooms to find the "current" booking (checked_in or confirmed for today)
-  const roomsWithBookings = (rooms || []).map((room: any) => {
-    const processedBookings = (room.bookings || []).map((b: any) => ({
+  const roomsWithBookings: AdminRoom[] = (rooms || []).map((room) => {
+    const processedBookings: AdminRoomBooking[] = (room.bookings || []).map((b) => ({
       ...b,
       guest_name: b.customers?.full_name || "ไม่ระบุชื่อ",
       check_in: b.check_in_date,
@@ -91,8 +109,8 @@ export default async function AdminRoomsPage() {
     }));
 
     // Find active booking (prefer checked_in)
-    const activeBooking = processedBookings.find((b: any) => b.status === "checked_in") || 
-                         processedBookings.find((b: any) => b.status === "confirmed");
+    const activeBooking = processedBookings.find((b) => b.status === "checked_in") || 
+                         processedBookings.find((b) => b.status === "confirmed");
     
     return {
       ...room,

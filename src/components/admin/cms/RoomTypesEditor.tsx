@@ -7,10 +7,12 @@ import { RoomTypeImageGallery } from "./RoomTypeImageGallery";
 import { PhysicalRoomsManager } from "./PhysicalRoomsManager";
 import { createRoomType, updateRoomType, deleteRoomType } from "@/app/actions/rooms";
 import { Plus, Image as ImageIcon, Hand, ArrowDown } from "lucide-react";
+import type { CmsPhysicalRoom } from "./physical-room-types";
+import type { CmsRoomType } from "./room-type-types";
 
 interface RoomTypesEditorProps {
-  initialRoomTypes: any[];
-  initialRooms: any[];
+  initialRoomTypes: CmsRoomType[];
+  initialRooms: CmsPhysicalRoom[];
 }
 
 export function RoomTypesEditor({ initialRoomTypes, initialRooms }: RoomTypesEditorProps) {
@@ -18,7 +20,7 @@ export function RoomTypesEditor({ initialRoomTypes, initialRooms }: RoomTypesEdi
   const [rooms, setRooms] = useState(initialRooms);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedRoomTypeId, setSelectedRoomTypeId] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [error, setError] = useState("");
 
   const handleSave = async (formData: FormData) => {
@@ -33,7 +35,7 @@ export function RoomTypesEditor({ initialRoomTypes, initialRooms }: RoomTypesEdi
         setEditingId(null);
         if (!id) {
           // Create: remove "new" placeholder and prepend real data
-          const newRoomType = { ...result.data, images: [] };
+          const newRoomType: CmsRoomType = { ...result.data, images: [] };
           setRoomTypes((prev) => [newRoomType, ...prev.filter((rt) => rt.id !== "new")]);
         } else {
           // Update: merge images from existing state
@@ -184,8 +186,11 @@ export function RoomTypesEditor({ initialRoomTypes, initialRooms }: RoomTypesEdi
               roomTypeId={selectedRoomTypeId}
               roomTypes={roomTypes}
               initialRooms={rooms.filter((r) => r.room_type_id === selectedRoomTypeId)}
-              onRoomsChange={(newRooms: any[]) => {
-                setRooms(newRooms);
+              onRoomsChange={(newRooms) => {
+                setRooms((prev) => [
+                  ...prev.filter((room) => room.room_type_id !== selectedRoomTypeId),
+                  ...newRooms,
+                ]);
               }}
             />
           </>

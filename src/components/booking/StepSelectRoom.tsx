@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { useState } from "react";
 import type { RoomTypeDisplay } from "@/types/landing.types";
 import type { BookingLabels } from "./booking-i18n";
 
@@ -31,6 +32,7 @@ function getToday(): string {
 export default function StepSelectRoom(props: StepSelectRoomProps) {
   const today = getToday();
   const labels = props.labels.selectRoom;
+  const [selectingRoomId, setSelectingRoomId] = useState("");
 
   return (
     <div>
@@ -59,27 +61,23 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
           </div>
           <div>
             <label className="text-xs text-earth uppercase tracking-wider font-medium block mb-1">{labels.adults}</label>
-            <select
+            <input
+              type="number"
+              min="1"
               value={props.adults}
-              onChange={function (e) { props.onAdultsChange(Number(e.target.value)); }}
+              onChange={function (e) { props.onAdultsChange(Number(e.target.value) || 1); }}
               className="w-full px-3 py-2 border border-stone rounded-lg text-sm bg-white focus:ring-2 focus:ring-gold/50"
-            >
-              {[1, 2, 3, 4, 5, 6].map(function (n) {
-                return <option key={n} value={n}>{n}</option>;
-              })}
-            </select>
+            />
           </div>
           <div>
             <label className="text-xs text-earth uppercase tracking-wider font-medium block mb-1">{labels.children}</label>
-            <select
+            <input
+              type="number"
+              min="0"
               value={props.childrenCount}
-              onChange={function (e) { props.onChildrenChange(Number(e.target.value)); }}
+              onChange={function (e) { props.onChildrenChange(Math.max(0, Number(e.target.value) || 0)); }}
               className="w-full px-3 py-2 border border-stone rounded-lg text-sm bg-white focus:ring-2 focus:ring-gold/50"
-            >
-              {[0, 1, 2, 3, 4].map(function (n) {
-                return <option key={n} value={n}>{n}</option>;
-              })}
-            </select>
+            />
           </div>
         </div>
       </div>
@@ -103,6 +101,7 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
           const hasVacancy = room.availableRoomsCount > 0;
           const fitsGuests = room.maxGuests >= props.totalGuests;
           const isAvailable = hasVacancy && fitsGuests;
+          const isSelecting = selectingRoomId === room.id;
           const availabilityText = hasVacancy
             ? labels.availableRooms(room.availableRoomsCount)
             : labels.fullyBooked;
@@ -133,11 +132,21 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
                     <span className="text-sm text-earth">{labels.perNight}</span>
                   </div>
                   <button
-                    onClick={function () { if (isAvailable) props.onSelect(room); }}
-                    disabled={!isAvailable}
-                    className={"px-5 py-2 rounded-lg text-sm font-semibold transition-all " + (isAvailable ? "bg-gold text-white hover:bg-gold-dark cursor-pointer" : "bg-stone-light text-earth cursor-not-allowed")}
+                    onClick={function () {
+                      if (!isAvailable) return;
+                      setSelectingRoomId(room.id);
+                      window.setTimeout(function () {
+                        props.onSelect(room);
+                        setSelectingRoomId("");
+                      }, 150);
+                    }}
+                    disabled={!isAvailable || Boolean(selectingRoomId)}
+                    className={"inline-flex items-center justify-center gap-2 px-5 py-2 rounded-lg text-sm font-semibold transition-all " + (isAvailable && !selectingRoomId ? "bg-gold text-white hover:bg-gold-dark cursor-pointer" : "bg-stone-light text-earth cursor-not-allowed")}
                   >
-                    {isAvailable ? labels.select : labels.notAvailable}
+                    {isSelecting && (
+                      <span className="h-4 w-4 rounded-full border-2 border-current border-r-transparent animate-spin" aria-hidden="true" />
+                    )}
+                    <span>{isSelecting ? "กำลังโหลด..." : isAvailable ? labels.select : labels.notAvailable}</span>
                   </button>
                 </div>
               </div>

@@ -1,15 +1,17 @@
 "use client";
 
+import Image from "next/image";
 import { Edit2, Trash2, Image as ImageIcon, Users, Tag } from "lucide-react";
+import type { CmsRoomType } from "./room-type-types";
 
 interface RoomTypeCardProps {
-  roomType: any;
+  roomType: CmsRoomType;
   onEdit: () => void;
   onDelete: () => void;
 }
 
 export function RoomTypeCard({ roomType, onEdit, onDelete }: RoomTypeCardProps) {
-  const coverImage = roomType.images?.find((img: any) => img.is_cover);
+  const coverImage = roomType.images?.find((img) => img.is_cover);
   const amenityIcons: Record<string, string> = {
     "WiFi": "wifi",
     "แอร์": "wind",
@@ -23,6 +25,7 @@ export function RoomTypeCard({ roomType, onEdit, onDelete }: RoomTypeCardProps) 
     "โต๊ะทำงาน": "monitor",
   };
 
+  void amenityIcons;
   const displayAmenities = (roomType.amenities || []).slice(0, 5);
   const moreAmenitiesCount = (roomType.amenities || []).length - 5;
 
@@ -31,7 +34,13 @@ export function RoomTypeCard({ roomType, onEdit, onDelete }: RoomTypeCardProps) 
       {/* Cover Image */}
       <div className="relative h-44 bg-[#f0ece4] flex items-center justify-center overflow-hidden">
         {coverImage?.image_url ? (
-          <img src={coverImage.image_url} alt={roomType.name} className="w-full h-full object-cover" />
+          <Image
+            src={coverImage.image_url}
+            alt={roomType.name}
+            fill
+            sizes="(min-width: 1024px) 33vw, (min-width: 768px) 50vw, 100vw"
+            className="object-cover"
+          />
         ) : (
           <ImageIcon className="w-10 h-10 text-[#c4b9a8]" />
         )}

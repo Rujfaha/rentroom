@@ -1,16 +1,18 @@
 "use client";
 
 import { useState } from "react";
-import { Save, X } from "lucide-react";
+import { Save } from "lucide-react";
+import type { CmsPhysicalRoom, CmsRoomTypeOption } from "./physical-room-types";
+import type { HousekeepingStatus, RoomStatus } from "@/types/database.types";
 
-const ROOM_STATUS_OPTIONS = [
+const ROOM_STATUS_OPTIONS: { value: RoomStatus; label: string }[] = [
   { value: "available", label: "ว่าง" },
   { value: "occupied", label: "มีผู้เข้าพัก" },
   { value: "maintenance", label: "ซ่อมบำรุง" },
   { value: "out_of_order", label: "ไม่พร้อมใช้งาน" },
 ];
 
-const HK_STATUS_OPTIONS = [
+const HK_STATUS_OPTIONS: { value: HousekeepingStatus; label: string }[] = [
   { value: "clean", label: "สะอาด" },
   { value: "dirty", label: "รอทำความสะอาด" },
   { value: "in_progress", label: "กำลังทำความสะอาด" },
@@ -19,8 +21,8 @@ const HK_STATUS_OPTIONS = [
 ];
 
 interface PhysicalRoomFormProps {
-  room?: any;
-  roomTypes: any[];
+  room?: CmsPhysicalRoom;
+  roomTypes: CmsRoomTypeOption[];
   defaultRoomTypeId?: string;
   onSave: (formData: FormData) => Promise<void>;
   onCancel: () => void;
@@ -117,7 +119,7 @@ export function PhysicalRoomForm({ room, roomTypes, defaultRoomTypeId, onSave, o
           <label className="block text-xs font-medium text-[#8b7355] mb-1">สถานะห้อง</label>
           <select
             value={status}
-            onChange={(e) => setStatus(e.target.value)}
+            onChange={(e) => setStatus(e.target.value as RoomStatus)}
             className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
           >
             {ROOM_STATUS_OPTIONS.map((opt) => (
@@ -131,7 +133,7 @@ export function PhysicalRoomForm({ room, roomTypes, defaultRoomTypeId, onSave, o
           <label className="block text-xs font-medium text-[#8b7355] mb-1">สถานะความสะอาด</label>
           <select
             value={housekeeping}
-            onChange={(e) => setHousekeeping(e.target.value)}
+            onChange={(e) => setHousekeeping(e.target.value as HousekeepingStatus)}
             className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm"
           >
             {HK_STATUS_OPTIONS.map((opt) => (

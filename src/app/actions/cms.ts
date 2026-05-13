@@ -3,6 +3,46 @@
 import { createClient } from "@/lib/supabase/server";
 import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
+import type { ContactType, Hotel } from "@/types/database.types";
+
+interface DbError {
+  message?: string;
+}
+
+interface HotelSettingsRow {
+  settings: Record<string, unknown> | null;
+}
+
+interface InsertOnlyTable<TInsert> {
+  insert(value: TInsert): Promise<{ error: DbError | null }>;
+}
+
+interface UpdateByHotelTable<TUpdate> {
+  update(value: TUpdate): {
+    eq(column: string, value: string): Promise<{ error: DbError | null }>;
+  };
+}
+
+interface UpdateScopedTable<TUpdate> {
+  update(value: TUpdate): {
+    eq(column: string, value: string): {
+      eq(column: string, value: string): Promise<{ error: DbError | null }>;
+    };
+  };
+}
+
+interface ContactInsert {
+  hotel_id: string;
+  contact_type: ContactType;
+  value: string;
+  label: string | null;
+  is_visible: boolean;
+}
+
+function toContactType(value: string): ContactType {
+  const allowed: ContactType[] = ["phone", "email", "facebook", "line", "instagram", "website", "tiktok", "whatsapp", "map_url", "other"];
+  return allowed.includes(value as ContactType) ? value as ContactType : "other";
+}
 
 export async function updatePromptPay(formData: FormData) {
   const session = await getSession();
@@ -27,8 +67,8 @@ export async function updatePromptPay(formData: FormData) {
 
   if (fetchErr) return { error: "Failed to fetch hotel settings" };
 
-  const hotel = hotelData as any;
-  const currentSettings = (hotel?.settings as Record<string, any>) || {};
+  const hotel = hotelData as unknown as HotelSettingsRow | null;
+  const currentSettings = hotel?.settings || {};
 
   // 2. Update PromptPay setting
   const newSettings = {
@@ -40,7 +80,8 @@ export async function updatePromptPay(formData: FormData) {
     },
   };
 
-  const { error: updateErr } = await (supabase.from("hotels") as any)
+  const hotelsTable = supabase.from("hotels") as unknown as UpdateByHotelTable<Partial<Hotel>>;
+  const { error: updateErr } = await hotelsTable
     .update({ settings: newSettings })
     .eq("id", session.hotelId);
 
@@ -57,7 +98,7 @@ export async function updateContact(formData: FormData) {
   if (!session?.hotelId) return { error: "Unauthorized or no hotel assigned" };
 
   const id = formData.get("id") as string;
-  const type = formData.get("type") as string;
+  const type = toContactType(String(formData.get("type") || ""));
   const value = formData.get("value") as string;
   const label = formData.get("label") as string;
   const isVisible = formData.get("isVisible") === "true";
@@ -66,20 +107,22 @@ export async function updateContact(formData: FormData) {
 
   if (id === "new") {
     // Insert new
-    const { error } = await (supabase.from("cms_hotel_contacts") as any).insert({
+    const contactsInsertTable = supabase.from("cms_hotel_contacts") as unknown as InsertOnlyTable<ContactInsert>;
+    const { error } = await contactsInsertTable.insert({
       hotel_id: session.hotelId,
       contact_type: type,
       value,
-      label,
+      label: label || null,
       is_visible: isVisible,
     });
     if (error) return { error: "Failed to create contact" };
   } else {
     // Update existing
-    const { error } = await (supabase.from("cms_hotel_contacts") as any)
+    const contactsUpdateTable = supabase.from("cms_hotel_contacts") as unknown as UpdateScopedTable<Partial<ContactInsert>>;
+    const { error } = await contactsUpdateTable
       .update({
         value,
-        label,
+        label: label || null,
         is_visible: isVisible,
       })
       .eq("id", id)
@@ -123,7 +166,8 @@ export async function updateHotelGeneralSettings(formData: FormData) {
 
   const supabase = await createClient();
 
-  const { error } = await (supabase.from("hotels") as any)
+  const hotelsTable = supabase.from("hotels") as unknown as UpdateByHotelTable<Partial<Hotel>>;
+  const { error } = await hotelsTable
     .update({ name, description, address })
     .eq("id", session.hotelId);
 
@@ -158,8 +202,10 @@ export async function updateSeoSettings(formData: FormData) {
 
   if (fetchErr) return { error: "Failed to fetch SEO settings" };
 
-  const currentSettings = ((hotelData as any)?.settings as Record<string, any>) || {};
-  const { error: updateErr } = await (supabase.from("hotels") as any)
+  const hotel = hotelData as unknown as HotelSettingsRow | null;
+  const currentSettings = hotel?.settings || {};
+  const hotelsTable = supabase.from("hotels") as unknown as UpdateByHotelTable<Partial<Hotel>>;
+  const { error: updateErr } = await hotelsTable
     .update({
       settings: {
         ...currentSettings,

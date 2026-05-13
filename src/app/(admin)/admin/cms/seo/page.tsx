@@ -3,6 +3,15 @@ import { redirect } from "next/navigation";
 import { createServiceClient } from "@/lib/supabase/service";
 import { SeoSettingsEditor } from "@/components/admin/cms/SeoSettingsEditor";
 
+interface SeoHotelSettingsRow {
+  settings: Record<string, unknown> | null;
+}
+
+function getSeoSettings(settings: Record<string, unknown> | null | undefined): Record<string, unknown> {
+  const seo = settings?.seo;
+  return seo && typeof seo === "object" ? seo as Record<string, unknown> : {};
+}
+
 export const metadata = {
   title: "CMS | SEO",
   robots: {
@@ -24,7 +33,8 @@ export default async function SeoCMSPage() {
     .eq("id", session.hotelId)
     .single();
 
-  const seo = ((hotel as any)?.settings as Record<string, any>)?.seo || {};
+  const hotelSettings = hotel as unknown as SeoHotelSettingsRow | null;
+  const seo = getSeoSettings(hotelSettings?.settings);
 
   return (
     <div className="w-full min-h-full flex flex-col justify-center pb-8">

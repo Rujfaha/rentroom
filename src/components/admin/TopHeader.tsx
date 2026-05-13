@@ -1,10 +1,94 @@
-﻿"use client";
+"use client";
 
 import { useState, useRef, useEffect } from "react";
+import type { ReactNode } from "react";
 import { Bell, Search, LogOut, CheckCircle, Info, AlertTriangle } from "lucide-react";
 import { logoutAction } from "@/app/actions/auth";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import { Suspense } from "react";
 import { ADMIN_TAB_SESSION_KEY } from "@/lib/admin-tab-session";
+
+const READ_NOTICE_IDS_KEY = "rentroom_admin_read_notice_ids";
+
+interface NoticeItem {
+  id: number;
+  title: string;
+  time: string;
+  icon: ReactNode;
+  unread: boolean;
+  link: string;
+}
+
+const initialNotices: NoticeItem[] = [
+  {
+    id: 1,
+    title: "การจองใหม่: Arkkarawin Deluxe",
+    time: "5 นาทีที่แล้ว",
+    icon: <CheckCircle className="w-5 h-5 text-emerald-600" />,
+    unread: true,
+    link: "/admin/bookings",
+  },
+  {
+    id: 2,
+    title: "การแจ้งเตือนระบบ: อัปเดตราคาสำเร็จ",
+    time: "1 ชั่วโมงที่แล้ว",
+    icon: <Info className="w-5 h-5 text-blue-500" />,
+    unread: true,
+    link: "/admin/cms/settings",
+  },
+  {
+    id: 3,
+    title: "ลูกค้ารอยืนยันการโอนเงิน",
+    time: "3 ชั่วโมงที่แล้ว",
+    icon: <AlertTriangle className="w-5 h-5 text-amber-500" />,
+    unread: false,
+    link: "/admin/bookings",
+  },
+];
+
+function getReadNoticeIds(): Set<number> {
+  if (typeof window === "undefined") return new Set();
+  try {
+    const rawValue = window.sessionStorage.getItem(READ_NOTICE_IDS_KEY);
+    const parsed = JSON.parse(rawValue || "[]") as unknown;
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.map((id) => Number(id)).filter((id) => Number.isFinite(id)));
+  } catch {
+    return new Set();
+  }
+}
+
+function saveReadNoticeIds(notices: NoticeItem[]) {
+  if (typeof window === "undefined") return;
+  const readIds = notices.filter((notice) => !notice.unread).map((notice) => notice.id);
+  window.sessionStorage.setItem(READ_NOTICE_IDS_KEY, JSON.stringify(readIds));
+}
+
+function getInitialNotices(): NoticeItem[] {
+  const readIds = getReadNoticeIds();
+  return initialNotices.map((notice) => ({
+    ...notice,
+    unread: notice.unread && !readIds.has(notice.id),
+  }));
+}
+
+function SearchBar() {
+  const searchParams = useSearchParams();
+  const q = searchParams.get("q") || "";
+
+  return (
+    <form action="/admin/bookings" method="GET" className="relative w-full">
+      <Search className="w-4 h-4 text-[#a89279] absolute left-3 top-1/2 -translate-y-1/2" />
+      <input 
+        type="text" 
+        name="q"
+        defaultValue={q}
+        placeholder="ค้นหาการจอง, ชื่อลูกค้า, หรือห้องพัก..." 
+        className="w-full pl-9 pr-4 py-2 bg-white border border-[#e8e2d6] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[#1a3c2a] focus:border-[#1a3c2a] transition-colors text-[#2c2c2c] placeholder-[#c4b9a8]"
+      />
+    </form>
+  );
+}
 
 export function TopHeader() {
   const router = useRouter();
@@ -12,32 +96,7 @@ export function TopHeader() {
   const noticesRef = useRef<HTMLDivElement>(null);
 
   // Use state for notices to allow marking them as read
-  const [notices, setNotices] = useState([
-    {
-      id: 1,
-      title: "การจองใหม่: Arkkarawin Deluxe",
-      time: "5 นาทีที่แล้ว",
-      icon: <CheckCircle className="w-5 h-5 text-emerald-600" />,
-      unread: true,
-      link: "/admin/bookings",
-    },
-    {
-      id: 2,
-      title: "การแจ้งเตือนระบบ: อัปเดตราคาสำเร็จ",
-      time: "1 ชั่วโมงที่แล้ว",
-      icon: <Info className="w-5 h-5 text-blue-500" />,
-      unread: true,
-      link: "/admin/cms/settings",
-    },
-    {
-      id: 3,
-      title: "ลูกค้ารอยืนยันการโอนเงิน",
-      time: "3 ชั่วโมงที่แล้ว",
-      icon: <AlertTriangle className="w-5 h-5 text-amber-500" />,
-      unread: false,
-      link: "/admin/bookings",
-    },
-  ]);
+  const [notices, setNotices] = useState(getInitialNotices);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -49,13 +108,23 @@ export function TopHeader() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const handleBellClick = () => {
+    setIsNoticesOpen(!isNoticesOpen);
+    setNotices((prevNotices) => {
+      const nextNotices = prevNotices.map((notice) => ({ ...notice, unread: false }));
+      saveReadNoticeIds(nextNotices);
+      return nextNotices;
+    });
+  };
+
   const handleNoticeClick = (id: number, link: string) => {
-    // Mark as read
-    setNotices((prevNotices) =>
-      prevNotices.map((notice) =>
+    setNotices((prevNotices) => {
+      const nextNotices = prevNotices.map((notice) =>
         notice.id === id ? { ...notice, unread: false } : notice
-      )
-    );
+      );
+      saveReadNoticeIds(nextNotices);
+      return nextNotices;
+    });
     // Close dropdown
     setIsNoticesOpen(false);
     // Navigate to link
@@ -77,21 +146,16 @@ export function TopHeader() {
 
       {/* Search */}
       <div className="flex-1 max-w-md hidden md:flex">
-        <div className="relative w-full">
-          <Search className="w-4 h-4 text-[#a89279] absolute left-3 top-1/2 -translate-y-1/2" />
-          <input 
-            type="text" 
-            placeholder="ค้นหาการจอง, ชื่อลูกค้า, หรือห้องพัก..." 
-            className="w-full pl-9 pr-4 py-2 bg-white border border-[#e8e2d6] rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-[#1a3c2a] focus:border-[#1a3c2a] transition-colors text-[#2c2c2c] placeholder-[#c4b9a8]"
-          />
-        </div>
+        <Suspense fallback={<div className="w-full h-9 bg-white border border-[#e8e2d6] rounded-lg"></div>}>
+          <SearchBar />
+        </Suspense>
       </div>
 
       {/* Right Actions */}
       <div className="flex items-center space-x-4">
         <div className="relative" ref={noticesRef}>
           <button 
-            onClick={() => setIsNoticesOpen(!isNoticesOpen)}
+            onClick={handleBellClick}
             className={`relative p-2 transition-colors rounded-full cursor-pointer ${isNoticesOpen ? 'bg-[#e8e2d6] text-[#1a3c2a]' : 'text-[#8b7355] hover:text-[#1a3c2a] hover:bg-[#e8e2d6]/50'}`}
           >
             <Bell className="w-5 h-5" />
@@ -102,7 +166,7 @@ export function TopHeader() {
 
           {/* Dropdown */}
           {isNoticesOpen && (
-            <div className="absolute right-0 mt-2 w-80 bg-white border border-[#e8e2d6] rounded-xl shadow-lg overflow-hidden z-50">
+            <div className="absolute -right-20 md:right-0 mt-2 w-[300px] sm:w-80 bg-white border border-[#e8e2d6] rounded-xl shadow-lg overflow-hidden z-50">
               <div className="px-4 py-3 border-b border-[#e8e2d6] flex justify-between items-center bg-[#faf7f0]">
                 <h3 className="font-serif text-[#1a3c2a] font-medium">การแจ้งเตือน</h3>
                 {unreadCount > 0 && (

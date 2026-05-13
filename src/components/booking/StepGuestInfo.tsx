@@ -27,7 +27,9 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
   const [phone, setPhone] = useState("");
   const [email, setEmail] = useState("");
   const [specialRequests, setSpecialRequests] = useState("");
+  const [companyName, setCompanyName] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const totalAmount = props.room.stayTotal ?? props.room.basePrice * props.totalNights;
 
@@ -43,12 +45,16 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
 
   function handleSubmit() {
     if (!validate()) return;
-    props.onSubmit({
-      fullName: fullName,
-      phone: phone,
-      email: email,
-      specialRequests: specialRequests,
-    });
+    setIsSubmitting(true);
+    window.setTimeout(function () {
+      props.onSubmit({
+        fullName: fullName,
+        phone: phone,
+        email: email,
+        specialRequests: specialRequests,
+        companyName: companyName,
+      });
+    }, 150);
   }
 
   const inputClass = "w-full px-4 py-3 border border-stone rounded-lg text-charcoal focus:outline-none focus:ring-2 focus:ring-gold/50 focus:border-gold transition-colors";
@@ -60,6 +66,17 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
         <div className="bg-white rounded-xl p-6 shadow-md">
           <h3 className="font-semibold text-forest-dark text-lg mb-6">{labels.title}</h3>
           <div className="space-y-4">
+            <div className="absolute left-[-9999px] top-auto h-px w-px overflow-hidden" aria-hidden="true">
+              <label htmlFor="booking-company-name">Company</label>
+              <input
+                id="booking-company-name"
+                type="text"
+                value={companyName}
+                onChange={function (e) { setCompanyName(e.target.value); }}
+                tabIndex={-1}
+                autoComplete="off"
+              />
+            </div>
             <div>
               <label className={labelClass}>{labels.fullName}</label>
               <input
@@ -107,11 +124,14 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
             </div>
           </div>
           <div className="flex gap-3 mt-8">
-            <button onClick={props.onBack} className="px-6 py-3 border-2 border-stone text-earth rounded-lg hover:bg-stone-light/50 transition-colors font-medium cursor-pointer">
+            <button onClick={props.onBack} disabled={isSubmitting} className="px-6 py-3 border-2 border-stone text-earth rounded-lg hover:bg-stone-light/50 transition-colors font-medium cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed">
               {labels.back}
             </button>
-            <button onClick={handleSubmit} className="flex-1 px-6 py-3 bg-gold text-white rounded-lg hover:bg-gold-dark transition-colors font-semibold shadow-lg shadow-gold/20 cursor-pointer">
-              {labels.continue}
+            <button onClick={handleSubmit} disabled={isSubmitting} className="flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 bg-gold text-white rounded-lg hover:bg-gold-dark transition-colors font-semibold shadow-lg shadow-gold/20 cursor-pointer disabled:opacity-70 disabled:cursor-wait">
+              {isSubmitting && (
+                <span className="h-4 w-4 rounded-full border-2 border-current border-r-transparent animate-spin" aria-hidden="true" />
+              )}
+              <span>{isSubmitting ? "กำลังโหลด..." : labels.continue}</span>
             </button>
           </div>
         </div>

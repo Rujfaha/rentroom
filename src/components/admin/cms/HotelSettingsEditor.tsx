@@ -4,7 +4,13 @@ import { useState, useTransition } from "react";
 import { updateHotelGeneralSettings } from "@/app/actions/cms";
 import { Save, MapPin, AlignLeft, Type } from "lucide-react";
 
-export function HotelSettingsEditor({ initialData }: { initialData: any }) {
+interface HotelSettingsData {
+  name?: string | null;
+  description?: string | null;
+  address?: string | null;
+}
+
+export function HotelSettingsEditor({ initialData }: { initialData: HotelSettingsData | null }) {
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [success, setSuccess] = useState(false);

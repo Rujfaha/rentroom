@@ -2,6 +2,31 @@ import { getSession } from "@/lib/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { ContactsTabs } from "@/components/admin/cms/ContactsTabs";
 import { redirect } from "next/navigation";
+import type { CmsContactRow } from "@/components/admin/cms/ContactEditor";
+
+interface ContactsHotelSettingsRow {
+  settings: Record<string, unknown> | null;
+}
+
+interface PromptPaySettings {
+  accountId: string;
+  accountName: string;
+  type: "phone" | "national_id";
+}
+
+function getPromptPaySettings(settings: Record<string, unknown> | null | undefined): PromptPaySettings {
+  const promptpay = settings?.promptpay;
+  if (!promptpay || typeof promptpay !== "object") {
+    return { accountId: "", accountName: "", type: "phone" };
+  }
+
+  const data = promptpay as Record<string, unknown>;
+  return {
+    accountId: typeof data.accountId === "string" ? data.accountId : "",
+    accountName: typeof data.accountName === "string" ? data.accountName : "",
+    type: data.type === "national_id" ? "national_id" : "phone",
+  };
+}
 
 export const metadata = {
   title: "ข้อมูลติดต่อและการชำระเงิน | Arkkarawin",
@@ -14,11 +39,12 @@ export default async function ContactsCmsPage() {
   const supabase = await createServiceClient();
 
   // Fetch Contacts
-  const { data: contacts } = await supabase
+  const { data: contactsData } = await supabase
     .from("cms_hotel_contacts")
     .select("*")
     .eq("hotel_id", session.hotelId)
     .order("sort_order", { ascending: true });
+  const contacts = (contactsData ?? []) as unknown as CmsContactRow[];
 
   // Fetch Settings for PromptPay
   const { data: hotelData } = await supabase
@@ -27,13 +53,8 @@ export default async function ContactsCmsPage() {
     .eq("id", session.hotelId)
     .single();
 
-  const hotel = hotelData as any;
-  const settings = (hotel?.settings as Record<string, any>) || {};
-  const promptpay = settings.promptpay || {
-    accountId: "",
-    accountName: "",
-    type: "phone",
-  };
+  const hotel = hotelData as unknown as ContactsHotelSettingsRow | null;
+  const promptpay = getPromptPaySettings(hotel?.settings);
 
   return (
     <div className="space-y-6 pb-8">
@@ -44,7 +65,7 @@ export default async function ContactsCmsPage() {
         </p>
       </div>
 
-      <ContactsTabs contacts={contacts || []} promptpay={promptpay} />
+      <ContactsTabs contacts={contacts} promptpay={promptpay} />
     </div>
   );
 }

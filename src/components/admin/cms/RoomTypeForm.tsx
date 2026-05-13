@@ -1,9 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { ImageUploadInput } from "./ImageUploadInput";
-import { uploadRoomTypeImage } from "@/app/actions/rooms";
 import { Save, X, Plus } from "lucide-react";
+import type { CmsRoomType } from "./room-type-types";
 
 const PREDEFINED_AMENITIES = [
   "WiFi",
@@ -28,7 +27,7 @@ const BED_TYPE_OPTIONS = [
 ];
 
 interface RoomTypeFormProps {
-  roomType?: any;
+  roomType?: CmsRoomType;
   onSave: (formData: FormData) => Promise<void>;
   onCancel: () => void;
 }

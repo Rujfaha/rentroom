@@ -3,6 +3,7 @@
 import { useState, useTransition, useRef } from "react";
 import { updateHeroSlide, deleteHeroSlide } from "@/app/actions/hero";
 import { Plus, Save, Trash2, Edit2, Image as ImageIcon, Link, Upload, X } from "lucide-react";
+import type { CmsHeroSlide } from "./content-editor-types";
 
 function ImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isSaving?: boolean }) {
   const safeDefaultUrl = defaultUrl ?? "";
@@ -72,7 +73,7 @@ function ImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isSaving?: b
         setImageUrl(result.url);
         setPreview(result.url);
       }
-    } catch (error) {
+    } catch {
       setUploading(false);
       setUploadError("ไม่สามารถดาวน์โหลดรูปภาพจาก URL นี้ได้");
       setPreview(imageUrl);
@@ -191,7 +192,7 @@ function ImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isSaving?: b
   );
 }
 
-export function HeroSlideEditor({ initialSlides }: { initialSlides: any[] }) {
+export function HeroSlideEditor({ initialSlides }: { initialSlides: CmsHeroSlide[] }) {
   const [slides, setSlides] = useState(initialSlides ?? []);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -231,7 +232,7 @@ export function HeroSlideEditor({ initialSlides }: { initialSlides: any[] }) {
       <div className="flex justify-end">
         <button
           onClick={() => {
-            const newSlide = { id: "new", image_url: "", headline: "", subheadline: "", is_active: true };
+            const newSlide: CmsHeroSlide = { id: "new", image_url: "", headline: "", subheadline: "", is_active: true };
             setSlides([newSlide, ...slides]);
             setEditingId("new");
           }}
@@ -304,7 +305,7 @@ export function HeroSlideEditor({ initialSlides }: { initialSlides: any[] }) {
               <>
                 <div className="relative h-48 bg-[#f0ece4] flex items-center justify-center overflow-hidden">
                   {slide.image_url ? (
-                    <img src={slide.image_url} alt={slide.headline} className="w-full h-full object-cover" />
+                    <img src={slide.image_url} alt={slide.headline || ""} className="w-full h-full object-cover" />
                   ) : (
                     <ImageIcon className="w-10 h-10 text-[#c4b9a8]" />
                   )}

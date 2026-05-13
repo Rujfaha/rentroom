@@ -3,6 +3,7 @@
 import { useRef, useState, useTransition } from "react";
 import { updatePromotion, deletePromotion } from "@/app/actions/promotions";
 import { Plus, Save, Trash2, Edit2, Link, Upload, X, Calendar, Percent } from "lucide-react";
+import type { CmsPromotion } from "./content-editor-types";
 
 function PromotionImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isSaving?: boolean }) {
   const safeDefaultUrl = defaultUrl ?? "";
@@ -192,7 +193,7 @@ function PromotionImageInput({ defaultUrl, isSaving }: { defaultUrl: string; isS
   );
 }
 
-function DiscountFields({ promo }: { promo: any }) {
+function DiscountFields({ promo }: { promo: CmsPromotion }) {
   const [discountType, setDiscountType] = useState<"percent" | "fixed">(
     promo.discount_type === "fixed" ? "fixed" : "percent"
   );
@@ -256,7 +257,7 @@ function DiscountFields({ promo }: { promo: any }) {
   );
 }
 
-export function PromotionEditor({ initialPromotions }: { initialPromotions: any[] }) {
+export function PromotionEditor({ initialPromotions }: { initialPromotions: CmsPromotion[] }) {
   const [promotions, setPromotions] = useState(initialPromotions ?? []);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
@@ -297,7 +298,7 @@ export function PromotionEditor({ initialPromotions }: { initialPromotions: any[
       <div className="flex justify-end">
         <button
           onClick={() => {
-            const newPromo = { id: "new", title: "", description: "", image_url: "", discount_type: "percent", discount_percentage: "", discount_amount: "", discount_code: "", discount_text: "", valid_until: "", is_active: true };
+            const newPromo: CmsPromotion = { id: "new", title: "", description: "", image_url: "", discount_type: "percent", discount_percentage: "", discount_amount: "", discount_code: "", discount_text: "", valid_until: "", is_active: true };
             setPromotions([newPromo, ...promotions]);
             setEditingId("new");
           }}
@@ -388,7 +389,7 @@ export function PromotionEditor({ initialPromotions }: { initialPromotions: any[
               <>
                 {promo.image_url && (
                   <div className="h-32 bg-slate-100 overflow-hidden shrink-0 border-b border-[#e8e2d6]">
-                    <img src={promo.image_url} alt={promo.title} className="w-full h-full object-cover" />
+                    <img src={promo.image_url} alt={promo.title || ""} className="w-full h-full object-cover" />
                   </div>
                 )}
                 <div className="p-5 flex flex-col flex-1">

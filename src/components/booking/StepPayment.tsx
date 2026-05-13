@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import Image from "next/image";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
 import type { BookingLabels } from "./booking-i18n";
-import { validatePromotionCode } from "@/app/actions/booking";
+import { evaluateBookingPromotion } from "@/app/actions/promotion-engine";
 
 interface StepPaymentProps {
   hotelId: string;
@@ -30,6 +30,7 @@ export default function StepPayment(props: StepPaymentProps) {
   const labels = props.labels.payment;
   const subtotalAmount = props.room.stayTotal ?? props.room.basePrice * props.totalNights;
   const [promotionCode, setPromotionCode] = useState("");
+  const [appliedPromotionCode, setAppliedPromotionCode] = useState<string | undefined>();
   const [discountAmount, setDiscountAmount] = useState(0);
   const [discountLabel, setDiscountLabel] = useState("");
   const [discountMessage, setDiscountMessage] = useState("");
@@ -45,6 +46,61 @@ export default function StepPayment(props: StepPaymentProps) {
   const [uploadError, setUploadError] = useState("");
   const [isUploadingSlip, setIsUploadingSlip] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(function () {
+    let active = true;
+    const timeoutId = window.setTimeout(function () {
+      setIsCheckingDiscount(true);
+      evaluateBookingPromotion({
+        hotelId: props.hotelId,
+        roomTypeId: props.room.id,
+        checkInDate: props.checkIn,
+        checkOutDate: props.checkOut,
+        nights: props.totalNights,
+        quantity: 1,
+        guests: Math.max(1, props.adults + props.childrenCount),
+        subtotal: subtotalAmount,
+        bookingChannel: "website",
+        customer: {
+          phone: props.guest.phone,
+          email: props.guest.email,
+        },
+      }).then(function (result) {
+        if (!active) return;
+        if (result.selectedPromotion) {
+          setDiscountAmount(result.discountAmount);
+          setDiscountLabel(result.selectedPromotion.promotionName);
+          setDiscountMessage("ระบบใช้โปรโมชั่นที่เหมาะสมให้แล้ว");
+          setAppliedPromotionCode(undefined);
+        } else {
+          setDiscountAmount(0);
+          setDiscountLabel("");
+          setDiscountMessage("");
+          setAppliedPromotionCode(undefined);
+        }
+        setIsCheckingDiscount(false);
+      }).catch(function () {
+        if (!active) return;
+        setIsCheckingDiscount(false);
+      });
+    }, 0);
+
+    return function () {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [
+    props.adults,
+    props.checkIn,
+    props.checkOut,
+    props.childrenCount,
+    props.guest.email,
+    props.guest.phone,
+    props.hotelId,
+    props.room.id,
+    props.totalNights,
+    subtotalAmount,
+  ]);
 
   useEffect(function () {
     const timeoutId = window.setTimeout(function () {
@@ -101,21 +157,34 @@ export default function StepPayment(props: StepPaymentProps) {
     }
 
     setIsCheckingDiscount(true);
-    const result = await validatePromotionCode({
+    const result = await evaluateBookingPromotion({
       hotelId: props.hotelId,
-      code,
+      roomTypeId: props.room.id,
+      checkInDate: props.checkIn,
+      checkOutDate: props.checkOut,
+      nights: props.totalNights,
+      quantity: 1,
+      guests: Math.max(1, props.adults + props.childrenCount),
       subtotal: subtotalAmount,
+      bookingChannel: "website",
+      promotionCode: code,
+      customer: {
+        phone: props.guest.phone,
+        email: props.guest.email,
+      },
     });
     setIsCheckingDiscount(false);
 
-    if (result.valid) {
+    if (result.valid && result.selectedPromotion) {
       setDiscountAmount(result.discountAmount);
-      setDiscountLabel(result.title || code);
+      setDiscountLabel(result.selectedPromotion.promotionName || code);
       setDiscountMessage("ใช้ code ส่วนลดสำเร็จ");
+      setAppliedPromotionCode(code);
     } else {
       setDiscountAmount(0);
       setDiscountLabel("");
       setDiscountMessage(result.message || "code ส่วนลดไม่ถูกต้อง");
+      setAppliedPromotionCode(undefined);
     }
   }
 
@@ -141,7 +210,7 @@ export default function StepPayment(props: StepPaymentProps) {
 
       props.onConfirm(
         result.url,
-        discountAmount > 0 ? promotionCode.trim().toUpperCase() : undefined
+        appliedPromotionCode
       );
     } catch {
       setUploadError("Unable to upload payment slip");
@@ -167,8 +236,11 @@ export default function StepPayment(props: StepPaymentProps) {
                 value={promotionCode}
                 onChange={(e) => {
                   setPromotionCode(e.target.value.toUpperCase());
-                  setDiscountAmount(0);
-                  setDiscountLabel("");
+                  setAppliedPromotionCode(undefined);
+                  if (discountAmount > 0 && appliedPromotionCode) {
+                    setDiscountAmount(0);
+                    setDiscountLabel("");
+                  }
                   setDiscountMessage("");
                 }}
                 className="w-full rounded-lg border border-stone bg-white px-3 py-2 text-sm text-forest-dark outline-none transition-colors focus:border-gold"
@@ -311,17 +383,22 @@ export default function StepPayment(props: StepPaymentProps) {
               onClick={handleConfirm}
               disabled={!slipFile || props.isConfirming || isUploadingSlip}
               className={
-                "flex-1 px-6 py-3 rounded-lg font-semibold transition-all " +
+                "flex-1 inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-semibold transition-all " +
                 (slipFile && !props.isConfirming && !isUploadingSlip
                   ? "bg-gold text-white hover:bg-gold-dark shadow-lg shadow-gold/20 cursor-pointer"
                   : "bg-stone-light text-earth cursor-not-allowed")
               }
             >
-              {isUploadingSlip
-                ? "กำลังอัปโหลดสลิป..."
-                : props.isConfirming
-                ? "กำลังบันทึกการจอง..."
-                : labels.confirm}
+              {(isUploadingSlip || props.isConfirming) && (
+                <span className="h-4 w-4 rounded-full border-2 border-current border-r-transparent animate-spin" aria-hidden="true" />
+              )}
+              <span>
+                {isUploadingSlip
+                  ? "กำลังอัปโหลดสลิป..."
+                  : props.isConfirming
+                  ? "กำลังบันทึกการจอง..."
+                  : labels.confirm}
+              </span>
             </button>
           </div>
         </div>

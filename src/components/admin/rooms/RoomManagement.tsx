@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useTransition, useEffect, useCallback } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import {
   BedDouble,
   CheckCircle2,
@@ -13,11 +13,12 @@ import { RoomTypeSection } from "./RoomTypeSection";
 import { RoomSection } from "./RoomSection";
 import { getAdminRooms } from "@/app/actions/rooms";
 import { createClient } from "@/lib/supabase/client";
+import type { AdminRoom, AdminRoomType } from "./types";
 
 interface RoomManagementProps {
   hotelId: string;
-  initialRoomTypes: any[];
-  initialRooms: any[];
+  initialRoomTypes: AdminRoomType[];
+  initialRooms: AdminRoom[];
 }
 
 export function RoomManagement({ hotelId, initialRoomTypes, initialRooms }: RoomManagementProps) {

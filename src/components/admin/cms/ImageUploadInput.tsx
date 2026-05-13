@@ -6,64 +6,85 @@ import { Link, Upload, X } from "lucide-react";
 interface ImageUploadInputProps {
   folder: string;
   onUploadSuccess: (url: string) => void;
-  defaultUrl?: string;
+  onUploadMultipleSuccess?: (urls: string[]) => void;
+  defaultUrl?: string | null;
+  multiple?: boolean;
 }
 
-export function ImageUploadInput({ folder, onUploadSuccess, defaultUrl = "" }: ImageUploadInputProps) {
-  const safeDefaultUrl = defaultUrl ?? "";
+function safeString(value: unknown): string {
+  return typeof value === "string" ? value : "";
+}
+
+export function ImageUploadInput({ folder, onUploadSuccess, onUploadMultipleSuccess, defaultUrl = "", multiple = false }: ImageUploadInputProps) {
+  const safeDefaultUrl = safeString(defaultUrl);
   const [tab, setTab] = useState<"url" | "upload">("url");
-  const [tempUrl, setTempUrl] = useState("");
-  const [imageUrl, setImageUrl] = useState(safeDefaultUrl);
-  const [preview, setPreview] = useState(safeDefaultUrl);
+  const [tempUrl, setTempUrl] = useState<string>("");
+  const [imageUrl, setImageUrl] = useState<string>(safeDefaultUrl);
+  const [preview, setPreview] = useState<string>(safeDefaultUrl);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+    const files = Array.from(e.target.files || []);
+    if (files.length === 0) return;
 
-    const localPreview = URL.createObjectURL(file);
+    const localPreview = URL.createObjectURL(files[0]);
     setPreview(localPreview);
     setUploadError("");
     setUploading(true);
 
-    const fd = new FormData();
-    fd.append("file", file);
-    fd.append("folder", folder);
-
     try {
-      const res = await fetch("/api/cms/upload-image", { method: "POST", body: fd });
-      const result = await res.json();
+      const uploadedUrls: string[] = [];
+
+      for (const file of files) {
+        const fd = new FormData();
+        fd.append("file", file);
+        fd.append("folder", folder);
+
+        const res = await fetch("/api/cms/upload-image", { method: "POST", body: fd });
+        const result = await res.json();
+
+        if (result.error) {
+          throw new Error(result.error || "อัปโหลดไม่สำเร็จ");
+        }
+
+        if (result.url) {
+          uploadedUrls.push(safeString(result.url));
+        }
+      }
+
       setUploading(false);
 
-      if (result.error) {
-        setUploadError(result.error || "อัปโหลดไม่สำเร็จ");
-        setPreview(imageUrl);
-      } else if (result.url) {
-        setImageUrl(result.url);
-        setPreview(result.url);
-        onUploadSuccess(result.url);
+      if (uploadedUrls.length > 0) {
+        setImageUrl(safeString(uploadedUrls[0]));
+        setPreview(safeString(uploadedUrls[0]));
+        if (multiple && onUploadMultipleSuccess) {
+          onUploadMultipleSuccess(uploadedUrls);
+        } else {
+          onUploadSuccess(uploadedUrls[0]);
+        }
       }
-    } catch {
+    } catch (error) {
       setUploading(false);
-      setUploadError("อัปโหลดไม่สำเร็จ");
-      setPreview(imageUrl);
+      setUploadError(error instanceof Error ? error.message : "อัปโหลดไม่สำเร็จ");
+      setPreview(safeString(imageUrl));
     }
   };
 
   const handleFetchExternalUrl = async () => {
-    if (!tempUrl.trim()) {
+    const nextTempUrl = safeString(tempUrl);
+    if (!nextTempUrl.trim()) {
       setUploadError("กรุณาใส่ URL");
       return;
     }
 
     setUploadError("");
     setUploading(true);
-    setPreview(tempUrl);
+    setPreview(nextTempUrl);
 
     const fd = new FormData();
-    fd.append("url", tempUrl);
+    fd.append("url", nextTempUrl);
     fd.append("folder", folder);
 
     try {
@@ -73,16 +94,17 @@ export function ImageUploadInput({ folder, onUploadSuccess, defaultUrl = "" }: I
 
       if (result.error) {
         setUploadError(result.error || "ไม่สามารถดาวน์โหลดรูปภาพจาก URL นี้ได้");
-        setPreview(imageUrl);
+        setPreview(safeString(imageUrl));
       } else if (result.url) {
-        setImageUrl(result.url);
-        setPreview(result.url);
-        onUploadSuccess(result.url);
+        const nextUrl = safeString(result.url);
+        setImageUrl(nextUrl);
+        setPreview(nextUrl);
+        onUploadSuccess(nextUrl);
       }
     } catch {
       setUploading(false);
       setUploadError("ไม่สามารถดาวน์โหลดรูปภาพจาก URL นี้ได้");
-      setPreview(imageUrl);
+      setPreview(safeString(imageUrl));
     }
   };
 
@@ -95,7 +117,7 @@ export function ImageUploadInput({ folder, onUploadSuccess, defaultUrl = "" }: I
 
   return (
     <div className="space-y-2">
-      <input type="hidden" name="image_url" value={imageUrl ?? ""} />
+      <input type="hidden" name="image_url" value={safeString(imageUrl)} />
 
       <label className="block text-xs font-medium text-[#8b7355] mb-1">รูปภาพ</label>
 
@@ -127,8 +149,8 @@ export function ImageUploadInput({ folder, onUploadSuccess, defaultUrl = "" }: I
         <div className="space-y-2">
           <input
             type="text"
-            value={tempUrl ?? ""}
-            onChange={(e) => setTempUrl(e.target.value)}
+            value={safeString(tempUrl)}
+            onChange={(e) => setTempUrl(safeString(e.currentTarget.value))}
             disabled={uploading}
             className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-md focus:ring-1 focus:ring-[#1a3c2a] outline-none text-sm disabled:opacity-60"
             placeholder="https://example.com/image.jpg"
@@ -136,7 +158,7 @@ export function ImageUploadInput({ folder, onUploadSuccess, defaultUrl = "" }: I
           <button
             type="button"
             onClick={handleFetchExternalUrl}
-            disabled={uploading || !tempUrl.trim()}
+            disabled={uploading || !safeString(tempUrl).trim()}
             className="w-full flex items-center justify-center gap-2 px-3 py-2 bg-[#1a3c2a] text-[#faf7f0] rounded-md text-sm font-medium hover:bg-[#0f2418] transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {uploading ? (
@@ -159,6 +181,7 @@ export function ImageUploadInput({ folder, onUploadSuccess, defaultUrl = "" }: I
             ref={fileRef}
             type="file"
             accept="image/*"
+            multiple={multiple}
             onChange={handleFileChange}
             className="hidden"
           />
@@ -176,7 +199,7 @@ export function ImageUploadInput({ folder, onUploadSuccess, defaultUrl = "" }: I
             ) : (
               <>
                 <Upload className="w-4 h-4" />
-                เลือกไฟล์รูปภาพ
+                {multiple ? "เลือกไฟล์รูปภาพหลายรูป" : "เลือกไฟล์รูปภาพ"}
               </>
             )}
           </button>
