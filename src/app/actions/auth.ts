@@ -2,7 +2,9 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { createSession, deleteSession } from "@/lib/session";
+import { checkRateLimit, getClientIp, getRateLimitErrorMessage } from "@/lib/rate-limit";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import bcrypt from "bcryptjs";
 import type { User, UserRole } from "@/types/database.types";
 
@@ -33,6 +35,16 @@ export async function loginAction(
 
   if (!username || !password) {
     return { error: "กรุณากรอกข้อมูลให้ครบถ้วน" };
+  }
+
+  const requestHeaders = await headers();
+  const loginRateLimit = checkRateLimit("admin-login", getClientIp(requestHeaders), {
+    windowMs: 10 * 60 * 1000,
+    max: 10,
+  });
+
+  if (!loginRateLimit.allowed) {
+    return { error: getRateLimitErrorMessage() };
   }
 
   const supabase = await createClient();

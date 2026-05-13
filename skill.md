@@ -52,3 +52,40 @@
      return arr[0];
    }
    ```
+
+## Security Hardening: Rate Limit และ Upload
+
+เมื่อเพิ่มหรือแก้ endpoint/action ที่รับ input จาก user ให้ใช้ `src/lib/rate-limit.ts` สำหรับจุดที่ถูกยิงซ้ำได้ง่าย
+
+จุดที่ควรมี rate limit เสมอ:
+
+1. `loginAction`
+2. `createWebsiteBooking`
+3. `validatePromotionCode`
+4. `lookupPublicBooking`
+5. upload API routes
+
+แนวทาง key:
+
+1. ใช้ IP จาก `getClientIp(headers)` หรือ `getClientIp(request.headers)`
+2. รวม `hotelId` หรือ email/phone เมื่อเกี่ยวข้อง
+3. ส่ง error กลางด้วย `getRateLimitErrorMessage()`
+4. อย่า log password, token, session cookie, API key หรือ service role key
+
+Threshold ที่ใช้อยู่:
+
+1. Admin login: 10 ครั้งต่อ 10 นาทีต่อ IP
+2. Booking create: 5 ครั้งต่อ 10 นาทีต่อ hotel/IP
+3. Booking create guest: 3 ครั้งต่อ 30 นาทีต่อ hotel/email หรือ hotel/phone
+4. Promotion code: 10 ครั้งต่อ 10 นาทีต่อ hotel/IP
+5. Public booking lookup: 10 ครั้งต่อ 10 นาทีต่อ email/IP
+6. Booking slip upload: 10 ครั้งต่อ 10 นาทีต่อ IP
+7. CMS image upload: 20 ครั้งต่อ 10 นาทีต่อ hotel/IP
+
+Upload endpoint ต้องตรวจอย่างน้อย:
+
+1. MIME type จาก server-side
+2. file size
+3. extension allowlist
+4. folder/path allowlist ถ้ารับ path จาก form
+5. สุ่มหรือสร้างชื่อไฟล์เอง ห้ามใช้ path เต็มจาก user

@@ -1,6 +1,7 @@
 import Navbar from "@/components/sections/Navbar";
 import HeroSection from "@/components/sections/HeroSection";
 import SearchBar from "@/components/sections/SearchBar";
+import StaahSearchCalendarFix from "@/components/sections/StaahSearchCalendarFix";
 import RoomTypesSection from "@/components/sections/RoomTypesSection";
 import PromotionsSection from "@/components/sections/PromotionsSection";
 import AboutSection from "@/components/sections/AboutSection";
@@ -300,6 +301,7 @@ export default async function Home() {
       <Navbar hotelName={hotelName} navLinks={hotel.navLinks} />
       <HeroSection slides={heroSlides} />
       <SearchBar labels={hotel.searchBarLabels} />
+      <StaahSearchCalendarFix />
       <RoomTypesSection initialRoomTypes={roomTypes} hotelId={hotelRow?.id || ""} />
       <PromotionsSection promotions={promotions} />
       <AboutSection hotelName={hotelName} description={hotelDescription} attractions={attractions} />

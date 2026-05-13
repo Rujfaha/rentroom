@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 import { createServiceClient } from "@/lib/supabase/service";
+import { checkRateLimit, getClientIp, getRateLimitErrorMessage } from "@/lib/rate-limit";
 
 const BUCKET_NAME = "cms-uploads";
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/gif", "image/webp"]);
+const ALLOWED_FOLDERS = new Set(["hero", "room_types", "attractions", "promotions", "settings"]);
 
 interface CmsImageInsert {
   hotel_id: string;
@@ -16,20 +20,28 @@ interface InsertOnlyTable<TInsert> {
 
 async function downloadExternalImage(imageUrl: string): Promise<{ buffer: Buffer; ext: string }> {
   try {
+    const url = new URL(imageUrl);
+    if (!["http:", "https:"].includes(url.protocol)) {
+      throw new Error("URL protocol is not allowed");
+    }
+
     const response = await fetch(imageUrl);
-    
+
     if (!response.ok) {
       throw new Error(`Failed to download image: ${response.statusText}`);
     }
 
     // ตรวจสอบ content-type
     const contentType = response.headers.get("content-type");
-    if (!contentType || !contentType.startsWith("image/")) {
+    if (!contentType || !ALLOWED_MIME_TYPES.has(contentType.split(";")[0].trim().toLowerCase())) {
       throw new Error("URL does not point to an image");
     }
 
     const buffer = Buffer.from(await response.arrayBuffer());
-    
+    if (buffer.length > MAX_FILE_SIZE) {
+      throw new Error("Image file is too large");
+    }
+
     // ดึง extension จาก content-type หรือ URL
     let ext = "jpg";
     if (contentType.includes("png")) ext = "png";
@@ -60,6 +72,12 @@ function getContentType(ext: string): string {
   return map[ext] || "image/jpeg";
 }
 
+function normalizeExtension(ext: string): string {
+  const normalized = ext.toLowerCase().replace(/[^a-z0-9]/g, "");
+  if (["jpg", "jpeg", "png", "gif", "webp"].includes(normalized)) return normalized;
+  return "jpg";
+}
+
 export async function POST(request: NextRequest) {
   try {
     const session = await getSession();
@@ -67,10 +85,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
+    const uploadRateLimit = checkRateLimit("cms-image-upload", `${session.hotelId}:${getClientIp(request.headers)}`, {
+      windowMs: 10 * 60 * 1000,
+      max: 20,
+    });
+
+    if (!uploadRateLimit.allowed) {
+      return NextResponse.json({ error: getRateLimitErrorMessage() }, { status: 429 });
+    }
+
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const externalUrl = formData.get("url") as string | null;
-    const folder = (formData.get("folder") as string) || "hero";
+    const requestedFolder = (formData.get("folder") as string) || "hero";
+    const folder = ALLOWED_FOLDERS.has(requestedFolder) ? requestedFolder : "hero";
 
     let buffer: Buffer;
     let ext: string;
@@ -78,9 +106,17 @@ export async function POST(request: NextRequest) {
 
     if (file && file.size > 0) {
       // Mode: Upload file
+      if (!ALLOWED_MIME_TYPES.has(file.type)) {
+        return NextResponse.json({ error: "Only image files are allowed" }, { status: 400 });
+      }
+
+      if (file.size > MAX_FILE_SIZE) {
+        return NextResponse.json({ error: "Image file must be 10MB or smaller" }, { status: 400 });
+      }
+
       const bytes = await file.arrayBuffer();
       buffer = Buffer.from(bytes);
-      ext = file.name.split(".").pop() || "jpg";
+      ext = normalizeExtension(file.name.split(".").pop() || "jpg");
       originalName = file.name;
     } else if (externalUrl) {
       // Mode: Download from external URL
