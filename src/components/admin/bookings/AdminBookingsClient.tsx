@@ -8,9 +8,13 @@ import {
   Clock,
   CreditCard,
   ExternalLink,
+  Eye,
   Filter,
+  LayoutGrid,
+  List,
   LogIn,
   LogOut,
+  Plus,
   RotateCcw,
   Search,
   UserRound,
@@ -18,9 +22,28 @@ import {
   XCircle,
 } from "lucide-react";
 import { approveBooking, checkInBooking, checkOutBooking, markNoShowBooking, rejectBooking } from "@/app/actions/booking";
+import type { AdminBookingRoomTypeOption } from "@/app/actions/booking";
+import { BookingDetailModal } from "./BookingDetailModal";
+import { BookingsCalendarView } from "./BookingsCalendarView";
+import { CreateBookingModal, type CreateBookingPrefill } from "./CreateBookingModal";
 
 export type BookingStatus = "pending" | "confirmed" | "checked_in" | "checked_out" | "cancelled" | "no_show";
-type PaymentStatus = "pending" | "verified" | "rejected";
+export type PaymentStatus = "pending" | "verified" | "rejected";
+
+export interface AdminBookingPaymentRow {
+  id: string;
+  amount: number | string;
+  status: PaymentStatus;
+  method: string;
+  slip_image_url: string | null;
+  notes?: string | null;
+}
+
+export interface AdminBookingPromotionRow {
+  promotion_name: string | null;
+  promotion_code: string | null;
+  discount_amount: number | string | null;
+}
 
 export interface AdminBookingRow {
   id: string;
@@ -31,13 +54,17 @@ export interface AdminBookingRow {
   status: BookingStatus;
   source: string;
   total_amount: number | string;
+  discount_amount?: number | string | null;
   net_amount: number | string;
   special_requests: string | null;
+  notes?: string | null;
+  cancel_reason?: string | null;
   confirmed_at: string | null;
   checked_in_at: string | null;
   checked_out_at: string | null;
   cancelled_at: string | null;
   created_at: string;
+  room_id: string | null;
   customers: {
     full_name: string;
     phone: string | null;
@@ -49,13 +76,20 @@ export interface AdminBookingRow {
       name: string;
     } | null;
   } | null;
-  payments: Array<{
+  payments: AdminBookingPaymentRow[] | null;
+  booking_promotions?: AdminBookingPromotionRow[] | null;
+}
+
+export interface AdminCalendarRoom {
+  id: string;
+  room_number: string;
+  floor: string | null;
+  status: string;
+  is_active: boolean;
+  room_types: {
     id: string;
-    amount: number | string;
-    status: PaymentStatus;
-    method: string;
-    slip_image_url: string | null;
-  }> | null;
+    name: string;
+  } | null;
 }
 
 const STATUS_STYLES: Record<BookingStatus, string> = {
@@ -156,7 +190,7 @@ function getSearchText(booking: AdminBookingRow): string {
     .toLowerCase();
 }
 
-function BookingActions({ booking }: { booking: AdminBookingRow }) {
+function BookingActions({ booking, onOpenDetail }: { booking: AdminBookingRow; onOpenDetail: () => void }) {
   const canCheckIn = booking.status === "confirmed";
   const canCheckOut = booking.status === "checked_in";
   const canMarkNoShow = booking.status === "confirmed" || booking.status === "checked_in";
@@ -166,6 +200,15 @@ function BookingActions({ booking }: { booking: AdminBookingRow }) {
 
   return (
     <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-1 gap-2 min-w-full lg:min-w-[180px]">
+      <button
+        type="button"
+        onClick={onOpenDetail}
+        className="inline-flex items-center justify-center gap-1.5 px-3 py-2 border border-[#c9a84c]/40 text-[#1a3c2a] bg-[#c9a84c]/10 rounded-lg hover:bg-[#c9a84c]/20 transition-colors text-sm font-medium cursor-pointer"
+      >
+        <Eye className="w-3.5 h-3.5" />
+        ดูรายละเอียด
+      </button>
+
       {booking.payments?.[0]?.slip_image_url && (
         <a
           href={booking.payments[0].slip_image_url}
@@ -303,17 +346,26 @@ function StatusInfoPanel({ booking }: { booking: AdminBookingRow }) {
 
 interface AdminBookingsClientProps {
   bookings: AdminBookingRow[];
+  rooms: AdminCalendarRoom[];
+  formOptions: AdminBookingRoomTypeOption[];
   initialQuery: string;
   initialStatus: string;
 }
 
-export function AdminBookingsClient({ bookings, initialQuery, initialStatus }: AdminBookingsClientProps) {
+type ViewMode = "list" | "calendar";
+
+export function AdminBookingsClient({ bookings, rooms, formOptions, initialQuery, initialStatus }: AdminBookingsClientProps) {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [isPending, startTransition] = useTransition();
   const [query, setQuery] = useState(initialQuery ?? "");
   const [status, setStatus] = useState(initialStatus ?? "");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
+  const [selectedBookingId, setSelectedBookingId] = useState<string | null>(null);
+  const [createPrefill, setCreatePrefill] = useState<CreateBookingPrefill | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createSuccessMessage, setCreateSuccessMessage] = useState<string | null>(null);
 
   function syncUrl(nextQuery: string, nextStatus: string) {
     const params = new URLSearchParams(searchParams.toString());
@@ -369,6 +421,40 @@ export function AdminBookingsClient({ bookings, initialQuery, initialStatus }: A
 
   const hasFilter = Boolean(query.trim() || status);
 
+  const selectedBooking = useMemo(
+    () => bookings.find((booking) => booking.id === selectedBookingId) || null,
+    [bookings, selectedBookingId]
+  );
+
+  const handleCalendarEmptyCell = (input: { roomId: string; date: string }) => {
+    const room = rooms.find((item) => item.id === input.roomId);
+    const checkIn = input.date;
+    const checkOutDate = new Date(`${checkIn}T00:00:00`);
+    if (Number.isNaN(checkOutDate.getTime())) return;
+    checkOutDate.setDate(checkOutDate.getDate() + 1);
+    const checkOut = checkOutDate.toISOString().split("T")[0];
+    setCreatePrefill({
+      roomId: input.roomId,
+      roomTypeId: room?.room_types?.id,
+      checkIn,
+      checkOut,
+    });
+    setCreateSuccessMessage(null);
+    setCreateOpen(true);
+  };
+
+  const handleOpenCreate = () => {
+    setCreatePrefill(null);
+    setCreateSuccessMessage(null);
+    setCreateOpen(true);
+  };
+
+  const handleCreateSuccess = ({ bookingNumber }: { bookingNumber: string }) => {
+    setCreateOpen(false);
+    setCreatePrefill(null);
+    setCreateSuccessMessage(`สร้างการจอง ${bookingNumber} สำเร็จ`);
+  };
+
   return (
     <>
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -390,118 +476,204 @@ export function AdminBookingsClient({ bookings, initialQuery, initialStatus }: A
         })}
       </div>
 
-      <div className="bg-white rounded-2xl border border-[#e8e2d6] p-4 shadow-sm">
-        <div className="flex flex-col xl:flex-row gap-3 xl:items-center">
-          <div className="relative flex-1 min-w-0">
-            <Search className="w-4 h-4 text-[#8b7355] absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="search"
-              value={query}
-              onChange={(event) => handleQueryChange(event.target.value)}
-              placeholder="ค้นหารหัสจอง ชื่อลูกค้า เบอร์โทร อีเมล ห้อง หรือประเภทห้อง..."
-              className="w-full pl-9 pr-3 py-3 bg-[#faf7f0] border border-[#e8e2d6] rounded-xl text-sm focus:ring-2 focus:ring-[#c9a84c]/30 focus:border-[#c9a84c] outline-none"
-            />
-          </div>
-
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-            <div className="relative min-w-full sm:min-w-[220px]">
-              <Filter className="w-4 h-4 text-[#8b7355] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <select
-                value={status}
-                onChange={(event) => handleStatusChange(event.target.value)}
-                className="w-full pl-9 pr-9 py-3 bg-[#faf7f0] border border-[#e8e2d6] rounded-xl text-sm text-[#2c2c2c] focus:ring-2 focus:ring-[#c9a84c]/30 focus:border-[#c9a84c] outline-none cursor-pointer appearance-none"
-              >
-                {STATUS_OPTIONS.map((option) => (
-                  <option key={option.value || "all"} value={option.value}>{option.label}</option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              type="button"
-              onClick={handleReset}
-              disabled={!hasFilter}
-              className="inline-flex items-center justify-center gap-1.5 px-4 py-3 border border-[#e8e2d6] text-[#8b7355] rounded-xl hover:bg-[#faf7f0] hover:text-[#1a3c2a] transition-colors text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              <RotateCcw className="w-3.5 h-3.5" />
-              ล้างตัวกรอง
-            </button>
-          </div>
+      {/* View tabs + create */}
+      <div className="flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-xl border border-[#e8e2d6] bg-white p-0.5 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setViewMode("list")}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+              viewMode === "list" ? "bg-[#1a3c2a] text-[#faf7f0]" : "text-[#8b7355] hover:text-[#1a3c2a]"
+            }`}
+          >
+            <List className="w-4 h-4" />
+            รายการ
+          </button>
+          <button
+            type="button"
+            onClick={() => setViewMode("calendar")}
+            className={`inline-flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+              viewMode === "calendar" ? "bg-[#1a3c2a] text-[#faf7f0]" : "text-[#8b7355] hover:text-[#1a3c2a]"
+            }`}
+          >
+            <LayoutGrid className="w-4 h-4" />
+            ปฏิทินห้องพัก
+          </button>
         </div>
 
-        <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-[#8b7355]">
-          <span>
-            แสดง {filteredBookings.length.toLocaleString("th-TH")} จาก {bookings.length.toLocaleString("th-TH")} รายการ
-          </span>
-          {isPending && <span className="text-[#c9a84c]">กำลังอัปเดตตัวกรอง...</span>}
+        <div className="ml-auto">
+          <button
+            type="button"
+            onClick={handleOpenCreate}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-[#1a3c2a] text-[#faf7f0] rounded-xl hover:bg-[#0f2418] transition-colors text-sm font-semibold cursor-pointer shadow-sm"
+          >
+            <Plus className="w-4 h-4" />
+            สร้างการจอง
+          </button>
         </div>
       </div>
 
-      {filteredBookings.length === 0 ? (
-        <div className="py-16 text-center border-2 border-dashed border-[#e8e2d6] rounded-xl">
-          <CalendarDays className="w-10 h-10 mx-auto mb-3 text-[#c4b9a8]" />
-          <p className="text-[#8b7355] font-medium">ไม่พบรายการจองที่ตรงกับตัวกรอง</p>
-          <p className="text-sm text-[#a89279] mt-1">ลองเปลี่ยนคำค้นหาหรือสถานะเพื่อดูรายการอื่น</p>
+      {createSuccessMessage && (
+        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800 flex items-start justify-between gap-3">
+          <p>{createSuccessMessage}</p>
+          <button
+            type="button"
+            onClick={() => setCreateSuccessMessage(null)}
+            className="text-xs font-medium text-emerald-700 hover:text-emerald-900 cursor-pointer"
+          >
+            ปิด
+          </button>
         </div>
-      ) : (
-        <div className="space-y-3">
-          {filteredBookings.map((booking) => {
-            const paymentStatus = getPaymentStatus(booking);
-            return (
-              <div key={booking.id} className="bg-white rounded-xl border border-[#e8e2d6] p-4 shadow-sm hover:shadow-md transition-shadow">
-                <div className="flex flex-col lg:flex-row lg:items-center gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="font-semibold text-[#1a3c2a]">{booking.booking_number}</p>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${STATUS_STYLES[booking.status]}`}>
-                        {STATUS_LABELS[booking.status]}
-                      </span>
-                      <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${PAYMENT_STYLES[paymentStatus]}`}>
-                        {PAYMENT_LABELS[paymentStatus]}
-                      </span>
-                    </div>
+      )}
 
-                    <StatusInfoPanel booking={booking} />
-
-                    <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
-                      <div>
-                        <p className="text-xs text-[#8b7355]">ลูกค้า</p>
-                        <p className="text-[#2c2c2c] font-medium flex items-center gap-1">
-                          <UserRound className="w-3.5 h-3.5 text-[#8b7355]" />
-                          {booking.customers?.full_name || "-"}
-                        </p>
-                        <p className="text-xs text-[#8b7355]">{booking.customers?.phone || booking.customers?.email || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-[#8b7355]">ห้องพัก</p>
-                        <p className="text-[#2c2c2c] font-medium">{booking.rooms?.room_types?.name || "-"}</p>
-                        <p className="text-xs text-[#8b7355]">ห้อง {booking.rooms?.room_number || "-"}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-[#8b7355]">วันที่เข้าพัก</p>
-                        <p className="text-[#2c2c2c] font-medium">{formatDate(booking.check_in_date)}</p>
-                        <p className="text-xs text-[#8b7355]">ถึง {formatDate(booking.check_out_date)}</p>
-                      </div>
-                      <div>
-                        <p className="text-xs text-[#8b7355]">ยอดสุทธิ</p>
-                        <p className="text-[#1a3c2a] font-bold">THB {formatPrice(booking.net_amount)}</p>
-                        <p className="text-xs text-[#8b7355]">{booking.num_guests} ผู้เข้าพัก · {booking.source}</p>
-                      </div>
-                    </div>
-
-                    {booking.special_requests && (
-                      <div className="mt-3 bg-[#faf7f0] rounded-lg px-3 py-2 text-xs text-[#8b7355]">
-                        หมายเหตุ: {booking.special_requests}
-                      </div>
-                    )}
-                  </div>
-
-                  <BookingActions booking={booking} />
-                </div>
+      {viewMode === "list" ? (
+        <>
+          <div className="bg-white rounded-2xl border border-[#e8e2d6] p-4 shadow-sm">
+            <div className="flex flex-col xl:flex-row gap-3 xl:items-center">
+              <div className="relative flex-1 min-w-0">
+                <Search className="w-4 h-4 text-[#8b7355] absolute left-3 top-1/2 -translate-y-1/2" />
+                <input
+                  type="search"
+                  value={query}
+                  onChange={(event) => handleQueryChange(event.target.value)}
+                  placeholder="ค้นหารหัสจอง ชื่อลูกค้า เบอร์โทร อีเมล ห้อง หรือประเภทห้อง..."
+                  className="w-full pl-9 pr-3 py-3 bg-[#faf7f0] border border-[#e8e2d6] rounded-xl text-sm focus:ring-2 focus:ring-[#c9a84c]/30 focus:border-[#c9a84c] outline-none"
+                />
               </div>
-            );
-          })}
-        </div>
+
+              <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                <div className="relative min-w-full sm:min-w-[220px]">
+                  <Filter className="w-4 h-4 text-[#8b7355] absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                  <select
+                    value={status}
+                    onChange={(event) => handleStatusChange(event.target.value)}
+                    className="w-full pl-9 pr-9 py-3 bg-[#faf7f0] border border-[#e8e2d6] rounded-xl text-sm text-[#2c2c2c] focus:ring-2 focus:ring-[#c9a84c]/30 focus:border-[#c9a84c] outline-none cursor-pointer appearance-none"
+                  >
+                    {STATUS_OPTIONS.map((option) => (
+                      <option key={option.value || "all"} value={option.value}>{option.label}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleReset}
+                  disabled={!hasFilter}
+                  className="inline-flex items-center justify-center gap-1.5 px-4 py-3 border border-[#e8e2d6] text-[#8b7355] rounded-xl hover:bg-[#faf7f0] hover:text-[#1a3c2a] transition-colors text-sm font-medium cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  ล้างตัวกรอง
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs text-[#8b7355]">
+              <span>
+                แสดง {filteredBookings.length.toLocaleString("th-TH")} จาก {bookings.length.toLocaleString("th-TH")} รายการ
+              </span>
+              {isPending && <span className="text-[#c9a84c]">กำลังอัปเดตตัวกรอง...</span>}
+            </div>
+          </div>
+
+          {filteredBookings.length === 0 ? (
+            <div className="py-16 text-center border-2 border-dashed border-[#e8e2d6] rounded-xl">
+              <CalendarDays className="w-10 h-10 mx-auto mb-3 text-[#c4b9a8]" />
+              <p className="text-[#8b7355] font-medium">ไม่พบรายการจองที่ตรงกับตัวกรอง</p>
+              <p className="text-sm text-[#a89279] mt-1">ลองเปลี่ยนคำค้นหาหรือสถานะเพื่อดูรายการอื่น</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {filteredBookings.map((booking) => {
+                const paymentStatus = getPaymentStatus(booking);
+                return (
+                  <div key={booking.id} className="bg-white rounded-xl border border-[#e8e2d6] p-4 shadow-sm hover:shadow-md transition-shadow">
+                    <div className="flex flex-col lg:flex-row lg:items-center gap-4">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedBookingId(booking.id)}
+                            className="font-semibold text-[#1a3c2a] hover:underline cursor-pointer"
+                          >
+                            {booking.booking_number}
+                          </button>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${STATUS_STYLES[booking.status]}`}>
+                            {STATUS_LABELS[booking.status]}
+                          </span>
+                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${PAYMENT_STYLES[paymentStatus]}`}>
+                            {PAYMENT_LABELS[paymentStatus]}
+                          </span>
+                        </div>
+
+                        <StatusInfoPanel booking={booking} />
+
+                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
+                          <div>
+                            <p className="text-xs text-[#8b7355]">ลูกค้า</p>
+                            <p className="text-[#2c2c2c] font-medium flex items-center gap-1">
+                              <UserRound className="w-3.5 h-3.5 text-[#8b7355]" />
+                              {booking.customers?.full_name || "-"}
+                            </p>
+                            <p className="text-xs text-[#8b7355]">{booking.customers?.phone || booking.customers?.email || "-"}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-[#8b7355]">ห้องพัก</p>
+                            <p className="text-[#2c2c2c] font-medium">{booking.rooms?.room_types?.name || "-"}</p>
+                            <p className="text-xs text-[#8b7355]">ห้อง {booking.rooms?.room_number || "-"}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-[#8b7355]">วันที่เข้าพัก</p>
+                            <p className="text-[#2c2c2c] font-medium">{formatDate(booking.check_in_date)}</p>
+                            <p className="text-xs text-[#8b7355]">ถึง {formatDate(booking.check_out_date)}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-[#8b7355]">ยอดสุทธิ</p>
+                            <p className="text-[#1a3c2a] font-bold">THB {formatPrice(booking.net_amount)}</p>
+                            <p className="text-xs text-[#8b7355]">{booking.num_guests} ผู้เข้าพัก · {booking.source}</p>
+                          </div>
+                        </div>
+
+                        {booking.special_requests && (
+                          <div className="mt-3 bg-[#faf7f0] rounded-lg px-3 py-2 text-xs text-[#8b7355]">
+                            หมายเหตุ: {booking.special_requests}
+                          </div>
+                        )}
+                      </div>
+
+                      <BookingActions booking={booking} onOpenDetail={() => setSelectedBookingId(booking.id)} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      ) : (
+        <BookingsCalendarView
+          bookings={bookings}
+          rooms={rooms}
+          onSelectBooking={(booking) => setSelectedBookingId(booking.id)}
+          onSelectEmptyCell={handleCalendarEmptyCell}
+        />
+      )}
+
+      {selectedBooking && (
+        <BookingDetailModal
+          booking={selectedBooking}
+          onClose={() => setSelectedBookingId(null)}
+        />
+      )}
+
+      {createOpen && (
+        <CreateBookingModal
+          options={formOptions}
+          prefill={createPrefill ?? undefined}
+          onClose={() => {
+            setCreateOpen(false);
+            setCreatePrefill(null);
+          }}
+          onSuccess={handleCreateSuccess}
+        />
       )}
     </>
   );

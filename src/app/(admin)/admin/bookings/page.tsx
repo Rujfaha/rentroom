@@ -1,7 +1,12 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
 import { createServiceClient } from "@/lib/supabase/service";
-import { AdminBookingsClient, type AdminBookingRow } from "@/components/admin/bookings/AdminBookingsClient";
+import { getAdminBookingFormOptions } from "@/app/actions/booking";
+import {
+  AdminBookingsClient,
+  type AdminBookingRow,
+  type AdminCalendarRoom,
+} from "@/components/admin/bookings/AdminBookingsClient";
 
 export const metadata = {
   title: "การจอง | Arkkarawin",
@@ -20,46 +25,80 @@ export default async function AdminBookingsPage({
   const status = Array.isArray(params.status) ? params.status[0] : params.status || "";
 
   const supabase = await createServiceClient();
-  const { data, error } = await supabase
-    .from("bookings")
-    .select(`
-      id,
-      booking_number,
-      check_in_date,
-      check_out_date,
-      num_guests,
-      status,
-      source,
-      total_amount,
-      net_amount,
-      special_requests,
-      confirmed_at,
-      checked_in_at,
-      checked_out_at,
-      cancelled_at,
-      created_at,
-      customers (
-        full_name,
-        phone,
-        email
-      ),
-      rooms (
+
+  const [bookingsResult, roomsResult, formOptions] = await Promise.all([
+    supabase
+      .from("bookings")
+      .select(`
+        id,
+        booking_number,
+        check_in_date,
+        check_out_date,
+        num_guests,
+        status,
+        source,
+        total_amount,
+        discount_amount,
+        net_amount,
+        special_requests,
+        notes,
+        cancel_reason,
+        confirmed_at,
+        checked_in_at,
+        checked_out_at,
+        cancelled_at,
+        created_at,
+        room_id,
+        customers (
+          full_name,
+          phone,
+          email
+        ),
+        rooms (
+          room_number,
+          room_types (
+            name
+          )
+        ),
+        payments (
+          id,
+          amount,
+          status,
+          method,
+          slip_image_url,
+          notes
+        ),
+        booking_promotions (
+          promotion_name,
+          promotion_code,
+          discount_amount
+        )
+      `)
+      .eq("hotel_id", session.hotelId)
+      .order("created_at", { ascending: false })
+      .returns<AdminBookingRow[]>(),
+    supabase
+      .from("rooms")
+      .select(`
+        id,
         room_number,
+        floor,
+        status,
+        is_active,
         room_types (
+          id,
           name
         )
-      ),
-      payments (
-        id,
-        amount,
-        status,
-        method,
-        slip_image_url
-      )
-    `)
-    .eq("hotel_id", session.hotelId)
-    .order("created_at", { ascending: false })
-    .returns<AdminBookingRow[]>();
+      `)
+      .eq("hotel_id", session.hotelId)
+      .eq("is_active", true)
+      .order("room_number", { ascending: true })
+      .returns<AdminCalendarRoom[]>(),
+    getAdminBookingFormOptions(),
+  ]);
+
+  const { data: bookings, error: bookingsError } = bookingsResult;
+  const { data: rooms, error: roomsError } = roomsResult;
 
   return (
     <div className="space-y-6 pb-8">
@@ -70,14 +109,18 @@ export default async function AdminBookingsPage({
         </p>
       </div>
 
-      {error && (
+      {(bookingsError || roomsError) && (
         <div className="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg text-sm">
-          ไม่สามารถโหลดข้อมูลการจองได้: {error.message}
+          ไม่สามารถโหลดข้อมูลการจองได้
+          {bookingsError ? `: ${bookingsError.message}` : ""}
+          {roomsError ? ` / ${roomsError.message}` : ""}
         </div>
       )}
 
       <AdminBookingsClient
-        bookings={data ?? []}
+        bookings={bookings ?? []}
+        rooms={rooms ?? []}
+        formOptions={formOptions}
         initialQuery={q}
         initialStatus={status}
       />
