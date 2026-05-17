@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceClient } from "@/lib/supabase/service";
-import { checkRateLimit, getClientIp, getRateLimitErrorMessage } from "@/lib/rate-limit";
 
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -27,15 +26,6 @@ function sanitizeFilePart(value: string): string {
 
 export async function POST(request: NextRequest) {
   try {
-    const uploadRateLimit = checkRateLimit("booking-slip-upload", getClientIp(request.headers), {
-      windowMs: 10 * 60 * 1000,
-      max: 10,
-    });
-
-    if (!uploadRateLimit.allowed) {
-      return NextResponse.json({ error: getRateLimitErrorMessage() }, { status: 429 });
-    }
-
     const formData = await request.formData();
     const file = formData.get("file");
 

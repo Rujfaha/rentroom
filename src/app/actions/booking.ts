@@ -2,9 +2,7 @@
 
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSession } from "@/lib/session";
-import { checkRateLimit, getClientIp, getRateLimitErrorMessage } from "@/lib/rate-limit";
 import { revalidatePath } from "next/cache";
-import { headers } from "next/headers";
 import { evaluateBookingPromotion } from "@/app/actions/promotion-engine";
 import { sendBookingStatusEmail, type BookingEmailData } from "@/lib/email/booking-notifications";
 import type { RoomStatus } from "@/types/database.types";
@@ -531,21 +529,6 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
     return { success: false, error: "ข้อมูลการจองไม่ครบถ้วน" };
   }
 
-  const requestHeaders = await headers();
-  const clientIp = getClientIp(requestHeaders);
-  const bookingRateLimit = checkRateLimit("booking-create", `${input.hotelId}:${clientIp}`, {
-    windowMs: 10 * 60 * 1000,
-    max: 5,
-  });
-  const guestRateLimit = checkRateLimit("booking-create-guest", `${input.hotelId}:${normalizedGuest.email || normalizedGuest.phone}`, {
-    windowMs: 30 * 60 * 1000,
-    max: 3,
-  });
-
-  if (!bookingRateLimit.allowed || !guestRateLimit.allowed) {
-    return { success: false, error: getRateLimitErrorMessage() };
-  }
-
   const supabase = await createServiceClient();
   const hasDuplicateBooking = await findRecentDuplicateBooking(supabase, {
     hotelId: input.hotelId,
@@ -693,16 +676,6 @@ export async function validatePromotionCode(input: {
     return { valid: false, code, discountAmount: 0, message: "กรุณากรอก code ส่วนลด" };
   }
 
-  const requestHeaders = await headers();
-  const promotionRateLimit = checkRateLimit("promotion-code", `${input.hotelId}:${getClientIp(requestHeaders)}`, {
-    windowMs: 10 * 60 * 1000,
-    max: 10,
-  });
-
-  if (!promotionRateLimit.allowed) {
-    return { valid: false, code, discountAmount: 0, message: getRateLimitErrorMessage() };
-  }
-
   const supabase = await createServiceClient();
   const today = new Date().toISOString().split("T")[0];
   const promotionsTable = supabase.from("promotions") as unknown as SelectListTable<PromotionDiscountRow>;
@@ -754,16 +727,6 @@ export async function lookupPublicBooking(input: {
   const email = input.email.trim().toLowerCase();
 
   if (!bookingRef || !email) {
-    return null;
-  }
-
-  const requestHeaders = await headers();
-  const lookupRateLimit = checkRateLimit("booking-lookup", `${email}:${getClientIp(requestHeaders)}`, {
-    windowMs: 10 * 60 * 1000,
-    max: 10,
-  });
-
-  if (!lookupRateLimit.allowed) {
     return null;
   }
 

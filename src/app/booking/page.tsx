@@ -1,23 +1,13 @@
+import { Suspense } from "react";
+import BookingFlow from "@/components/booking/BookingFlow";
 import Link from "next/link";
-import Script from "next/script";
 import LoadingLink from "@/components/ui/LoadingLink";
+import { getBookingPageData } from "@/app/actions/booking";
 import { bookingMessages, getBookingLocale, type BookingLocale } from "@/components/booking/booking-i18n";
 import { buildHotelMetadata } from "@/lib/seo";
 import { getHotelConfig } from "@/services/mock-data";
 
 const hotel = getHotelConfig();
-const staahPropertyId = "823NTUMiMyoYlz445M9jdJttEoLgrHIoGzsfYoMomu2V7D84NTY=";
-const staahWidgetId = "quickbook-widget-" + staahPropertyId + "-" + staahPropertyId;
-const staahBookingUrl =
-  "https://www.swiftbook.io/inst/#/home?propertyId=" +
-  staahPropertyId +
-  "&JDRN=Y&ap=1&gsId=" +
-  staahPropertyId;
-const staahWidgetScriptUrl =
-  "https://www.swiftbook.io/cwplugin/displaywidget/preview/booking-service.min.js?propertyId=" +
-  staahPropertyId +
-  "&scriptId=" +
-  staahPropertyId;
 
 interface BookingMetadataHotelRow {
   id: string;
@@ -68,6 +58,10 @@ export async function generateMetadata() {
   });
 }
 
+function formatDate(date: Date): string {
+  return date.toISOString().split("T")[0];
+}
+
 function firstParam(value: string | string[] | undefined): string | undefined {
   return Array.isArray(value) ? value[0] : value;
 }
@@ -97,9 +91,18 @@ export default async function BookingPage({
   searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const params = (await searchParams) ?? {};
+  const today = new Date();
+  const tomorrow = new Date(today);
+  tomorrow.setDate(today.getDate() + 1);
+
+  const checkIn = firstParam(params.checkIn) || formatDate(today);
+  const checkOut = firstParam(params.checkOut) || formatDate(tomorrow);
+  const adults = Number(firstParam(params.adults)) || 2;
+  const children = Number(firstParam(params.children)) || 0;
   const locale = getBookingLocale(firstParam(params.lang));
   const labels = bookingMessages[locale];
-  const displayHotelName = hotel.name;
+  const bookingData = await getBookingPageData(checkIn, checkOut, adults, children);
+  const displayHotelName = bookingData.hotel?.name || hotel.name;
 
   return (
     <div className="min-h-screen bg-cream">
@@ -129,27 +132,24 @@ export default async function BookingPage({
           </div>
         </div>
       </header>
-      <main className="relative z-30 max-w-5xl mx-auto px-4 py-12">
+      <main className="max-w-4xl mx-auto px-4 py-12">
         <h1 className="font-[family-name:var(--font-serif)] text-3xl md:text-4xl font-bold text-forest-dark text-center mb-2">
           {labels.header.title}
         </h1>
         <p className="text-earth text-center mb-10">
           {labels.header.subtitle}
         </p>
-        <section className="relative z-40 min-h-80 overflow-visible rounded-2xl bg-white p-4 shadow-md md:p-6">
-          <div id={staahWidgetId} className="Configure-quickBook-Widget relative z-50 min-h-56 overflow-visible" />
-          <div className="relative z-0 mt-8 flex justify-center">
-            <a
-              href={staahBookingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center justify-center rounded-lg bg-gold px-6 py-3 text-sm font-semibold text-white transition-colors hover:bg-gold-dark"
-            >
-              {locale === "th" ? "เปิดหน้าจองห้องพัก" : "Open booking engine"}
-            </a>
-          </div>
-        </section>
-        <Script id="propInfo" src={staahWidgetScriptUrl} strategy="afterInteractive" />
+        <Suspense fallback={<div className="text-center text-earth py-12">{labels.header.loading}</div>}>
+          <BookingFlow
+            hotelId={bookingData.hotel?.id || ""}
+            initialRoomTypes={bookingData.roomTypes}
+            initialCheckIn={checkIn}
+            initialCheckOut={checkOut}
+            initialAdults={adults}
+            initialChildren={children}
+            locale={locale}
+          />
+        </Suspense>
       </main>
     </div>
   );
