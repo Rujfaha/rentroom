@@ -1,9 +1,16 @@
 import { Suspense } from "react";
+import { cookies } from "next/headers";
 import BookingFlow from "@/components/booking/BookingFlow";
 import Link from "next/link";
 import LoadingLink from "@/components/ui/LoadingLink";
 import { getBookingPageData } from "@/app/actions/booking";
-import { bookingMessages, getBookingLocale, type BookingLocale } from "@/components/booking/booking-i18n";
+import {
+  BOOKING_LOCALE_COOKIE,
+  bookingMessages,
+  getBookingLocale,
+  isBookingLocale,
+  type BookingLocale,
+} from "@/components/booking/booking-i18n";
 import { buildHotelMetadata } from "@/lib/seo";
 import { getHotelConfig } from "@/services/mock-data";
 
@@ -99,7 +106,17 @@ export default async function BookingPage({
   const checkOut = firstParam(params.checkOut) || formatDate(tomorrow);
   const adults = Number(firstParam(params.adults)) || 2;
   const children = Number(firstParam(params.children)) || 0;
-  const locale = getBookingLocale(firstParam(params.lang));
+
+  // เลือกภาษาตามลำดับความสำคัญ: query string > cookie > default(th)
+  const langParam = firstParam(params.lang);
+  let locale: BookingLocale;
+  if (langParam) {
+    locale = getBookingLocale(langParam);
+  } else {
+    const cookieStore = await cookies();
+    const cookieLang = cookieStore.get(BOOKING_LOCALE_COOKIE)?.value;
+    locale = isBookingLocale(cookieLang) ? cookieLang : "th";
+  }
   const labels = bookingMessages[locale];
   const bookingData = await getBookingPageData(checkIn, checkOut, adults, children);
   const displayHotelName = bookingData.hotel?.name || hotel.name;

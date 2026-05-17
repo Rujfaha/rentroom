@@ -4,6 +4,12 @@ import { revalidatePath } from "next/cache";
 import { createServiceClient } from "@/lib/supabase/service";
 import { getSession } from "@/lib/session";
 import { evaluatePromotions } from "@/lib/promotions/promotion-engine";
+import {
+  BOOKING_RATE_LIMIT_MESSAGE,
+  buildBookingAttemptContext,
+  evaluatePromotionValidationRateLimit,
+  recordBookingAttempt,
+} from "@/lib/booking/anti-spam";
 import type { BookingChannel, PromotionBenefit, PromotionCondition, PromotionEvaluationInput, PromotionEvaluationResult, PromotionRow } from "@/lib/promotions/types";
 
 type ActionResult = { success?: boolean; error?: string };
@@ -422,9 +428,53 @@ export async function getPromotionEngineRows(hotelId: string, options?: { includ
 }
 
 export async function evaluateBookingPromotion(input: PromotionEvaluationInput): Promise<PromotionEvaluationResult> {
+  const shouldRateLimit = input.bookingChannel === "website" && Boolean(input.promotionCode?.trim());
+  const supabase = shouldRateLimit ? await createServiceClient() : null;
+  const attemptContext = shouldRateLimit
+    ? await buildBookingAttemptContext({
+        hotelId: input.hotelId,
+        action: "promotion_validate",
+        email: input.customer?.email,
+        phone: input.customer?.phone,
+        roomTypeId: input.roomTypeId,
+        checkInDate: input.checkInDate,
+        checkOutDate: input.checkOutDate,
+      })
+    : null;
+
+  if (supabase && attemptContext) {
+    const rateLimit = await evaluatePromotionValidationRateLimit(supabase, attemptContext);
+    if (rateLimit.blocked) {
+      await recordBookingAttempt(supabase, attemptContext, {
+        success: false,
+        reason: "blocked_rate_limit",
+        riskScore: rateLimit.riskScore,
+      });
+      return {
+        valid: false,
+        code: input.promotionCode?.trim().toUpperCase() || "",
+        eligiblePromotions: [],
+        selectedPromotion: null,
+        discountAmount: 0,
+        finalTotal: input.subtotal,
+        message: BOOKING_RATE_LIMIT_MESSAGE,
+      };
+    }
+  }
+
   const rows = await getPromotionEngineRows(input.hotelId);
   const customerUsageByPromotionId = await getCustomerUsageByPromotionId(input);
-  return evaluatePromotions(rows, { ...input, customerUsageByPromotionId });
+  const result = evaluatePromotions(rows, { ...input, customerUsageByPromotionId });
+
+  if (supabase && attemptContext) {
+    await recordBookingAttempt(supabase, attemptContext, {
+      success: result.valid,
+      reason: result.valid ? "allowed" : "invalid_promotion",
+      riskScore: result.valid ? 0 : 20,
+    });
+  }
+
+  return result;
 }
 
 async function getCustomerUsageByPromotionId(input: PromotionEvaluationInput): Promise<Record<string, number>> {

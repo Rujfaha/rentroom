@@ -5,7 +5,20 @@ import { getSession } from "@/lib/session";
 import { revalidatePath } from "next/cache";
 import { evaluateBookingPromotion } from "@/app/actions/promotion-engine";
 import { sendBookingStatusEmail, type BookingEmailData } from "@/lib/email/booking-notifications";
-import type { RoomStatus } from "@/types/database.types";
+import {
+  BOOKING_RATE_LIMIT_MESSAGE,
+  buildBookingAttemptContext,
+  evaluateBookingRateLimit,
+  recordBookingAttempt,
+} from "@/lib/booking/anti-spam";
+import {
+  isValidBookingDateRange,
+  isValidFormTiming,
+  normalizeGuestInfo,
+  validateWebsiteBookingInput,
+  type NormalizedGuestInfo,
+} from "@/lib/booking/validation";
+import type { BookingSource, PaymentMethod, RoomStatus } from "@/types/database.types";
 import type { BookingStatus, PaymentStatus } from "@/types/database.types";
 import type { GuestInfo, RoomAmenity, RoomTypeDisplay } from "@/types/landing.types";
 import type { PromotionBreakdown } from "@/lib/promotions/types";
@@ -130,11 +143,25 @@ interface CreateWebsiteBookingInput {
   };
 }
 
-interface NormalizedGuestInfo {
-  fullName: string;
-  phone: string;
-  email: string;
-  specialRequests: string;
+export interface AdminBookingRoomOption {
+  id: string;
+  roomNumber: string;
+  roomTypeId: string;
+  roomTypeName: string;
+}
+
+export interface AdminBookingRoomTypeOption {
+  id: string;
+  name: string;
+  basePrice: number;
+  maxGuests: number;
+  rooms: AdminBookingRoomOption[];
+}
+
+export interface AdminCreateBookingState {
+  success: boolean;
+  error?: string;
+  bookingNumber?: string;
 }
 
 interface BookingDuplicateRow {
@@ -142,45 +169,44 @@ interface BookingDuplicateRow {
   booking_number: string;
 }
 
-interface CustomerInsert {
-  hotel_id: string;
-  full_name: string;
-  phone: string;
-  email: string;
-  notes: string | null;
+interface AtomicBookingRpcParams {
+  p_hotel_id: string;
+  p_room_type_id: string;
+  p_preferred_room_id: string | null;
+  p_booking_number: string;
+  p_check_in_date: string;
+  p_check_out_date: string;
+  p_num_guests: number;
+  p_source: BookingSource;
+  p_total_amount: number;
+  p_discount_amount: number;
+  p_net_amount: number;
+  p_customer_full_name: string;
+  p_customer_phone: string | null;
+  p_customer_email: string | null;
+  p_customer_notes: string | null;
+  p_special_requests: string | null;
+  p_booking_notes: string | null;
+  p_created_by: string | null;
+  p_payment_amount: number | null;
+  p_payment_method: PaymentMethod | null;
+  p_payment_status: PaymentStatus;
+  p_slip_image_url: string | null;
+  p_transaction_ref: string | null;
+  p_payment_notes: string | null;
 }
 
-interface BookingInsert {
-  hotel_id: string;
-  room_id: string;
-  customer_id: string;
+interface AtomicBookingRpcRow {
+  booking_id: string;
   booking_number: string;
-  check_in_date: string;
-  check_out_date: string;
-  num_guests: number;
-  status: "pending";
-  source: "website";
-  total_amount: number;
-  discount_amount: number;
-  net_amount: number;
-  special_requests: string | null;
+  room_id: string;
 }
 
-interface BookingGuestInsert {
-  booking_id: string;
-  hotel_id: string;
-  full_name: string;
-  phone: string;
-  is_primary: boolean;
-}
-
-interface PaymentInsert {
-  hotel_id: string;
-  booking_id: string;
-  amount: number;
-  method: "promptpay";
-  status: "pending";
-  slip_image_url: string | null;
+interface AtomicBookingRpcClient {
+  rpc(
+    fn: "create_booking_atomic",
+    params: AtomicBookingRpcParams
+  ): Promise<{ data: AtomicBookingRpcRow[] | null; error: { message?: string; code?: string } | null }>;
 }
 
 interface BookingPromotionInsert {
@@ -204,11 +230,6 @@ interface PromotionUsageInsert {
   discount_amount: number;
 }
 
-interface InsertResult<T> {
-  data: T | null;
-  error: { message?: string } | null;
-}
-
 interface UpdateResult {
   error: { message?: string } | null;
 }
@@ -216,14 +237,6 @@ interface UpdateResult {
 interface SelectSingleResult<T> {
   data: T | null;
   error: { message?: string } | null;
-}
-
-interface InsertSelectTable<TInsert, TResult> {
-  insert(value: TInsert): {
-    select(columns: string): {
-      single(): Promise<InsertResult<TResult>>;
-    };
-  };
 }
 
 interface InsertOnlyTable<TInsert> {
@@ -373,8 +386,6 @@ interface PromotionDiscountResult {
 
 const BLOCKING_BOOKING_STATUSES: BlockingBookingStatus[] = ["pending", "confirmed", "checked_in"];
 const BOOKABLE_ROOM_STATUSES: RoomStatus[] = ["available", "occupied"];
-const MIN_BOOKING_FORM_TIME_MS = 3000;
-const MAX_BOOKING_NIGHTS = 30;
 const DUPLICATE_BOOKING_WINDOW_MINUTES = 30;
 
 const amenityIconMap: Record<string, string> = {
@@ -426,7 +437,7 @@ export async function getBookingPageData(
 }
 
 export async function searchAvailableRoomTypes(input: BookingRoomSearchInput): Promise<RoomTypeDisplay[]> {
-  if (!input.hotelId || !isValidDateRange(input.checkIn, input.checkOut)) {
+  if (!input.hotelId || !isValidBookingDateRange(input.checkIn, input.checkOut)) {
     return [];
   }
 
@@ -517,19 +528,31 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
     return { success: false, error: validationError };
   }
 
+  const supabase = await createServiceClient();
+  const attemptContext = await buildBookingAttemptContext({
+    hotelId: input.hotelId,
+    action: "booking_create",
+    email: normalizedGuest.email,
+    phone: normalizedGuest.phone,
+    roomTypeId: input.roomTypeId,
+    checkInDate: input.checkIn,
+    checkOutDate: input.checkOut,
+  });
+
   if (input.antiSpam?.companyName?.trim()) {
+    await recordBookingAttempt(supabase, attemptContext, { success: false, reason: "honeypot", riskScore: 100 });
     return { success: false, error: "กรุณาตรวจสอบข้อมูลการจองอีกครั้ง" };
   }
 
   if (!isValidFormTiming(input.antiSpam?.formStartedAt)) {
+    await recordBookingAttempt(supabase, attemptContext, { success: false, reason: "too_fast", riskScore: 50 });
     return { success: false, error: "กรุณาตรวจสอบข้อมูลการจองอีกครั้ง" };
   }
 
-  if (!input.hotelId || !input.roomTypeId || !isValidDateRange(input.checkIn, input.checkOut)) {
+  if (!input.hotelId || !input.roomTypeId || !isValidBookingDateRange(input.checkIn, input.checkOut)) {
     return { success: false, error: "ข้อมูลการจองไม่ครบถ้วน" };
   }
 
-  const supabase = await createServiceClient();
   const hasDuplicateBooking = await findRecentDuplicateBooking(supabase, {
     hotelId: input.hotelId,
     roomTypeId: input.roomTypeId,
@@ -539,7 +562,18 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
   });
 
   if (hasDuplicateBooking) {
+    await recordBookingAttempt(supabase, attemptContext, { success: false, reason: "duplicate", riskScore: 40 });
     return { success: false, error: "พบรายการจองที่คล้ายกันแล้ว กรุณาตรวจสอบสถานะการจอง หรือรอสักครู่ก่อนทำรายการใหม่" };
+  }
+
+  const rateLimit = await evaluateBookingRateLimit(supabase, attemptContext);
+  if (rateLimit.blocked) {
+    await recordBookingAttempt(supabase, attemptContext, {
+      success: false,
+      reason: "blocked_rate_limit",
+      riskScore: rateLimit.riskScore,
+    });
+    return { success: false, error: BOOKING_RATE_LIMIT_MESSAGE };
   }
 
   const availableRoomId = await findAvailableRoomId({
@@ -577,91 +611,135 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
     },
   });
   if (input.promotionCode?.trim() && !promotion.valid) {
+    await recordBookingAttempt(supabase, attemptContext, { success: false, reason: "invalid_promotion", riskScore: 20 });
     return { success: false, error: promotion.message || "code ส่วนลดไม่ถูกต้อง" };
   }
   const selectedPromotion = promotion.selectedPromotion;
   const discountAmount = selectedPromotion ? promotion.discountAmount : 0;
   const netAmount = Math.max(0, totalAmount - discountAmount);
-  const bookingNumber = await generateBookingNumber(input.hotelId);
-
-  const customersTable = supabase.from("customers") as unknown as InsertSelectTable<CustomerInsert, { id: string }>;
-  const { data: customer, error: customerError } = await customersTable
-    .insert({
-      hotel_id: input.hotelId,
-      full_name: normalizedGuest.fullName,
-      phone: normalizedGuest.phone,
-      email: normalizedGuest.email,
-      notes: normalizedGuest.specialRequests || null,
-    })
-    .select("id")
-    .single();
-
-  if (customerError || !customer) {
-    console.error("createWebsiteBooking customer error:", customerError);
-    return { success: false, error: "ไม่สามารถบันทึกข้อมูลผู้เข้าพักได้" };
-  }
-
-  const bookingsTable = supabase.from("bookings") as unknown as InsertSelectTable<BookingInsert, { id: string; booking_number: string }>;
-  const { data: booking, error: bookingError } = await bookingsTable
-    .insert({
-      hotel_id: input.hotelId,
-      room_id: availableRoomId,
-      customer_id: customer.id,
-      booking_number: bookingNumber,
-      check_in_date: input.checkIn,
-      check_out_date: input.checkOut,
-      num_guests: Math.max(1, input.adults + input.children),
+  const booking = await createAtomicBooking(supabase, {
+    hotelId: input.hotelId,
+    roomTypeId: input.roomTypeId,
+    preferredRoomId: null,
+    checkIn: input.checkIn,
+    checkOut: input.checkOut,
+    totalGuests: Math.max(1, input.adults + input.children),
+    source: "website",
+    totalAmount,
+    discountAmount,
+    netAmount,
+    guest: normalizedGuest,
+    customerNotes: normalizedGuest.specialRequests || null,
+    specialRequests: normalizedGuest.specialRequests || null,
+    bookingNotes: null,
+    createdBy: null,
+    payment: {
+      amount: netAmount,
+      method: "promptpay",
       status: "pending",
-      source: "website",
-      total_amount: totalAmount,
-      discount_amount: discountAmount,
-      net_amount: netAmount,
-      special_requests: normalizedGuest.specialRequests || null,
-    })
-    .select("id, booking_number")
-    .single();
+      slipUrl: input.slipUrl || null,
+      transactionRef: null,
+      notes: null,
+    },
+  });
 
-  if (bookingError || !booking) {
-    console.error("createWebsiteBooking booking error:", bookingError);
-    return { success: false, error: "ไม่สามารถสร้างการจองได้" };
+  if (!booking.success) {
+    return { success: false, error: booking.error };
   }
 
   if (selectedPromotion) {
     await recordPromotionUsage(
       supabase,
-      booking.id,
+      booking.bookingId,
       selectedPromotion,
       normalizedGuest.phone,
       normalizedGuest.email
     );
   }
 
-  const bookingGuestsTable = supabase.from("booking_guests") as unknown as InsertOnlyTable<BookingGuestInsert>;
-  await bookingGuestsTable.insert({
-    booking_id: booking.id,
-    hotel_id: input.hotelId,
-    full_name: normalizedGuest.fullName,
-    phone: normalizedGuest.phone,
-    is_primary: true,
+  await sendBookingStatusEmailForBooking(supabase, booking.bookingId, input.hotelId, "createWebsiteBooking");
+  await recordBookingAttempt(supabase, attemptContext, { success: true, reason: "allowed", riskScore: rateLimit.riskScore });
+
+  return { success: true, bookingNumber: booking.bookingNumber };
+}
+
+interface AtomicBookingInput {
+  hotelId: string;
+  roomTypeId: string;
+  preferredRoomId: string | null;
+  checkIn: string;
+  checkOut: string;
+  totalGuests: number;
+  source: BookingSource;
+  totalAmount: number;
+  discountAmount: number;
+  netAmount: number;
+  guest: NormalizedGuestInfo;
+  customerNotes: string | null;
+  specialRequests: string | null;
+  bookingNotes: string | null;
+  createdBy: string | null;
+  payment: {
+    amount: number;
+    method: PaymentMethod;
+    status: PaymentStatus;
+    slipUrl: string | null;
+    transactionRef: string | null;
+    notes: string | null;
+  } | null;
+}
+
+async function createAtomicBooking(
+  supabase: Awaited<ReturnType<typeof createServiceClient>>,
+  input: AtomicBookingInput
+): Promise<{ success: true; bookingId: string; bookingNumber: string; roomId: string } | { success: false; error: string }> {
+  const bookingNumber = await generateBookingNumber(input.hotelId);
+  const rpcClient = supabase as unknown as AtomicBookingRpcClient;
+  const { data, error } = await rpcClient.rpc("create_booking_atomic", {
+    p_hotel_id: input.hotelId,
+    p_room_type_id: input.roomTypeId,
+    p_preferred_room_id: input.preferredRoomId,
+    p_booking_number: bookingNumber,
+    p_check_in_date: input.checkIn,
+    p_check_out_date: input.checkOut,
+    p_num_guests: input.totalGuests,
+    p_source: input.source,
+    p_total_amount: input.totalAmount,
+    p_discount_amount: input.discountAmount,
+    p_net_amount: input.netAmount,
+    p_customer_full_name: input.guest.fullName,
+    p_customer_phone: input.guest.phone || null,
+    p_customer_email: input.guest.email || null,
+    p_customer_notes: input.customerNotes,
+    p_special_requests: input.specialRequests,
+    p_booking_notes: input.bookingNotes,
+    p_created_by: input.createdBy,
+    p_payment_amount: input.payment?.amount ?? null,
+    p_payment_method: input.payment?.method ?? null,
+    p_payment_status: input.payment?.status ?? "pending",
+    p_slip_image_url: input.payment?.slipUrl ?? null,
+    p_transaction_ref: input.payment?.transactionRef ?? null,
+    p_payment_notes: input.payment?.notes ?? null,
   });
 
-  const paymentsTable = supabase.from("payments") as unknown as InsertOnlyTable<PaymentInsert>;
-  const { error: paymentError } = await paymentsTable.insert({
-    hotel_id: input.hotelId,
-    booking_id: booking.id,
-    amount: netAmount,
-    method: "promptpay",
-    status: "pending",
-    slip_image_url: input.slipUrl || null,
-  });
-
-  if (paymentError) {
-    console.error("createWebsiteBooking payment error:", paymentError);
+  if (error || !data?.[0]) {
+    console.error("createAtomicBooking rpc error:", error);
+    const message = error?.message || "";
+    if (message.includes("ROOM_NOT_AVAILABLE")) {
+      return { success: false, error: "ขออภัย ห้องพักไม่ว่างในช่วงวันที่เลือกแล้ว กรุณาเลือกห้องหรือวันที่อื่น" };
+    }
+    if (message.includes("INVALID_DATE_RANGE")) {
+      return { success: false, error: "กรุณาเลือกวันที่เข้าพักให้ถูกต้อง" };
+    }
+    return { success: false, error: "ไม่สามารถสร้างการจองได้" };
   }
 
-  await sendBookingStatusEmailForBooking(supabase, booking.id, input.hotelId, "createWebsiteBooking");
-
-  return { success: true, bookingNumber: booking.booking_number };
+  return {
+    success: true,
+    bookingId: data[0].booking_id,
+    bookingNumber: data[0].booking_number,
+    roomId: data[0].room_id,
+  };
 }
 
 export async function validatePromotionCode(input: {
@@ -717,6 +795,150 @@ export async function validatePromotionCode(input: {
     discountValue,
     discountAmount,
   };
+}
+
+export async function getAdminBookingFormOptions(): Promise<AdminBookingRoomTypeOption[]> {
+  const session = await getSession();
+  if (!session?.hotelId) return [];
+
+  const supabase = await createServiceClient();
+  const { data, error } = await supabase
+    .from("room_types")
+    .select(`
+      id,
+      name,
+      base_price,
+      max_guests,
+      rooms (
+        id,
+        room_number,
+        room_type_id,
+        is_active
+      )
+    `)
+    .eq("hotel_id", session.hotelId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .returns<Array<{
+      id: string;
+      name: string;
+      base_price: number | string | null;
+      max_guests: number | null;
+      rooms: Array<{
+        id: string;
+        room_number: string;
+        room_type_id: string;
+        is_active: boolean;
+      }> | null;
+    }>>();
+
+  if (error) {
+    console.error("getAdminBookingFormOptions error:", error);
+    return [];
+  }
+
+  return (data ?? []).map((roomType) => ({
+    id: roomType.id,
+    name: roomType.name,
+    basePrice: Number(roomType.base_price) || 0,
+    maxGuests: roomType.max_guests || 1,
+    rooms: (roomType.rooms ?? [])
+      .filter((room) => room.is_active)
+      .map((room) => ({
+        id: room.id,
+        roomNumber: room.room_number,
+        roomTypeId: room.room_type_id,
+        roomTypeName: roomType.name,
+      })),
+  }));
+}
+
+export async function createAdminBooking(
+  _previousState: AdminCreateBookingState,
+  formData: FormData
+): Promise<AdminCreateBookingState> {
+  const session = await getSession();
+  if (!session?.hotelId || !session.userId) {
+    return { success: false, error: "กรุณาเข้าสู่ระบบอีกครั้ง" };
+  }
+
+  const roomTypeId = cleanFormText(formData.get("room_type_id"));
+  const preferredRoomId = cleanFormText(formData.get("room_id")) || null;
+  const checkIn = cleanFormText(formData.get("check_in"));
+  const checkOut = cleanFormText(formData.get("check_out"));
+  const source = parseBookingSource(cleanFormText(formData.get("source")));
+  const totalGuests = Math.max(1, Math.floor(Number(formData.get("num_guests")) || 1));
+  const guest = {
+    fullName: cleanFormText(formData.get("full_name")).replace(/\s+/g, " "),
+    phone: cleanFormText(formData.get("phone")).replace(/[\s-]/g, ""),
+    email: cleanFormText(formData.get("email")).toLowerCase(),
+    specialRequests: cleanFormText(formData.get("special_requests")),
+  };
+  const bookingNotes = cleanFormText(formData.get("booking_notes")) || null;
+  const paymentAmount = parseOptionalMoney(formData.get("payment_amount"));
+  const paymentMethod = parsePaymentMethod(cleanFormText(formData.get("payment_method")));
+  const paymentStatus = cleanFormText(formData.get("payment_status")) === "verified" ? "verified" : "pending";
+  const transactionRef = cleanFormText(formData.get("transaction_ref")) || null;
+  const paymentNotes = cleanFormText(formData.get("payment_notes")) || null;
+
+  const validationError = validateAdminBookingInput({
+    roomTypeId,
+    checkIn,
+    checkOut,
+    totalGuests,
+    guest,
+    paymentAmount,
+  });
+  if (validationError) {
+    return { success: false, error: validationError };
+  }
+
+  const roomType = await getRoomTypeForPricing(session.hotelId, roomTypeId);
+  if (!roomType) {
+    return { success: false, error: "ไม่พบประเภทห้องพักที่เลือก" };
+  }
+
+  const pricing = await getPricingContext(session.hotelId);
+  const calculatedTotal = getStayTotal(roomType, checkIn, checkOut, pricing);
+  const overrideTotal = parseOptionalMoney(formData.get("total_amount"));
+  const totalAmount = overrideTotal ?? calculatedTotal;
+  const netAmount = Math.max(0, totalAmount);
+  const supabase = await createServiceClient();
+  const booking = await createAtomicBooking(supabase, {
+    hotelId: session.hotelId,
+    roomTypeId,
+    preferredRoomId,
+    checkIn,
+    checkOut,
+    totalGuests,
+    source,
+    totalAmount,
+    discountAmount: 0,
+    netAmount,
+    guest,
+    customerNotes: bookingNotes,
+    specialRequests: guest.specialRequests || null,
+    bookingNotes,
+    createdBy: session.userId,
+    payment: paymentAmount && paymentAmount > 0
+      ? {
+          amount: paymentAmount,
+          method: paymentMethod,
+          status: paymentStatus,
+          slipUrl: null,
+          transactionRef,
+          notes: paymentNotes,
+        }
+      : null,
+  });
+
+  if (!booking.success) {
+    return { success: false, error: booking.error };
+  }
+
+  await sendBookingStatusEmailForBooking(supabase, booking.bookingId, session.hotelId, "createAdminBooking");
+  revalidateBookingPages();
+  return { success: true, bookingNumber: booking.bookingNumber };
 }
 
 export async function lookupPublicBooking(input: {
@@ -1144,12 +1366,67 @@ function revalidateBookingPages() {
   revalidatePath("/");
 }
 
-function isValidDateRange(checkIn: string, checkOut: string) {
-  if (!checkIn || !checkOut) return false;
-  const checkInTime = new Date(checkIn).getTime();
-  const checkOutTime = new Date(checkOut).getTime();
-  if (!Number.isFinite(checkInTime) || !Number.isFinite(checkOutTime)) return false;
-  return checkOutTime > checkInTime;
+function cleanFormText(value: FormDataEntryValue | null): string {
+  return String(value || "").trim();
+}
+
+function parseOptionalMoney(value: FormDataEntryValue | null): number | null {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  return Math.round(parsed * 100) / 100;
+}
+
+function parseBookingSource(value: string): BookingSource {
+  if (value === "phone" || value === "ota" || value === "other") return value;
+  return "walk_in";
+}
+
+function parsePaymentMethod(value: string): PaymentMethod {
+  if (value === "bank_transfer" || value === "credit_card" || value === "promptpay" || value === "other") return value;
+  return "cash";
+}
+
+function validateAdminBookingInput(input: {
+  roomTypeId: string;
+  checkIn: string;
+  checkOut: string;
+  totalGuests: number;
+  guest: NormalizedGuestInfo;
+  paymentAmount: number | null;
+}): string | null {
+  if (!input.roomTypeId || !isValidBookingDateRange(input.checkIn, input.checkOut)) {
+    return "กรุณาเลือกห้องและวันที่เข้าพักให้ครบถ้วน";
+  }
+
+  if (calculateNights(input.checkIn, input.checkOut) > 30) {
+    return "ระยะเวลาการเข้าพักยาวเกินไป";
+  }
+
+  if (!Number.isFinite(input.totalGuests) || input.totalGuests < 1 || input.totalGuests > 20) {
+    return "กรุณากรอกจำนวนผู้เข้าพักให้ถูกต้อง";
+  }
+
+  if (input.guest.fullName.length < 2 || input.guest.fullName.length > 100) {
+    return "กรุณากรอกชื่อลูกค้าให้ถูกต้อง";
+  }
+
+  if (input.guest.phone && !/^\+?\d{8,20}$/.test(input.guest.phone)) {
+    return "กรุณากรอกเบอร์โทรเป็นตัวเลข 8-20 หลัก";
+  }
+
+  if (input.guest.email && (input.guest.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.guest.email))) {
+    return "กรุณากรอกอีเมลให้ถูกต้อง";
+  }
+
+  if (!input.guest.phone && !input.guest.email) {
+    return "กรุณากรอกเบอร์โทรหรืออีเมลอย่างน้อยหนึ่งอย่าง";
+  }
+
+  if (input.paymentAmount !== null && input.paymentAmount <= 0) {
+    return "ยอดชำระต้องมากกว่า 0";
+  }
+
+  return null;
 }
 
 function calculateNights(checkIn: string, checkOut: string): number {
@@ -1157,60 +1434,6 @@ function calculateNights(checkIn: string, checkOut: string): number {
   const checkOutDate = new Date(checkOut);
   const diffTime = checkOutDate.getTime() - checkInDate.getTime();
   return Math.max(1, Math.ceil(diffTime / (1000 * 60 * 60 * 24)));
-}
-
-function normalizeGuestInfo(guest: GuestInfo): NormalizedGuestInfo {
-  return {
-    fullName: guest.fullName.trim().replace(/\s+/g, " "),
-    phone: guest.phone.trim().replace(/[\s-]/g, ""),
-    email: guest.email.trim().toLowerCase(),
-    specialRequests: guest.specialRequests.trim(),
-  };
-}
-
-function validateWebsiteBookingInput(input: CreateWebsiteBookingInput, guest: NormalizedGuestInfo): string | null {
-  if (!input.hotelId || !input.roomTypeId || !isValidDateRange(input.checkIn, input.checkOut)) {
-    return "ข้อมูลการจองไม่ครบถ้วน";
-  }
-
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const checkInTime = new Date(input.checkIn).getTime();
-  if (checkInTime < today.getTime()) {
-    return "กรุณาเลือกวันที่เข้าพักให้ถูกต้อง";
-  }
-
-  if (calculateNights(input.checkIn, input.checkOut) > MAX_BOOKING_NIGHTS) {
-    return "ระยะเวลาการเข้าพักยาวเกินไป กรุณาติดต่อที่พักโดยตรง";
-  }
-
-  if (guest.fullName.length < 2 || guest.fullName.length > 100) {
-    return "กรุณากรอกชื่อผู้เข้าพักให้ถูกต้อง";
-  }
-
-  if (!/^\+?\d{8,20}$/.test(guest.phone)) {
-    return "กรุณากรอกเบอร์โทรให้ถูกต้อง";
-  }
-
-  if (guest.email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(guest.email)) {
-    return "กรุณากรอกอีเมลให้ถูกต้อง";
-  }
-
-  if (guest.specialRequests.length > 1000) {
-    return "รายละเอียดคำขอเพิ่มเติมยาวเกินไป";
-  }
-
-  if (!input.slipUrl.trim()) {
-    return "กรุณาแนบหลักฐานการชำระเงิน";
-  }
-
-  return null;
-}
-
-function isValidFormTiming(formStartedAt?: number): boolean {
-  if (!formStartedAt || !Number.isFinite(formStartedAt)) return false;
-  const elapsedMs = Date.now() - formStartedAt;
-  return elapsedMs >= MIN_BOOKING_FORM_TIME_MS && elapsedMs < 24 * 60 * 60 * 1000;
 }
 
 async function findRecentDuplicateBooking(

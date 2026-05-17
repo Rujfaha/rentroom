@@ -47,6 +47,7 @@ export interface BookingLabels {
     errors: {
       fullName: string;
       phone: string;
+      invalidPhone: string;
       email: string;
       invalidEmail: string;
     };
@@ -148,6 +149,7 @@ export const bookingMessages: Record<BookingLocale, BookingLabels> = {
       errors: {
         fullName: "กรุณากรอกชื่อ-นามสกุล",
         phone: "กรุณากรอกเบอร์โทร",
+        invalidPhone: "กรุณากรอกเบอร์โทรเป็นตัวเลขเท่านั้น",
         email: "กรุณากรอกอีเมล",
         invalidEmail: "กรุณากรอกอีเมลให้ถูกต้อง",
       },
@@ -247,6 +249,7 @@ export const bookingMessages: Record<BookingLocale, BookingLabels> = {
       errors: {
         fullName: "Please enter your full name",
         phone: "Please enter your phone number",
+        invalidPhone: "Please enter numbers only",
         email: "Please enter your email",
         invalidEmail: "Please enter a valid email",
       },
@@ -303,4 +306,30 @@ export const bookingMessages: Record<BookingLocale, BookingLabels> = {
 
 export function getBookingLocale(value: string | undefined): BookingLocale {
   return value === "en" ? "en" : "th";
+}
+
+// ─── Locale cookie ─────────────────────────────────────────
+// เก็บภาษาที่ user เลือกล่าสุดเพื่อจำข้ามการเข้าใช้งานครั้งถัดไป
+// ไม่ใช่ httpOnly เพราะต้องอ่าน/เขียนจากฝั่ง client ได้ และไม่ใช่ข้อมูล sensitive
+export const BOOKING_LOCALE_COOKIE = "booking_lang";
+export const BOOKING_LOCALE_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 ปี
+
+export function isBookingLocale(value: unknown): value is BookingLocale {
+  return value === "th" || value === "en";
+}
+
+/**
+ * เขียน cookie ภาษาฝั่ง client (เรียกจาก useEffect ใน Client Component เท่านั้น)
+ */
+export function writeBookingLocaleCookie(locale: BookingLocale): void {
+  if (typeof document === "undefined") return;
+  const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie =
+    BOOKING_LOCALE_COOKIE +
+    "=" +
+    locale +
+    "; Path=/; Max-Age=" +
+    BOOKING_LOCALE_COOKIE_MAX_AGE +
+    "; SameSite=Lax" +
+    secure;
 }

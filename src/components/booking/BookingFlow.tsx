@@ -9,7 +9,8 @@ import StepConfirmation from "./StepConfirmation";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
 import { createWebsiteBooking, searchAvailableRoomTypes } from "@/app/actions/booking";
 import { createClient } from "@/lib/supabase/client";
-import { bookingMessages, type BookingLocale } from "./booking-i18n";
+import { bookingMessages, writeBookingLocaleCookie, type BookingLocale } from "./booking-i18n";
+import { clearGuestInfoDraft } from "./useGuestInfoDraft";
 
 interface BookingFlowProps {
   hotelId: string;
@@ -42,6 +43,11 @@ export default function BookingFlow({
   const supabase = useMemo(() => createClient(), []);
   const searchRequestIdRef = useRef(0);
   const [formStartedAt] = useState(function () { return Date.now(); });
+
+  // sync cookie จำภาษาที่ user เลือก ให้ครั้งถัดไปเข้ามาแล้วได้ภาษาเดิม
+  useEffect(function () {
+    writeBookingLocaleCookie(locale);
+  }, [locale]);
 
   const preselectedRoom = searchParams.get("room") || "";
   const preCheckIn = searchParams.get("checkIn") || initialCheckIn;
@@ -105,6 +111,8 @@ export default function BookingFlow({
 
     setSlipUrl(uploadedSlipUrl);
     setBookingRef(result.bookingNumber);
+    // จองสำเร็จแล้ว — ล้าง draft ข้อมูลลูกค้าออก
+    clearGuestInfoDraft();
     setStep(3);
   }
 
@@ -266,6 +274,7 @@ export default function BookingFlow({
           totalNights={totalNights}
           adults={adults}
           childrenCount={children}
+          initialInfo={guestInfo}
           onSubmit={handleGuestSubmit}
           onBack={handleBack}
           labels={labels}
