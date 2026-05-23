@@ -41,8 +41,8 @@ export default function SearchBar({ labels }: SearchBarProps) {
   }
 
   return (
-    <section id="search-bar" className="relative z-30 -mt-28 px-4 sm:-mt-32 md:-mt-36">
-      <div className="max-w-5xl mx-auto rounded-2xl border border-white/55 bg-white/75 p-6 shadow-2xl shadow-forest-dark/15 backdrop-blur-md md:p-8">
+    <section id="search-bar" className="relative z-30 -mt-24 px-4 sm:-mt-16 lg:-mt-12">
+      <div className="max-w-5xl mx-auto rounded-2xl border border-white/80 bg-white/90 p-6 shadow-2xl shadow-forest-dark/20 backdrop-blur-md md:p-8">
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold text-earth uppercase tracking-wider">

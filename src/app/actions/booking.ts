@@ -519,6 +519,9 @@ export async function searchAvailableRoomTypes(input: BookingRoomSearchInput): P
 export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Promise<{
   success: boolean;
   bookingNumber?: string;
+  totalAmount?: number;
+  discountAmount?: number;
+  netAmount?: number;
   error?: string;
 }> {
   const normalizedGuest = normalizeGuestInfo(input.guest);
@@ -660,7 +663,7 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
   await sendBookingStatusEmailForBooking(supabase, booking.bookingId, input.hotelId, "createWebsiteBooking");
   await recordBookingAttempt(supabase, attemptContext, { success: true, reason: "allowed", riskScore: rateLimit.riskScore });
 
-  return { success: true, bookingNumber: booking.bookingNumber };
+  return { success: true, bookingNumber: booking.bookingNumber, totalAmount, discountAmount, netAmount };
 }
 
 interface AtomicBookingInput {

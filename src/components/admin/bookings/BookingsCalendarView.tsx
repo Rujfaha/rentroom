@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { ChevronLeft, ChevronRight, Filter, Plus, RotateCcw } from "lucide-react";
+import { ChevronLeft, ChevronRight, Filter, Plus, RotateCcw, Calendar as CalendarIcon, BedDouble } from "lucide-react";
 import type {
   AdminBookingRow,
   AdminCalendarRoom,
@@ -188,10 +188,10 @@ export function BookingsCalendarView({
   return (
     <div className="space-y-4">
       {/* Toolbar */}
-      <div className="bg-white rounded-2xl border border-[#e8e2d6] p-4 shadow-sm">
+      <div className="bg-white rounded-2xl border border-[#e8e2d6] p-3 md:p-4 shadow-sm">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          {/* Date navigation */}
-          <div className="flex flex-wrap items-center gap-2">
+          {/* Date navigation - desktop only (mobile day view has its own strip) */}
+          <div className="hidden lg:flex flex-wrap items-center gap-2">
             <div className="inline-flex items-center rounded-xl border border-[#e8e2d6] overflow-hidden bg-[#faf7f0]">
               <button
                 type="button"
@@ -205,7 +205,7 @@ export function BookingsCalendarView({
                 type="date"
                 value={toIsoDate(startDate)}
                 onChange={(event) => handleStartDateChange(event.currentTarget.value)}
-                className="bg-transparent px-2 py-2 text-sm text-[#2c2c2c] outline-none border-x border-[#e8e2d6]"
+                className="bg-transparent px-2 py-2 text-sm text-[#2c2c2c] outline-none border-x border-[#e8e2d6] tabular-nums"
               />
               <button
                 type="button"
@@ -227,7 +227,8 @@ export function BookingsCalendarView({
 
           {/* Range + filters */}
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex rounded-xl border border-[#e8e2d6] bg-[#faf7f0] p-0.5">
+            {/* Range options - hidden on mobile (mobile uses day view) */}
+            <div className="hidden lg:inline-flex rounded-xl border border-[#e8e2d6] bg-[#faf7f0] p-0.5">
               {RANGE_OPTIONS.map((option) => {
                 const active = rangeDays === option.value;
                 return (
@@ -306,14 +307,26 @@ export function BookingsCalendarView({
         </div>
       </div>
 
-      {/* Calendar grid */}
+      {/* Calendar grid (desktop) / day view (mobile) */}
       {filteredRooms.length === 0 ? (
         <div className="py-16 text-center border-2 border-dashed border-[#e8e2d6] rounded-xl bg-white">
           <p className="text-[#8b7355] font-medium">ไม่พบห้องพักตรงตามตัวกรอง</p>
           <p className="text-sm text-[#a89279] mt-1">ลองเปลี่ยนประเภทห้อง หรือสร้างห้องในเมนูห้องพัก</p>
         </div>
       ) : (
-        <div className="bg-white rounded-2xl border border-[#e8e2d6] shadow-sm overflow-x-auto">
+        <>
+          {/* Mobile day-view */}
+          <MobileDayView
+            rooms={filteredRooms}
+            bookings={bookings}
+            statusFilter={statusFilter}
+            initialDate={startDate}
+            onSelectBooking={onSelectBooking}
+            onSelectEmptyCell={handleEmptyCellClick}
+          />
+
+          {/* Desktop grid view */}
+          <div className="hidden lg:block bg-white rounded-2xl border border-[#e8e2d6] shadow-sm overflow-x-auto">
           <div className="min-w-[720px]">
             {/* Header row */}
             <div
@@ -429,8 +442,264 @@ export function BookingsCalendarView({
               })}
             </div>
           </div>
-        </div>
+          </div>
+        </>
       )}
+    </div>
+  );
+}
+
+interface MobileDayViewProps {
+  rooms: AdminCalendarRoom[];
+  bookings: AdminBookingRow[];
+  statusFilter: "" | BookingStatus;
+  initialDate: Date;
+  onSelectBooking: (booking: AdminBookingRow) => void;
+  onSelectEmptyCell: (roomId: string, dateIso: string) => void;
+}
+
+function MobileDayView({
+  rooms,
+  bookings,
+  statusFilter,
+  initialDate,
+  onSelectBooking,
+  onSelectEmptyCell,
+}: MobileDayViewProps) {
+  const [activeDate, setActiveDate] = useState<Date>(() => {
+    const next = new Date(initialDate);
+    next.setHours(0, 0, 0, 0);
+    return next;
+  });
+
+  // Build a 7-day strip centered on activeDate (3 before, 3 after)
+  const dayStrip = useMemo(() => {
+    const result: Date[] = [];
+    for (let i = -3; i <= 3; i += 1) {
+      result.push(addDays(activeDate, i));
+    }
+    return result;
+  }, [activeDate]);
+
+  const activeIso = toIsoDate(activeDate);
+  const todayIso = toIsoDate(startOfToday());
+
+  // Compute per-room booking for the active day
+  const bookingsByRoom = useMemo(() => {
+    const map = new Map<string, AdminBookingRow>();
+    for (const booking of bookings) {
+      if (!booking.room_id) continue;
+      if (statusFilter && booking.status !== statusFilter) continue;
+      const checkIn = booking.check_in_date;
+      const lastNightIso = toIsoDate(addDays(new Date(booking.check_out_date), -1));
+      if (activeIso < checkIn || activeIso > lastNightIso) continue;
+      const existing = map.get(booking.room_id);
+      // Prefer more "active" status if multiple
+      const priority: Record<BookingStatus, number> = {
+        checked_in: 6,
+        confirmed: 5,
+        pending: 4,
+        no_show: 3,
+        checked_out: 2,
+        cancelled: 1,
+      };
+      if (!existing || priority[booking.status] > priority[existing.status]) {
+        map.set(booking.room_id, booking);
+      }
+    }
+    return map;
+  }, [bookings, statusFilter, activeIso]);
+
+  const occupiedCount = bookingsByRoom.size;
+  const availableCount = rooms.length - occupiedCount;
+
+  const formatThaiLong = (date: Date) =>
+    date.toLocaleDateString("th-TH", {
+      weekday: "long",
+      day: "numeric",
+      month: "long",
+    });
+
+  return (
+    <div className="lg:hidden space-y-3">
+      {/* Date strip */}
+      <div className="bg-white rounded-2xl border border-[#e8e2d6] p-3">
+        <div className="flex items-center justify-between mb-2">
+          <button
+            type="button"
+            onClick={() => setActiveDate((prev) => addDays(prev, -7))}
+            className="p-1.5 rounded-lg text-[#1a3c2a] hover:bg-[#faf7f0] cursor-pointer"
+            aria-label="สัปดาห์ก่อนหน้า"
+          >
+            <ChevronLeft className="w-4 h-4" />
+          </button>
+          <div className="text-center">
+            <p className="text-[10px] uppercase tracking-[0.14em] text-[#8b7355] font-semibold">
+              {activeIso === todayIso ? "วันนี้" : "ดูวันที่"}
+            </p>
+            <p className="text-sm font-serif text-[#1a3c2a] font-semibold">
+              {formatThaiLong(activeDate)}
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setActiveDate((prev) => addDays(prev, 7))}
+            className="p-1.5 rounded-lg text-[#1a3c2a] hover:bg-[#faf7f0] cursor-pointer"
+            aria-label="สัปดาห์ถัดไป"
+          >
+            <ChevronRight className="w-4 h-4" />
+          </button>
+        </div>
+
+        <div className="grid grid-cols-7 gap-1">
+          {dayStrip.map((date) => {
+            const iso = toIsoDate(date);
+            const isActive = iso === activeIso;
+            const isToday = iso === todayIso;
+            const dayLabel = date.toLocaleDateString("th-TH", { weekday: "narrow" });
+            return (
+              <button
+                key={iso}
+                type="button"
+                onClick={() => setActiveDate(date)}
+                className={`flex flex-col items-center py-2 px-1 rounded-lg transition-colors active:scale-[0.96] ${
+                  isActive
+                    ? "bg-[#1a3c2a] text-[#faf7f0]"
+                    : isToday
+                      ? "bg-[#c9a84c]/15 text-[#1a3c2a]"
+                      : "hover:bg-[#faf7f0] text-[#5c4a35]"
+                }`}
+              >
+                <span
+                  className={`text-[10px] font-medium uppercase ${
+                    isActive ? "text-[#faf7f0]/80" : "text-[#8b7355]"
+                  }`}
+                >
+                  {dayLabel}
+                </span>
+                <span className="text-base font-serif font-semibold tabular-nums leading-tight mt-0.5">
+                  {date.getDate()}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Quick jump to today */}
+        {activeIso !== todayIso && (
+          <div className="mt-2 flex justify-center">
+            <button
+              type="button"
+              onClick={() => setActiveDate(startOfToday())}
+              className="inline-flex items-center gap-1 px-3 py-1 text-[11px] font-semibold uppercase tracking-wider text-[#1a3c2a] hover:text-[#c9a84c] transition-colors cursor-pointer"
+            >
+              <CalendarIcon className="w-3 h-3" />
+              ไปวันนี้
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Day summary */}
+      <div className="grid grid-cols-3 gap-2">
+        <div className="rounded-xl bg-emerald-50 border border-emerald-300 p-3 text-center">
+          <p className="text-[10px] uppercase tracking-wider text-emerald-700 font-semibold">ว่าง</p>
+          <p className="text-xl font-serif font-bold text-emerald-900 mt-0.5 tabular-nums">
+            {availableCount}
+          </p>
+        </div>
+        <div className="rounded-xl bg-amber-50 border border-amber-300 p-3 text-center">
+          <p className="text-[10px] uppercase tracking-wider text-amber-700 font-semibold">เข้าพัก</p>
+          <p className="text-xl font-serif font-bold text-amber-900 mt-0.5 tabular-nums">
+            {occupiedCount}
+          </p>
+        </div>
+        <div className="rounded-xl bg-stone-100 border border-stone-400 p-3 text-center">
+          <p className="text-[10px] uppercase tracking-wider text-stone-700 font-semibold">รวม</p>
+          <p className="text-xl font-serif font-bold text-stone-800 mt-0.5 tabular-nums">
+            {rooms.length}
+          </p>
+        </div>
+      </div>
+
+      {/* Room list for the day */}
+      <ul className="space-y-2">
+        {rooms.map((room) => {
+          const booking = bookingsByRoom.get(room.id);
+          const customerName = booking?.customers?.full_name;
+          const statusClass = booking ? STATUS_BLOCK_STYLES[booking.status] : "";
+
+          return (
+            <li
+              key={room.id}
+              className="bg-white rounded-2xl border border-[#e8e2d6] shadow-[0_1px_2px_rgba(15,31,23,0.04)] overflow-hidden"
+            >
+              {booking ? (
+                <button
+                  type="button"
+                  onClick={() => onSelectBooking(booking)}
+                  className="w-full text-left p-3 hover:bg-[#faf7f0]/60 transition-colors active:scale-[0.99] cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-[#1a3c2a]/10 flex items-center justify-center flex-shrink-0">
+                      <BedDouble className="w-5 h-5 text-[#1a3c2a]" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-[#1a3c2a] text-sm">
+                          ห้อง {room.room_number}
+                        </p>
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border whitespace-nowrap ${statusClass}`}
+                        >
+                          {STATUS_LABELS[booking.status]}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#8b7355] truncate mt-0.5">
+                        {room.room_types?.name || "ไม่ระบุประเภท"}
+                      </p>
+                      <p className="text-xs text-[#5c4a35] truncate mt-1">
+                        {customerName || "ไม่ระบุชื่อ"}
+                        <span className="mx-1.5 text-[#c4b9a8]">·</span>
+                        <span className="font-mono">{booking.booking_number}</span>
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => onSelectEmptyCell(room.id, activeIso)}
+                  className="w-full text-left p-3 hover:bg-[#1a3c2a]/[0.03] transition-colors active:scale-[0.99] cursor-pointer"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-200 flex items-center justify-center flex-shrink-0">
+                      <BedDouble className="w-5 h-5 text-emerald-700" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="font-semibold text-[#1a3c2a] text-sm">
+                          ห้อง {room.room_number}
+                        </p>
+                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold border bg-emerald-50 text-emerald-700 border-emerald-200 whitespace-nowrap">
+                          ว่าง
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-[#8b7355] truncate mt-0.5">
+                        {room.room_types?.name || "ไม่ระบุประเภท"}
+                      </p>
+                      <p className="text-xs text-[#1a3c2a] mt-1 inline-flex items-center gap-1 font-medium">
+                        <Plus className="w-3 h-3" />
+                        แตะเพื่อสร้างการจอง
+                      </p>
+                    </div>
+                  </div>
+                </button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

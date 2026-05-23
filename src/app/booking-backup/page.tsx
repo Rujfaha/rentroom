@@ -1,8 +1,8 @@
 import { Suspense } from "react";
 import { cookies } from "next/headers";
+import BookingFlow from "@/components/booking/BookingFlowLegacy";
 import Link from "next/link";
 import LoadingLink from "@/components/ui/LoadingLink";
-import BookingFlow from "@/components/booking/BookingFlow";
 import { getBookingPageData } from "@/app/actions/booking";
 import {
   BOOKING_LOCALE_COOKIE,
@@ -41,9 +41,7 @@ export async function generateMetadata() {
   const supabase = await createServiceClient();
   const { data: hotelData } = await supabase
     .from("hotels")
-    .select(
-      "id, name, description, address, province, district, sub_district, postal_code, logo_url, cover_image_url, settings"
-    )
+    .select("id, name, description, address, province, district, sub_district, postal_code, logo_url, cover_image_url, settings")
     .eq("is_active", true)
     .limit(1)
     .single();
@@ -124,103 +122,41 @@ export default async function BookingPage({
   const displayHotelName = bookingData.hotel?.name || hotel.name;
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-cream via-[#fbf7ec] to-white">
-      <header className="sticky top-0 z-30 border-b border-white/40 bg-forest-dark/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
-          <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-            {/* Mobile back button */}
-            <LoadingLink
-              href="/"
-              className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full border border-white/20 bg-white/10 text-stone-light transition-colors hover:border-gold/60 hover:text-gold sm:hidden"
-              loadingLabel="กำลังกลับหน้าแรก..."
-              aria-label={labels.header.backHome}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="m15 18-6-6 6-6" />
-              </svg>
-            </LoadingLink>
-
-            <Link
-              href="/"
-              className="truncate font-[family-name:var(--font-serif)] text-lg font-bold tracking-wider text-white sm:text-2xl"
-            >
-              {displayHotelName}
-            </Link>
-          </div>
-
-          <div className="flex items-center gap-2 sm:gap-3">
+    <div className="min-h-screen bg-cream">
+      <header className="bg-forest-dark py-4 px-4">
+        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+          <Link href="/" className="font-[family-name:var(--font-serif)] text-2xl font-bold text-white tracking-wider cursor-pointer">
+            {displayHotelName}
+          </Link>
+          <div className="flex items-center gap-3">
             <div className="flex rounded-full border border-white/20 bg-white/10 p-1 text-xs font-semibold">
               <Link
                 href={buildLanguageHref(params, "th")}
-                className={
-                  "rounded-full px-3 py-1 transition-colors " +
-                  (locale === "th" ? "bg-gold text-white" : "text-stone-light hover:text-white")
-                }
+                className={"rounded-full px-3 py-1 transition-colors " + (locale === "th" ? "bg-gold text-white" : "text-stone-light hover:text-white")}
               >
                 TH
               </Link>
               <Link
                 href={buildLanguageHref(params, "en")}
-                className={
-                  "rounded-full px-3 py-1 transition-colors " +
-                  (locale === "en" ? "bg-gold text-white" : "text-stone-light hover:text-white")
-                }
+                className={"rounded-full px-3 py-1 transition-colors " + (locale === "en" ? "bg-gold text-white" : "text-stone-light hover:text-white")}
               >
                 ENG
               </Link>
             </div>
-
-            <LoadingLink
-              href="/"
-              className="hidden items-center gap-1.5 text-sm text-stone-light transition-colors hover:text-gold sm:inline-flex"
-              loadingLabel="กำลังกลับหน้าแรก..."
-            >
-              <svg
-                width="14"
-                height="14"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-              >
-                <path d="m15 18-6-6 6-6" />
-              </svg>
+            <LoadingLink href="/" className="inline-flex items-center gap-1.5 text-sm text-stone-light hover:text-gold transition-colors cursor-pointer" loadingLabel="กำลังกลับหน้าแรก...">
               {labels.header.backHome}
             </LoadingLink>
           </div>
         </div>
       </header>
-
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 sm:py-12">
-        <div className="mb-6 sm:mb-8">
-          <h1 className="font-[family-name:var(--font-serif)] text-3xl font-bold leading-tight text-forest-dark sm:text-4xl md:text-5xl">
-            {labels.header.title}
-          </h1>
-          <p className="mt-2 max-w-xl text-sm text-earth sm:text-base">
-            {labels.header.subtitle}
-          </p>
-        </div>
-
-        <Suspense
-          fallback={
-            <div className="rounded-3xl border border-stone/40 bg-white/70 p-12 text-center text-earth shadow-sm">
-              {labels.header.loading}
-            </div>
-          }
-        >
+      <main className="max-w-4xl mx-auto px-4 py-12">
+        <h1 className="font-[family-name:var(--font-serif)] text-3xl md:text-4xl font-bold text-forest-dark text-center mb-2">
+          {labels.header.title}
+        </h1>
+        <p className="text-earth text-center mb-10">
+          {labels.header.subtitle}
+        </p>
+        <Suspense fallback={<div className="text-center text-earth py-12">{labels.header.loading}</div>}>
           <BookingFlow
             hotelId={bookingData.hotel?.id || ""}
             hotelName={displayHotelName}

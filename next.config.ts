@@ -1,8 +1,17 @@
 import type { NextConfig } from "next";
 
+const lanDevOrigins = [
+  "10.82.13.94",
+  "10.82.13.94:3000",
+  ...(process.env.NEXT_ALLOWED_DEV_ORIGINS?.split(",") ?? []),
+]
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
 const nextConfig: NextConfig = {
   compress: true,
   poweredByHeader: false,
+  allowedDevOrigins: lanDevOrigins,
   images: {
     formats: ["image/avif", "image/webp"],
     minimumCacheTTL: 60,

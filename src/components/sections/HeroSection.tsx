@@ -46,7 +46,7 @@ export default function HeroSection({ slides }: HeroSectionProps) {
   const slide = slides[currentSlide];
 
   return (
-    <section className="relative h-screen min-h-[600px] max-h-[900px] w-full overflow-hidden">
+    <section className="relative h-[65vh] sm:h-[75vh] md:h-screen min-h-[420px] sm:min-h-[500px] md:min-h-[600px] max-h-[900px] w-full overflow-hidden">
       {slides.map(function (s, i) {
         const opacityClass = i === currentSlide ? "opacity-100" : "opacity-0";
         return (
@@ -73,10 +73,10 @@ export default function HeroSection({ slides }: HeroSectionProps) {
 
       <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center text-white">
         <div key={currentSlide} className="animate-[fadeInUp_0.8s_ease-out]">
-          <h1 className="font-[family-name:var(--font-serif)] text-4xl sm:text-5xl md:text-6xl lg:text-7xl font-bold leading-tight tracking-wide">
+          <h1 className="thai-text-balance font-[family-name:var(--font-accent)] text-3xl sm:text-5xl md:text-7xl lg:text-6xl font-extralight leading-tight tracking-wide">
             {slide.headline}
           </h1>
-          <p className="mt-4 md:mt-6 text-base sm:text-lg md:text-xl lg:text-2xl font-light text-stone-light max-w-2xl mx-auto leading-relaxed">
+          <p className="mx-auto mt-4 md:mt-6 max-w-[32rem] text-xl font-normal leading-relaxed text-white/95 drop-shadow-sm break-words [word-break:break-word] [overflow-wrap:anywhere] sm:max-w-[36rem] md:max-w-[40rem] lg:text-3xl lg:max-w-2xl">
             {slide.subheadline}
           </p>
         </div>

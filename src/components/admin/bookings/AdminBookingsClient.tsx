@@ -17,7 +17,6 @@ import {
   Plus,
   RotateCcw,
   Search,
-  UserRound,
   UserX,
   XCircle,
 } from "lucide-react";
@@ -143,34 +142,35 @@ function formatDate(value: string): string {
     year: "numeric",
   });
 }
-
-function formatDateTime(value: string | null): string {
-  if (!value) return "-";
-  return new Date(value).toLocaleString("th-TH", {
-    day: "numeric",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
+void formatDate;
 
 function getPaymentStatus(booking: AdminBookingRow): PaymentStatus {
   return booking.payments?.[0]?.status || "pending";
 }
 
-function getConfirmationNote(status: BookingStatus): string {
-  if (status === "pending") return "รอตรวจสลิปและยืนยันการจอง";
-  if (status === "confirmed") return "ยืนยันแล้ว พร้อมเช็คอิน";
-  if (status === "checked_in") return "ลูกค้าเข้าพักอยู่";
-  if (status === "checked_out") return "ลูกค้าเช็คเอาท์แล้ว";
-  if (status === "no_show") return "บันทึกว่าไม่เข้าพัก";
-  return "การจองถูกยกเลิก";
+function formatDateRangeShort(start: string, end: string): string {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const sameMonth =
+    startDate.getMonth() === endDate.getMonth() &&
+    startDate.getFullYear() === endDate.getFullYear();
+  const startLabel = startDate.toLocaleDateString("th-TH", {
+    day: "numeric",
+    ...(sameMonth ? {} : { month: "short" }),
+  });
+  const endLabel = endDate.toLocaleDateString("th-TH", {
+    day: "numeric",
+    month: "short",
+  });
+  return `${startLabel} - ${endLabel}`;
 }
 
-function getPaymentNote(status: PaymentStatus, hasSlip: boolean): string {
-  if (status === "verified") return "ตรวจสอบการชำระเงินแล้ว";
-  if (status === "rejected") return "สลิปหรือการชำระเงินถูกปฏิเสธ";
-  return hasSlip ? "มีสลิป รอตรวจสอบ" : "ยังไม่มีสลิป";
+function getNights(start: string, end: string): number {
+  const startDate = new Date(start);
+  const endDate = new Date(end);
+  const diff = endDate.getTime() - startDate.getTime();
+  if (Number.isNaN(diff) || diff <= 0) return 0;
+  return Math.round(diff / (1000 * 60 * 60 * 24));
 }
 
 function getSearchText(booking: AdminBookingRow): string {
@@ -303,47 +303,6 @@ function BookingActions({ booking, onOpenDetail }: { booking: AdminBookingRow; o
   );
 }
 
-function StatusInfoPanel({ booking }: { booking: AdminBookingRow }) {
-  const paymentStatus = getPaymentStatus(booking);
-  const hasSlip = Boolean(booking.payments?.[0]?.slip_image_url);
-
-  return (
-    <div className="mt-3 grid grid-cols-1 md:grid-cols-2 gap-3">
-      <div className="rounded-xl border border-[#e8e2d6] bg-[#faf7f0] p-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#1a3c2a]">
-            <CheckCircle2 className="w-3.5 h-3.5 text-[#c9a84c]" />
-            การยืนยัน
-          </div>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${STATUS_STYLES[booking.status]}`}>
-            {STATUS_LABELS[booking.status]}
-          </span>
-        </div>
-        <p className="mt-2 text-xs text-[#8b7355]">{getConfirmationNote(booking.status)}</p>
-        <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-[#8b7355]">
-          <span>ยืนยัน: {formatDateTime(booking.confirmed_at)}</span>
-          <span>เช็คอิน: {formatDateTime(booking.checked_in_at)}</span>
-          <span>เช็คเอาท์: {formatDateTime(booking.checked_out_at)}</span>
-          <span>ยกเลิก/ไม่เข้า: {formatDateTime(booking.cancelled_at)}</span>
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-[#e8e2d6] bg-white p-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#1a3c2a]">
-            <CreditCard className="w-3.5 h-3.5 text-[#c9a84c]" />
-            การชำระเงิน
-          </div>
-          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${PAYMENT_STYLES[paymentStatus]}`}>
-            {PAYMENT_LABELS[paymentStatus]}
-          </span>
-        </div>
-        <p className="mt-2 text-xs text-[#8b7355]">{getPaymentNote(paymentStatus, hasSlip)}</p>
-      </div>
-    </div>
-  );
-}
-
 interface AdminBookingsClientProps {
   bookings: AdminBookingRow[];
   rooms: AdminCalendarRoom[];
@@ -413,10 +372,10 @@ export function AdminBookingsClient({ bookings, rooms, formOptions, initialQuery
   };
 
   const statCards = [
-    { label: "การจองทั้งหมด", value: stats.total, icon: CalendarDays, bg: "bg-[#1a3c2a]/5", iconBg: "bg-[#1a3c2a]/10", color: "text-[#1a3c2a]" },
-    { label: "รอตรวจสอบ", value: stats.pending, icon: Clock, bg: "bg-amber-50", iconBg: "bg-amber-100", color: "text-amber-600" },
-    { label: "ยืนยันแล้ว", value: stats.confirmed, icon: CheckCircle2, bg: "bg-emerald-50", iconBg: "bg-emerald-100", color: "text-emerald-600" },
-    { label: "ชำระแล้ว", value: stats.paid, icon: CreditCard, bg: "bg-sky-50", iconBg: "bg-sky-100", color: "text-sky-600" },
+    { label: "การจองทั้งหมด", value: stats.total, icon: CalendarDays, iconClass: "bg-[#1a3c2a]/10 text-[#1a3c2a]" },
+    { label: "รอตรวจสอบ", value: stats.pending, icon: Clock, iconClass: "bg-amber-100 text-amber-700" },
+    { label: "ยืนยันแล้ว", value: stats.confirmed, icon: CheckCircle2, iconClass: "bg-emerald-100 text-emerald-700" },
+    { label: "ชำระแล้ว", value: stats.paid, icon: CreditCard, iconClass: "bg-sky-100 text-sky-700" },
   ];
 
   const hasFilter = Boolean(query.trim() || status);
@@ -461,16 +420,21 @@ export function AdminBookingsClient({ bookings, rooms, formOptions, initialQuery
         {statCards.map((card) => {
           const Icon = card.icon;
           return (
-            <div key={card.label} className={`${card.bg} rounded-xl p-4 border border-white/60`}>
-              <div className="flex items-center gap-3">
-                <div className={`${card.iconBg} w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0`}>
-                  <Icon className={`w-5 h-5 ${card.color}`} />
-                </div>
-                <div>
-                  <p className="text-2xl font-bold text-[#1a3c2a]">{card.value}</p>
-                  <p className="text-xs text-[#8b7355] font-medium">{card.label}</p>
+            <div
+              key={card.label}
+              className="bg-white rounded-2xl md:rounded-xl border border-[#e8e2d6] shadow-[0_1px_2px_rgba(15,31,23,0.04)] p-4 md:p-5"
+            >
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-[10px] md:text-[11px] uppercase tracking-[0.12em] text-[#8b7355] font-semibold leading-tight">
+                  {card.label}
+                </p>
+                <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${card.iconClass}`}>
+                  <Icon className="w-4 h-4" />
                 </div>
               </div>
+              <p className="text-2xl md:text-[28px] font-serif text-[#1a3c2a] font-bold leading-none tabular-nums mt-2">
+                {card.value}
+              </p>
             </div>
           );
         })}
@@ -582,70 +546,125 @@ export function AdminBookingsClient({ bookings, rooms, formOptions, initialQuery
               <p className="text-sm text-[#a89279] mt-1">ลองเปลี่ยนคำค้นหาหรือสถานะเพื่อดูรายการอื่น</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <ul className="space-y-2.5 md:space-y-3">
               {filteredBookings.map((booking) => {
                 const paymentStatus = getPaymentStatus(booking);
+                const customerName = booking.customers?.full_name || "ไม่ระบุชื่อ";
+                const customerInitial = customerName.charAt(0).toUpperCase() || "?";
+                const contact = booking.customers?.phone || booking.customers?.email;
+                const roomTypeName = booking.rooms?.room_types?.name;
+                const roomNumber = booking.rooms?.room_number;
+                const nights = getNights(booking.check_in_date, booking.check_out_date);
+
                 return (
-                  <div key={booking.id} className="bg-white rounded-xl border border-[#e8e2d6] p-4 shadow-sm hover:shadow-md transition-shadow">
+                  <li
+                    key={booking.id}
+                    className="bg-white rounded-2xl border border-[#e8e2d6] shadow-[0_1px_2px_rgba(15,31,23,0.04)] hover:shadow-[0_4px_16px_-4px_rgba(15,31,23,0.08)] hover:border-[#c9a84c]/30 transition-all duration-200 p-4 md:p-5"
+                  >
                     <div className="flex flex-col lg:flex-row lg:items-center gap-4">
                       <div className="flex-1 min-w-0">
-                        <div className="flex flex-wrap items-center gap-2">
+                        {/* Top row: avatar + name + status */}
+                        <div className="flex items-start gap-3">
                           <button
                             type="button"
                             onClick={() => setSelectedBookingId(booking.id)}
-                            className="font-semibold text-[#1a3c2a] hover:underline cursor-pointer"
+                            className="w-10 h-10 rounded-full bg-gradient-to-br from-[#c9a84c]/25 to-[#8b7355]/15 border border-[#c9a84c]/20 flex items-center justify-center text-[#1a3c2a] font-semibold text-sm flex-shrink-0 cursor-pointer hover:brightness-105"
+                            aria-label={`ดูรายละเอียด ${booking.booking_number}`}
                           >
-                            {booking.booking_number}
+                            {customerInitial}
                           </button>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium border ${STATUS_STYLES[booking.status]}`}>
-                            {STATUS_LABELS[booking.status]}
-                          </span>
-                          <span className={`inline-flex items-center px-2 py-0.5 rounded text-[11px] font-medium ${PAYMENT_STYLES[paymentStatus]}`}>
-                            {PAYMENT_LABELS[paymentStatus]}
-                          </span>
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center justify-between gap-2 flex-wrap">
+                              <button
+                                type="button"
+                                onClick={() => setSelectedBookingId(booking.id)}
+                                className="font-semibold text-[#1a3c2a] text-sm md:text-base truncate hover:underline cursor-pointer"
+                              >
+                                {customerName}
+                              </button>
+                              <span
+                                className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] md:text-[11px] font-semibold border whitespace-nowrap flex-shrink-0 ${STATUS_STYLES[booking.status]}`}
+                              >
+                                {STATUS_LABELS[booking.status]}
+                              </span>
+                            </div>
+                            <p className="text-[11px] md:text-xs text-[#8b7355] mt-0.5 truncate">
+                              <span className="font-mono text-[#5c4a35]">{booking.booking_number}</span>
+                              {contact && (
+                                <>
+                                  <span className="mx-1.5 text-[#c4b9a8]">·</span>
+                                  {contact}
+                                </>
+                              )}
+                            </p>
+                          </div>
                         </div>
 
-                        <StatusInfoPanel booking={booking} />
-
-                        <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 text-sm">
-                          <div>
-                            <p className="text-xs text-[#8b7355]">ลูกค้า</p>
-                            <p className="text-[#2c2c2c] font-medium flex items-center gap-1">
-                              <UserRound className="w-3.5 h-3.5 text-[#8b7355]" />
-                              {booking.customers?.full_name || "-"}
+                        {/* Middle: stay summary chips */}
+                        <div className="mt-3 grid grid-cols-2 md:grid-cols-4 gap-2 md:gap-3 text-xs">
+                          <div className="rounded-lg bg-[#faf7f0] border border-[#f0ece4] px-2.5 py-2">
+                            <p className="text-[10px] uppercase tracking-wider text-[#8b7355] font-semibold">
+                              ห้องพัก
                             </p>
-                            <p className="text-xs text-[#8b7355]">{booking.customers?.phone || booking.customers?.email || "-"}</p>
+                            <p className="text-[#1a3c2a] font-medium truncate mt-0.5">
+                              {roomTypeName || "-"}
+                            </p>
+                            <p className="text-[10px] text-[#8b7355] truncate">
+                              {roomNumber ? `ห้อง ${roomNumber}` : "ยังไม่ระบุ"}
+                            </p>
                           </div>
-                          <div>
-                            <p className="text-xs text-[#8b7355]">ห้องพัก</p>
-                            <p className="text-[#2c2c2c] font-medium">{booking.rooms?.room_types?.name || "-"}</p>
-                            <p className="text-xs text-[#8b7355]">ห้อง {booking.rooms?.room_number || "-"}</p>
+                          <div className="rounded-lg bg-[#faf7f0] border border-[#f0ece4] px-2.5 py-2">
+                            <p className="text-[10px] uppercase tracking-wider text-[#8b7355] font-semibold">
+                              วันเข้าพัก
+                            </p>
+                            <p className="text-[#1a3c2a] font-medium truncate mt-0.5 tabular-nums">
+                              {formatDateRangeShort(booking.check_in_date, booking.check_out_date)}
+                            </p>
+                            <p className="text-[10px] text-[#8b7355]">
+                              {nights > 0 ? `${nights} คืน` : "-"}
+                              {booking.num_guests ? ` · ${booking.num_guests} ผู้เข้าพัก` : ""}
+                            </p>
                           </div>
-                          <div>
-                            <p className="text-xs text-[#8b7355]">วันที่เข้าพัก</p>
-                            <p className="text-[#2c2c2c] font-medium">{formatDate(booking.check_in_date)}</p>
-                            <p className="text-xs text-[#8b7355]">ถึง {formatDate(booking.check_out_date)}</p>
+                          <div className="rounded-lg bg-[#faf7f0] border border-[#f0ece4] px-2.5 py-2">
+                            <p className="text-[10px] uppercase tracking-wider text-[#8b7355] font-semibold">
+                              การชำระเงิน
+                            </p>
+                            <span
+                              className={`mt-0.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${PAYMENT_STYLES[paymentStatus]}`}
+                            >
+                              {PAYMENT_LABELS[paymentStatus]}
+                            </span>
+                            <p className="text-[10px] text-[#8b7355] truncate mt-0.5">
+                              {booking.source ? `ผ่าน ${booking.source}` : ""}
+                            </p>
                           </div>
-                          <div>
-                            <p className="text-xs text-[#8b7355]">ยอดสุทธิ</p>
-                            <p className="text-[#1a3c2a] font-bold">THB {formatPrice(booking.net_amount)}</p>
-                            <p className="text-xs text-[#8b7355]">{booking.num_guests} ผู้เข้าพัก · {booking.source}</p>
+                          <div className="rounded-lg bg-[#1a3c2a]/[0.04] border border-[#1a3c2a]/10 px-2.5 py-2">
+                            <p className="text-[10px] uppercase tracking-wider text-[#8b7355] font-semibold">
+                              ยอดสุทธิ
+                            </p>
+                            <p className="text-[#1a3c2a] font-serif font-bold text-base tabular-nums mt-0.5">
+                              ฿{formatPrice(booking.net_amount)}
+                            </p>
                           </div>
                         </div>
 
                         {booking.special_requests && (
-                          <div className="mt-3 bg-[#faf7f0] rounded-lg px-3 py-2 text-xs text-[#8b7355]">
-                            หมายเหตุ: {booking.special_requests}
-                          </div>
+                          <p className="mt-3 text-[11px] md:text-xs text-[#8b7355] line-clamp-2">
+                            <span className="font-semibold text-[#5c4a35]">หมายเหตุ:</span>{" "}
+                            {booking.special_requests}
+                          </p>
                         )}
                       </div>
 
-                      <BookingActions booking={booking} onOpenDetail={() => setSelectedBookingId(booking.id)} />
+                      <BookingActions
+                        booking={booking}
+                        onOpenDetail={() => setSelectedBookingId(booking.id)}
+                      />
                     </div>
-                  </div>
+                  </li>
                 );
               })}
-            </div>
+            </ul>
           )}
         </>
       ) : (

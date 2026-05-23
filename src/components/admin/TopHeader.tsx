@@ -140,9 +140,37 @@ export function TopHeader() {
   const unreadCount = notices.filter((n) => n.unread).length;
 
   return (
-    <header className="h-16 bg-[#faf7f0] border-b border-[#e8e2d6] flex items-center justify-between px-6 sticky top-0 z-30 shadow-sm">
-      {/* Left Spacer for Mobile Menu Toggle */}
-      <div className="w-10 md:w-0"></div>
+    <header className="h-16 bg-[#faf7f0] border-b border-[#e8e2d6] flex items-center gap-3 px-4 md:px-6 sticky top-0 z-30 shadow-sm">
+      {/* Mobile brand mark (replaces hamburger toggle) */}
+      <div className="flex md:hidden items-center gap-2 min-w-0">
+        <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[#1a3c2a] to-[#0f2418] flex items-center justify-center shadow-sm flex-shrink-0">
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            className="w-4 h-4 text-[#c9a84c]"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <rect width="16" height="20" x="4" y="2" rx="2" ry="2" />
+            <path d="M9 22v-4h6v4" />
+            <path d="M8 6h.01" />
+            <path d="M16 6h.01" />
+            <path d="M12 6h.01" />
+            <path d="M12 10h.01" />
+            <path d="M12 14h.01" />
+            <path d="M16 10h.01" />
+            <path d="M16 14h.01" />
+            <path d="M8 10h.01" />
+            <path d="M8 14h.01" />
+          </svg>
+        </div>
+        <span className="font-serif text-[#1a3c2a] text-sm font-semibold tracking-wide truncate">
+          จัดการ
+        </span>
+      </div>
 
       {/* Search */}
       <div className="flex-1 max-w-md hidden md:flex">
@@ -151,8 +179,11 @@ export function TopHeader() {
         </Suspense>
       </div>
 
+      {/* Spacer to push right actions to the end on mobile */}
+      <div className="flex-1 md:hidden" />
+
       {/* Right Actions */}
-      <div className="flex items-center space-x-4">
+      <div className="flex items-center space-x-2 md:space-x-4 flex-shrink-0">
         <div className="relative" ref={noticesRef}>
           <button 
             onClick={handleBellClick}
@@ -214,9 +245,9 @@ export function TopHeader() {
           )}
         </div>
 
-        <div className="h-6 w-px bg-[#e8e2d6]"></div>
+        <div className="hidden md:block h-6 w-px bg-[#e8e2d6]"></div>
 
-        <form action={logoutAction} onSubmit={handleLogout}>
+        <form action={logoutAction} onSubmit={handleLogout} className="hidden md:block">
           <button 
             type="submit" 
             className="flex items-center space-x-2 px-3 py-2 text-sm font-medium text-[#8b7355] hover:text-red-600 transition-colors rounded-lg hover:bg-red-50 cursor-pointer"

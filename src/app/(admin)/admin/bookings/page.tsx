@@ -101,12 +101,17 @@ export default async function AdminBookingsPage({
   const { data: rooms, error: roomsError } = roomsResult;
 
   return (
-    <div className="space-y-6 pb-8">
-      <div>
-        <h1 className="text-2xl font-serif text-[#1a3c2a]">การจอง</h1>
-        <p className="text-[#8b7355] text-sm mt-1">
-          แสดงรายการจองจริงจากฐานข้อมูล พร้อมข้อมูลลูกค้า ห้องพัก และสถานะชำระเงิน
-        </p>
+    <div className="space-y-5 md:space-y-6 pb-8">
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <p className="text-[10px] md:text-[11px] uppercase tracking-[0.18em] text-[#8b7355] font-semibold">
+            จัดการการจอง
+          </p>
+          <h1 className="text-xl md:text-2xl font-serif text-[#1a3c2a] mt-1">การจอง</h1>
+          <p className="hidden md:block text-sm text-[#8b7355] mt-1">
+            ตรวจสอบสถานะ ชำระเงิน และจัดการเช็คอิน-เช็คเอาท์ทุกการจอง
+          </p>
+        </div>
       </div>
 
       {(bookingsError || roomsError) && (

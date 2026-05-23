@@ -1,10 +1,15 @@
+"use client";
+
+import { useEffect, useMemo, useRef } from "react";
 import Link from "next/link";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
 import type { BookingLabels } from "./booking-i18n";
 import LoadingLink from "@/components/ui/LoadingLink";
+import { downloadBookingReceipt, type BookingReceiptData } from "@/lib/booking/receipt";
 
 interface StepConfirmationProps {
   room: RoomTypeDisplay;
+  hotelName: string;
   checkIn: string;
   checkOut: string;
   totalNights: number;
@@ -13,6 +18,7 @@ interface StepConfirmationProps {
   guest: GuestInfo;
   bookingRef: string;
   slipUrl?: string;
+  totalAmount?: number;
   labels: BookingLabels;
 }
 
@@ -22,7 +28,64 @@ function formatPrice(price: number): string {
 
 export default function StepConfirmation(props: StepConfirmationProps) {
   const labels = props.labels.confirmation;
-  const totalAmount = props.room.stayTotal ?? props.room.basePrice * props.totalNights;
+  const totalAmount = props.totalAmount ?? props.room.stayTotal ?? props.room.basePrice * props.totalNights;
+  const hasDownloadedRef = useRef(false);
+  const receiptLabels = props.labels.locale === "th"
+    ? {
+        download: "ดาวน์โหลดใบจอง",
+        downloadedHint: "ระบบจะดาวน์โหลดใบจองให้อัตโนมัติ หากไม่พบไฟล์สามารถกดดาวน์โหลดอีกครั้งได้",
+      }
+    : {
+        download: "Download Receipt",
+        downloadedHint: "Your receipt will download automatically. If you do not see it, you can download it again.",
+      };
+  const receiptData = useMemo<BookingReceiptData>(function () {
+    return {
+      bookingRef: props.bookingRef,
+      hotelName: props.hotelName,
+      roomName: props.room.name,
+      checkIn: props.checkIn,
+      checkOut: props.checkOut,
+      totalNights: props.totalNights,
+      adults: props.adults,
+      childrenCount: props.childrenCount,
+      guestName: props.guest.fullName,
+      guestPhone: props.guest.phone,
+      guestEmail: props.guest.email,
+      specialRequests: props.guest.specialRequests,
+      totalAmount,
+      slipSubmitted: Boolean(props.slipUrl),
+      locale: props.labels.locale,
+      createdAt: new Date(),
+      checkBookingUrl: typeof window === "undefined" ? "/check-booking" : window.location.origin + "/check-booking",
+    };
+  }, [
+    props.adults,
+    props.bookingRef,
+    props.checkIn,
+    props.checkOut,
+    props.childrenCount,
+    props.guest.email,
+    props.guest.fullName,
+    props.guest.phone,
+    props.guest.specialRequests,
+    props.hotelName,
+    props.labels.locale,
+    props.room.name,
+    props.slipUrl,
+    props.totalNights,
+    totalAmount,
+  ]);
+
+  useEffect(function () {
+    if (!props.bookingRef || hasDownloadedRef.current) return;
+    hasDownloadedRef.current = true;
+    downloadBookingReceipt(receiptData);
+  }, [props.bookingRef, receiptData]);
+
+  function handleDownloadReceipt() {
+    downloadBookingReceipt(receiptData);
+  }
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -110,13 +173,37 @@ export default function StepConfirmation(props: StepConfirmationProps) {
         <div className="mt-8 p-4 bg-champagne/50 rounded-xl text-sm text-earth">
           <p>{labels.emailNotice(props.guest.email)}</p>
           <p className="mt-1">{labels.saveReference}</p>
+          <p className="mt-1">{receiptLabels.downloadedHint}</p>
         </div>
 
-        <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
-          <LoadingLink href="/" className="inline-flex items-center justify-center gap-2 px-8 py-3 bg-forest text-white rounded-lg hover:bg-forest-light transition-colors font-semibold cursor-pointer text-center" loadingLabel="กำลังกลับหน้าแรก...">
+        <div className="mt-8 flex flex-col sm:flex-row sm:flex-wrap gap-3 justify-center">
+          <button
+            type="button"
+            onClick={handleDownloadReceipt}
+            className="inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-gold px-5 text-sm font-semibold text-white transition-colors hover:bg-gold-dark cursor-pointer text-center"
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="18"
+              height="18"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+              <polyline points="7 10 12 15 17 10" />
+              <line x1="12" y1="15" x2="12" y2="3" />
+            </svg>
+            <span>{receiptLabels.download}</span>
+          </button>
+          <LoadingLink href="/" className="inline-flex h-11 w-full sm:w-auto items-center justify-center gap-2 whitespace-nowrap rounded-lg bg-forest px-5 text-sm font-semibold text-white transition-colors hover:bg-forest-light cursor-pointer text-center" loadingLabel="กำลังกลับหน้าแรก...">
             {labels.backHome}
           </LoadingLink>
-          <Link href="/check-booking" className="inline-block px-8 py-3 border-2 border-gold text-gold rounded-lg hover:bg-gold hover:text-white transition-colors font-semibold cursor-pointer text-center">
+          <Link href="/check-booking" className="inline-flex h-11 w-full sm:w-auto items-center justify-center whitespace-nowrap rounded-lg border-2 border-gold px-5 text-sm font-semibold text-gold transition-colors hover:bg-gold hover:text-white cursor-pointer text-center">
             {labels.checkStatus}
           </Link>
         </div>

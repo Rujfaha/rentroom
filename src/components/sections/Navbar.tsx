@@ -33,8 +33,16 @@ export default function Navbar({ hotelName, navLinks }: NavbarProps) {
   return (
     <nav className={"fixed top-0 left-0 right-0 z-50 transition-all duration-300 " + navBg}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-20">
-          <Link href="/" className={"font-[family-name:var(--font-serif)] text-2xl font-bold tracking-wider cursor-pointer " + textColor}>
+        <div className="relative flex h-25 items-center justify-end md:justify-between">
+          <Link
+            href="/"
+            onClick={function (e) {
+              if (window.location.pathname === "/") {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }
+            }}
+            className={"absolute left-[calc(50%-16px)] max-w-[62vw] -translate-x-1/2 truncate text-center font-[family-name:var(--font-serif)] text-3xl font-semibold tracking-normal cursor-pointer sm:max-w-[52vw] md:static md:left-auto md:max-w-[24rem] md:translate-x-0 md:text-left md:text-3xl lg:max-w-[28rem] lg:text-4xl " + textColor}>
             {hotelName}
           </Link>
 

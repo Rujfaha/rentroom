@@ -1,5 +1,6 @@
 import { redirect } from "next/navigation";
-import { CalendarDays, BedDouble, CreditCard, Users } from "lucide-react";
+import Link from "next/link";
+import { CalendarDays, BedDouble, CreditCard, Users, ArrowRight, Inbox } from "lucide-react";
 import { getSession } from "@/lib/session";
 import { createServiceClient } from "@/lib/supabase/service";
 import { StatCard } from "@/components/admin/StatCard";
@@ -64,10 +65,35 @@ const BOOKING_STATUS_LABELS: Record<string, string> = {
   no_show: "ไม่เข้าพัก",
 };
 
+const STATUS_STYLES: Record<string, string> = {
+  pending: "bg-amber-50 text-amber-700",
+  confirmed: "bg-emerald-50 text-emerald-700",
+  checked_in: "bg-blue-50 text-blue-700",
+  checked_out: "bg-stone-100 text-stone-600",
+  cancelled: "bg-rose-50 text-rose-600",
+  no_show: "bg-rose-50 text-rose-600",
+  default: "bg-stone-100 text-stone-600",
+};
+
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString("th-TH", {
     day: "numeric",
     month: "short",
+  });
+}
+
+function getGreeting(hour: number): string {
+  if (hour < 12) return "อรุณสวัสดิ์";
+  if (hour < 17) return "สวัสดียามบ่าย";
+  return "สวัสดียามค่ำ";
+}
+
+function formatTodayLong(date: Date): string {
+  return date.toLocaleDateString("th-TH", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
   });
 }
 
@@ -215,67 +241,183 @@ export default async function AdminDashboardPage() {
   ];
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-serif text-[#1a3c2a]">ภาพรวมระบบ</h1>
-          <p className="text-[#8b7355] text-sm mt-1 uppercase tracking-wider font-medium">
-            ยินดีต้อนรับกลับมา, {session.fullName}
+    <div className="space-y-5 md:space-y-6">
+      {/* Page header */}
+      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3 sm:gap-4">
+        <div className="min-w-0">
+          <p className="text-[10px] md:text-[11px] uppercase tracking-[0.18em] text-[#8b7355] font-semibold">
+            แดชบอร์ด · {formatTodayLong(now)}
+          </p>
+          <h1 className="text-xl md:text-2xl font-serif text-[#1a3c2a] mt-1">
+            {getGreeting(now.getHours())}, {session.fullName}
+          </h1>
+          <p className="hidden md:block text-sm text-[#8b7355] mt-1">
+            ภาพรวมการจอง สถานะห้องพัก และรายได้แบบเรียลไทม์
           </p>
         </div>
+
+        <Link
+          href="/admin/bookings"
+          className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-[#1a3c2a] text-[#faf7f0] text-xs font-semibold uppercase tracking-wider hover:bg-[#0f2418] transition-colors shadow-sm"
+        >
+          จัดการการจอง
+          <ArrowRight className="w-3.5 h-3.5" />
+        </Link>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {stats.map((stat) => (
           <StatCard key={stat.title} {...stat} />
         ))}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 bg-white rounded-xl shadow-sm border border-[#e8e2d6] p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-serif text-[#1a3c2a]">การจองล่าสุด</h2>
-            <span className="text-xs text-[#8b7355]">ข้อมูลจริงจากฐานข้อมูล</span>
+      {/* Content grid */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">
+        {/* Recent bookings */}
+        <div className="lg:col-span-2 bg-white rounded-2xl md:rounded-xl border border-[#e8e2d6] shadow-[0_1px_2px_rgba(15,31,23,0.04)] overflow-hidden">
+          <div className="flex items-center justify-between px-4 md:px-6 py-3.5 md:py-4 border-b border-[#f0ece4]">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[#8b7355] font-semibold">กิจกรรมล่าสุด</p>
+              <h2 className="text-base md:text-lg font-serif text-[#1a3c2a] mt-0.5">การจองล่าสุด</h2>
+            </div>
+            <Link
+              href="/admin/bookings"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-[#1a3c2a] hover:text-[#c9a84c] transition-colors whitespace-nowrap"
+            >
+              ดูทั้งหมด
+              <ArrowRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
 
           {recentBookings.length === 0 ? (
-            <div className="flex items-center justify-center h-56 border-2 border-dashed border-[#e8e2d6] rounded-lg text-[#a89279]">
-              ยังไม่มีรายการจอง
+            <div className="flex flex-col items-center justify-center h-48 md:h-56 px-6 text-center">
+              <div className="w-12 h-12 rounded-full bg-[#faf7f0] border border-[#e8e2d6] flex items-center justify-center mb-3">
+                <Inbox className="w-5 h-5 text-[#a89279]" />
+              </div>
+              <p className="text-sm font-medium text-[#5c4a35]">ยังไม่มีรายการจอง</p>
+              <p className="text-xs text-[#a89279] mt-1">เมื่อมีการจองใหม่จะแสดงที่นี่</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {recentBookings.map((booking) => (
-                <div key={booking.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-lg border border-[#f0ece4] bg-[#faf7f0]/60">
-                  <div>
-                    <p className="font-semibold text-[#1a3c2a]">{booking.booking_number}</p>
-                    <p className="text-sm text-[#8b7355]">
-                      {booking.customers?.full_name || "-"} · {booking.rooms?.room_types?.name || "-"} ห้อง {booking.rooms?.room_number || "-"}
-                    </p>
-                  </div>
-                  <div className="text-left sm:text-right">
-                    <p className="text-sm text-[#2c2c2c]">{formatDate(booking.check_in_date)} - {formatDate(booking.check_out_date)}</p>
-                    <p className="text-xs text-[#8b7355]">{BOOKING_STATUS_LABELS[booking.status] || booking.status}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <ul className="divide-y divide-[#f0ece4]">
+              {recentBookings.map((booking) => {
+                const statusLabel = BOOKING_STATUS_LABELS[booking.status] || booking.status;
+                const statusStyle = STATUS_STYLES[booking.status] ?? STATUS_STYLES.default;
+                const customerName = booking.customers?.full_name || "-";
+                const customerInitial = customerName.charAt(0).toUpperCase() || "?";
+                const roomLabel = [booking.rooms?.room_types?.name, booking.rooms?.room_number]
+                  .filter(Boolean)
+                  .join(" ");
+
+                return (
+                  <li key={booking.id}>
+                    <Link
+                      href={`/admin/bookings?focus=${booking.id}`}
+                      className="flex items-center gap-3 px-4 md:px-6 py-3 hover:bg-[#faf7f0]/70 transition-colors group"
+                    >
+                      {/* Avatar */}
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#c9a84c]/25 to-[#8b7355]/15 border border-[#c9a84c]/20 flex items-center justify-center text-[#1a3c2a] font-semibold text-sm flex-shrink-0">
+                        {customerInitial}
+                      </div>
+
+                      {/* Main info */}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-semibold text-[#1a3c2a] text-sm truncate">
+                          {customerName}
+                        </p>
+                        <p className="text-[11px] md:text-xs text-[#8b7355] truncate mt-0.5">
+                          <span className="font-mono text-[#5c4a35]">{booking.booking_number}</span>
+                          {roomLabel && (
+                            <>
+                              <span className="mx-1.5 text-[#c4b9a8]">·</span>
+                              {roomLabel}
+                            </>
+                          )}
+                        </p>
+                      </div>
+
+                      {/* Right meta */}
+                      <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                        <span
+                          className={`inline-flex items-center text-[10px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${statusStyle}`}
+                        >
+                          {statusLabel}
+                        </span>
+                        <span className="text-[11px] text-[#8b7355] whitespace-nowrap tabular-nums">
+                          {formatDate(booking.check_in_date)} - {formatDate(booking.check_out_date)}
+                        </span>
+                      </div>
+                    </Link>
+                  </li>
+                );
+              })}
+            </ul>
           )}
         </div>
 
-        <div className="bg-white rounded-xl shadow-sm border border-[#e8e2d6] p-6">
-          <h2 className="text-lg font-serif text-[#1a3c2a] mb-4">สถานะห้องพัก</h2>
-          <div className="space-y-3">
-            <div className="flex items-center justify-between p-3 rounded-lg bg-emerald-50 text-emerald-700">
-              <span className="text-sm font-medium">ว่าง</span>
-              <span className="font-bold">{availableRooms}</span>
+        {/* Room status panel */}
+        <div className="bg-white rounded-2xl md:rounded-xl border border-[#e8e2d6] shadow-[0_1px_2px_rgba(15,31,23,0.04)] overflow-hidden">
+          <div className="flex items-center justify-between px-4 md:px-6 py-3.5 md:py-4 border-b border-[#f0ece4]">
+            <div className="min-w-0">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-[#8b7355] font-semibold">สรุปสต็อก</p>
+              <h2 className="text-base md:text-lg font-serif text-[#1a3c2a] mt-0.5">สถานะห้องพัก</h2>
             </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-amber-50 text-amber-700">
-              <span className="text-sm font-medium">มีผู้เข้าพัก</span>
-              <span className="font-bold">{occupiedRooms}</span>
-            </div>
-            <div className="flex items-center justify-between p-3 rounded-lg bg-stone-50 text-stone-600">
-              <span className="text-sm font-medium">ถูกตัด stock รวม</span>
-              <span className="font-bold">{outOfStockRooms}</span>
+            <span className="text-[11px] text-[#8b7355] tabular-nums whitespace-nowrap">
+              ทั้งหมด {totalRooms} ห้อง
+            </span>
+          </div>
+
+          <div className="p-4 md:p-6">
+            {/* Occupancy progress */}
+            {totalRooms > 0 && (
+              <div className="mb-4 md:mb-5">
+                <div className="flex items-baseline justify-between mb-2">
+                  <span className="text-[10px] uppercase tracking-[0.14em] text-[#8b7355] font-semibold">
+                    อัตราเข้าพัก
+                  </span>
+                  <span className="text-lg font-serif text-[#1a3c2a] font-semibold tabular-nums">
+                    {Math.round((outOfStockRooms / totalRooms) * 100)}
+                    <span className="text-[11px] text-[#8b7355] ml-0.5">%</span>
+                  </span>
+                </div>
+                <div className="h-2 rounded-full bg-[#f0ece4] overflow-hidden">
+                  <div
+                    className="h-full rounded-full bg-gradient-to-r from-[#c9a84c] to-[#a0842e] transition-all duration-500"
+                    style={{ width: `${(outOfStockRooms / totalRooms) * 100}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Status tiles */}
+            <div className="grid grid-cols-3 lg:grid-cols-1 gap-2 lg:gap-2">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-3 rounded-xl bg-emerald-50 border border-emerald-300">
+                <span className="flex items-center gap-1.5 text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-emerald-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-600 flex-shrink-0" />
+                  ว่าง
+                </span>
+                <span className="font-serif text-xl lg:text-lg font-bold mt-1 lg:mt-0 text-emerald-900 tabular-nums">
+                  {availableRooms}
+                </span>
+              </div>
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-3 rounded-xl bg-amber-50 border border-amber-300">
+                <span className="flex items-center gap-1.5 text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-amber-800">
+                  <span className="w-1.5 h-1.5 rounded-full bg-amber-600 flex-shrink-0" />
+                  เข้าพัก
+                </span>
+                <span className="font-serif text-xl lg:text-lg font-bold mt-1 lg:mt-0 text-amber-900 tabular-nums">
+                  {occupiedRooms}
+                </span>
+              </div>
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between p-3 rounded-xl bg-stone-100 border border-stone-400">
+                <span className="flex items-center gap-1.5 text-[11px] lg:text-xs font-semibold uppercase tracking-wider text-stone-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-stone-500 flex-shrink-0" />
+                  ตัด stock
+                </span>
+                <span className="font-serif text-xl lg:text-lg font-bold mt-1 lg:mt-0 text-stone-800 tabular-nums">
+                  {outOfStockRooms}
+                </span>
+              </div>
             </div>
           </div>
         </div>

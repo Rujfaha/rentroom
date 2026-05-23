@@ -157,16 +157,25 @@ function RoomCard({ room, onImageClick }: { room: RoomTypeDisplay; onImageClick:
           )}
         </div>
 
-        <div className="mt-auto pt-6">
+        <div className="mt-auto pt-6 flex flex-col gap-2">
+          <Button
+            href={"/rooms/" + room.id}
+            variant="outline"
+            size="sm"
+            className="w-full"
+            loadingLabel="กำลังโหลด..."
+          >
+            ดูรายละเอียด
+          </Button>
           <Button
             href={isFull ? undefined : "/booking?room=" + room.id}
-            variant="outline"
+            variant="primary"
             size="sm"
             className="w-full"
             disabled={isFull}
             loadingLabel="กำลังโหลด..."
           >
-            {isFull ? "จองเต็มแล้ว (Fully Booked)" : "Book This Room"}
+            {isFull ? "จองเต็มแล้ว (Fully Booked)" : "จองห้องพักนี้"}
           </Button>
         </div>
       </div>
@@ -175,7 +184,6 @@ function RoomCard({ room, onImageClick }: { room: RoomTypeDisplay; onImageClick:
 }
 
 export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomTypesSectionProps) {
-  const [showModal, setShowModal] = useState(false);
   const [galleryRoom, setGalleryRoom] = useState<RoomTypeDisplay | null>(null);
   const [availabilityCounts, setAvailabilityCounts] = useState<Record<string, number>>({});
 
@@ -248,7 +256,7 @@ export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomType
   }, [hotelId, refreshAvailability, supabase]);
 
   useEffect(function () {
-    if (showModal || galleryRoom) {
+    if (galleryRoom) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "";
@@ -257,11 +265,11 @@ export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomType
     return function () {
       document.body.style.overflow = "";
     };
-  }, [showModal, galleryRoom]);
+  }, [galleryRoom]);
 
   if (!roomTypes || roomTypes.length === 0) {
     return (
-      <section id="rooms" className="py-20 md:py-28 bg-cream px-4">
+      <section id="rooms" className="py-16 md:py-24 bg-cream px-4">
         <div className="max-w-7xl mx-auto">
           <SectionTitle
             title="Room Types"
@@ -279,7 +287,7 @@ export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomType
   const remaining = roomTypes.slice(3);
 
   return (
-    <section id="rooms" className="py-20 md:py-28 bg-cream px-4">
+    <section id="rooms" className="py-16 md:py-24 bg-cream px-4">
       <div className="max-w-7xl mx-auto">
         <SectionTitle
           title="Room Types"
@@ -294,55 +302,19 @@ export default function RoomTypesSection({ initialRoomTypes, hotelId }: RoomType
 
         {remaining.length > 0 && (
           <div className="mt-10 text-center">
-            <button
-              onClick={function () { setShowModal(true); }}
+            <a
+              href="/booking"
               className="inline-flex items-center gap-2 px-6 py-3 border-2 border-forest-dark text-forest-dark font-medium rounded-full hover:bg-forest-dark hover:text-white transition-colors duration-300 cursor-pointer"
             >
               <span>เพิ่มเติม</span>
               <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M6 9l6 6 6-6" />
               </svg>
-            </button>
+            </a>
           </div>
         )}
       </div>
 
-      {showModal && (
-        <div
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="room-modal-title"
-          className="fixed inset-0 z-50 flex items-start justify-center bg-black/60 backdrop-blur-sm overflow-y-auto"
-          onClick={function () { setShowModal(false); }}
-        >
-          <div
-            className="relative w-full max-w-6xl mx-4 my-10"
-            onClick={function (e) { e.stopPropagation(); }}
-          >
-            <button
-              onClick={function () { setShowModal(false); }}
-              className="absolute -top-4 -right-4 z-10 w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center text-forest-dark hover:bg-forest-dark hover:text-white transition-colors cursor-pointer"
-              aria-label="Close"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
-
-            <div className="bg-cream rounded-2xl p-6 md:p-10 shadow-2xl">
-              <h2 id="room-modal-title" className="font-[family-name:var(--font-serif)] text-3xl md:text-4xl font-semibold text-forest-dark text-center mb-8">
-                All Room Types
-              </h2>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-                {remaining.map(function (room) {
-                  return <RoomCard key={room.id} room={room} onImageClick={setGalleryRoom} />;
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
       {galleryRoom && (
         <GalleryModal
           images={buildGalleryImages(galleryRoom)}
