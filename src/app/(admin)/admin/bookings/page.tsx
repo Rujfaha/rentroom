@@ -57,7 +57,12 @@ export default async function AdminBookingsPage({
         rooms (
           room_number,
           room_types (
-            name
+            id,
+            name,
+            base_price,
+            max_guests,
+            extra_bed_price,
+            max_extra_beds
           )
         ),
         payments (

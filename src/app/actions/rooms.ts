@@ -12,7 +12,7 @@ type ActionResult<T = undefined> = T extends undefined
   ? { success?: boolean; error?: string }
   : { success: true; data: T; error?: never } | { success?: false; error: string; data?: never };
 
-type RoomTypePayload = Pick<RoomType, "hotel_id" | "name" | "description" | "base_price" | "max_guests" | "amenities" | "is_active">;
+type RoomTypePayload = Pick<RoomType, "hotel_id" | "name" | "description" | "base_price" | "max_guests" | "extra_bed_price" | "max_extra_beds" | "amenities" | "is_active">;
 type RoomPayload = Pick<Room, "hotel_id" | "room_type_id" | "room_number" | "floor" | "status" | "housekeeping" | "notes" | "is_active">;
 type RoomTypeImagePayload = Pick<RoomTypeImage, "room_type_id" | "hotel_id" | "image_url" | "is_cover" | "sort_order">;
 type RoomTypeActionData = Omit<RoomType, "amenities"> & { amenities: string[]; images?: RoomTypeImage[] };
@@ -120,19 +120,23 @@ export async function createRoomType(formData: FormData): Promise<ActionResult<R
   const description = (formData.get("description") as string)?.trim() || null;
   const base_price = parseFloat(formData.get("base_price") as string ?? "0");
   const max_guests = parseInt(formData.get("max_guests") as string ?? "0", 10);
+  const extra_bed_price = parseFloat(formData.get("extra_bed_price") as string ?? "0");
+  const max_extra_beds = parseInt(formData.get("max_extra_beds") as string ?? "0", 10);
   const amenities = parseAmenities(formData.get("amenities"));
   const is_active = formData.get("is_active") === "true";
 
   if (!name) return { error: "กรุณากรอกชื่อประเภทห้อง" };
   if (isNaN(base_price) || base_price <= 0) return { error: "ราคาต้องเป็นตัวเลขมากกว่า 0" };
   if (isNaN(max_guests) || max_guests <= 0) return { error: "จำนวนผู้เข้าพักสูงสุดต้องเป็นจำนวนเต็มมากกว่า 0" };
+  if (isNaN(extra_bed_price) || extra_bed_price < 0) return { error: "ราคาเตียงเสริมต้องเป็นตัวเลขไม่ติดลบ" };
+  if (isNaN(max_extra_beds) || max_extra_beds < 0) return { error: "จำนวนเตียงเสริมสูงสุดต้องเป็นจำนวนเต็มไม่ติดลบ" };
 
   const supabase = await createServiceClient();
   const roomTypesSelectTable = supabase.from("room_types") as unknown as SelectIdByHotelTable;
   const { data: existing } = await roomTypesSelectTable.select("id").eq("hotel_id", hotelId).eq("name", name).maybeSingle();
   if (existing) return { error: "ชื่อประเภทห้องนี้มีอยู่แล้ว" };
 
-  const payload: RoomTypePayload = { hotel_id: hotelId, name, description, base_price, max_guests, amenities, is_active };
+  const payload: RoomTypePayload = { hotel_id: hotelId, name, description, base_price, max_guests, extra_bed_price, max_extra_beds, amenities, is_active };
   const roomTypesInsertTable = supabase.from("room_types") as unknown as InsertSelectTable<RoomTypePayload, RoomTypeActionData>;
   const { data, error } = await roomTypesInsertTable.insert(payload).select().single();
 
@@ -153,6 +157,8 @@ export async function updateRoomType(formData: FormData): Promise<ActionResult<R
   const description = (formData.get("description") as string)?.trim() || null;
   const base_price = parseFloat(formData.get("base_price") as string);
   const max_guests = parseInt(formData.get("max_guests") as string, 10);
+  const extra_bed_price = parseFloat(formData.get("extra_bed_price") as string ?? "0");
+  const max_extra_beds = parseInt(formData.get("max_extra_beds") as string ?? "0", 10);
   const amenities = parseAmenities(formData.get("amenities"));
   const is_active = formData.get("is_active") === "true";
 
@@ -160,6 +166,8 @@ export async function updateRoomType(formData: FormData): Promise<ActionResult<R
   if (!name) return { error: "กรุณากรอกชื่อประเภทห้อง" };
   if (isNaN(base_price) || base_price <= 0) return { error: "ราคาต้องเป็นตัวเลขมากกว่า 0" };
   if (isNaN(max_guests) || max_guests <= 0) return { error: "จำนวนผู้เข้าพักสูงสุดต้องเป็นจำนวนเต็มมากกว่า 0" };
+  if (isNaN(extra_bed_price) || extra_bed_price < 0) return { error: "ราคาเตียงเสริมต้องเป็นตัวเลขไม่ติดลบ" };
+  if (isNaN(max_extra_beds) || max_extra_beds < 0) return { error: "จำนวนเตียงเสริมสูงสุดต้องเป็นจำนวนเต็มไม่ติดลบ" };
 
   const supabase = await createServiceClient();
   const roomTypesSelectTable = supabase.from("room_types") as unknown as SelectIdByHotelTable;
@@ -167,7 +175,7 @@ export async function updateRoomType(formData: FormData): Promise<ActionResult<R
   if (existing) return { error: "ชื่อประเภทห้องนี้มีอยู่แล้ว" };
 
   const roomTypesUpdateTable = supabase.from("room_types") as unknown as UpdateSelectTable<Partial<RoomTypePayload>, RoomTypeActionData>;
-  const { data, error } = await roomTypesUpdateTable.update({ name, description, base_price, max_guests, amenities, is_active }).eq("id", id).eq("hotel_id", hotelId).select().single();
+  const { data, error } = await roomTypesUpdateTable.update({ name, description, base_price, max_guests, extra_bed_price, max_extra_beds, amenities, is_active }).eq("id", id).eq("hotel_id", hotelId).select().single();
 
   if (error) { console.error("updateRoomType error:", error); return { error: "ไม่สามารถอัปเดตประเภทห้องได้: " + (error.message || JSON.stringify(error)) }; }
   if (!data) return { error: "ไม่สามารถอัปเดตประเภทห้องได้" };
@@ -445,6 +453,7 @@ interface RoomTypeImageRow { image_url: string; is_cover: boolean; sort_order: n
 interface RoomTypeDetailRow {
   id: string; hotel_id: string; name: string; description: string | null;
   base_price: number | string | null; max_guests: number | null;
+  extra_bed_price?: number | string | null; max_extra_beds?: number | null;
   bed_type?: string | null; room_size?: number | string | null;
   amenities: unknown[] | null; is_active: boolean;
   room_type_images: RoomTypeImageRow[] | null;
@@ -488,7 +497,10 @@ export async function getRoomTypeDetail(roomTypeId: string): Promise<RoomTypeDis
     id: row.id, name: row.name, description: row.description || "",
     shortDescription: row.description ? (row.description.length > 120 ? row.description.substring(0, 120) + "..." : row.description) : "",
     coverImageUrl, galleryUrls, basePrice: Number(row.base_price) || 0,
-    maxGuests: row.max_guests || 2, bedType: row.bed_type || "King Size",
+    maxGuests: row.max_guests || 2,
+    extraBedPrice: Number(row.extra_bed_price) || 0,
+    maxExtraBeds: Number(row.max_extra_beds) || 0,
+    bedType: row.bed_type || "King Size",
     roomSize: Number(row.room_size) || 45, amenities, isActive: row.is_active,
     availableRoomsCount: Math.max(0, availableCount),
   };

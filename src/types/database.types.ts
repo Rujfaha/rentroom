@@ -146,6 +146,8 @@ export interface RoomType {
   description: string | null;
   base_price: number;
   max_guests: number;
+  extra_bed_price: number;
+  max_extra_beds: number;
   amenities: unknown[];
   is_active: boolean;
   created_at: string;

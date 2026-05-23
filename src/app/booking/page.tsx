@@ -125,8 +125,8 @@ export default async function BookingPage({
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-cream via-[#fbf7ec] to-white">
-      <header className="sticky top-0 z-30 border-b border-white/40 bg-forest-dark/95 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-3 py-3 sm:gap-4 sm:px-6 sm:py-4">
+      <header className="sticky top-0 z-30 border-b h-16 sm:h-20 border-white/40 bg-forest-dark/95 backdrop-blur-xl">
+        <div className="mx-auto flex h-full max-w-7xl items-center justify-between gap-3 px-3 sm:gap-4 sm:px-6">
           <div className="flex min-w-0 items-center gap-2 sm:gap-3">
             {/* Mobile back button */}
             <LoadingLink
@@ -182,12 +182,12 @@ export default async function BookingPage({
 
             <LoadingLink
               href="/"
-              className="hidden items-center gap-1.5 text-sm text-stone-light transition-colors hover:text-gold sm:inline-flex"
+              className="group hidden items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm font-medium text-stone-light backdrop-blur-sm transition-all duration-200 hover:border-gold/50 hover:bg-gold/10 hover:text-gold sm:inline-flex whitespace-nowrap flex-shrink-0"
               loadingLabel="กำลังกลับหน้าแรก..."
             >
               <svg
-                width="14"
-                height="14"
+                width="15"
+                height="15"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -195,6 +195,7 @@ export default async function BookingPage({
                 strokeLinecap="round"
                 strokeLinejoin="round"
                 aria-hidden="true"
+                className="transition-transform duration-200 group-hover:-translate-x-0.5"
               >
                 <path d="m15 18-6-6 6-6" />
               </svg>

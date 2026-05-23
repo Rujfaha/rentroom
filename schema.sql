@@ -245,10 +245,15 @@ CREATE TABLE bookings (
     cancelled_at    TIMESTAMPTZ,
     cancel_reason   TEXT,
     created_by      UUID REFERENCES users(id) ON DELETE SET NULL,
+    booking_group_id UUID,           -- จัดกลุ่ม bookings หลายห้องในตะกร้าเดียวกัน (NULL = single-room)
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     CONSTRAINT check_dates CHECK (check_out_date > check_in_date)
 );
+
+CREATE INDEX IF NOT EXISTS idx_bookings_booking_group_id
+  ON bookings (booking_group_id)
+  WHERE booking_group_id IS NOT NULL;
 
 -- ผู้เข้าพักในแต่ละการจอง (กรณีเข้าพักหลายคน)
 CREATE TABLE booking_guests (

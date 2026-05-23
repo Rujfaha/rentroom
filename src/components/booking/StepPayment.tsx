@@ -5,16 +5,19 @@ import Image from "next/image";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
 import type { BookingLabels } from "./booking-i18n";
 import { evaluateBookingPromotion } from "@/app/actions/promotion-engine";
+import { calculateBookingRoomTotal } from "@/lib/booking/pricing-summary";
 
 interface StepPaymentProps {
   hotelId: string;
-  room: RoomTypeDisplay;
+  /** ห้องในตะกร้า — รองรับ multi-room */
+  rooms: RoomTypeDisplay[];
   checkIn: string;
   checkOut: string;
   totalNights: number;
   adults: number;
   childrenCount: number;
   guest: GuestInfo;
+  cartSubtotal: number;
   onConfirm: (slipUrl: string, promotionCode?: string) => void;
   onBack: () => void;
   labels: BookingLabels;
@@ -28,7 +31,9 @@ function formatPrice(price: number): string {
 
 export default function StepPayment(props: StepPaymentProps) {
   const labels = props.labels.payment;
-  const subtotalAmount = props.room.stayTotal ?? props.room.basePrice * props.totalNights;
+  const subtotalAmount = props.cartSubtotal;
+  const primaryRoom = props.rooms[0];
+  const totalGuests = props.adults + props.childrenCount;
   const [promotionCode, setPromotionCode] = useState("");
   const [appliedPromotionCode, setAppliedPromotionCode] = useState<string | undefined>();
   const [discountAmount, setDiscountAmount] = useState(0);
@@ -49,15 +54,17 @@ export default function StepPayment(props: StepPaymentProps) {
 
   useEffect(function () {
     let active = true;
+    const primaryId = primaryRoom?.id || "";
+    if (!primaryId) return;
     const timeoutId = window.setTimeout(function () {
       setIsCheckingDiscount(true);
       evaluateBookingPromotion({
         hotelId: props.hotelId,
-        roomTypeId: props.room.id,
+        roomTypeId: primaryId,
         checkInDate: props.checkIn,
         checkOutDate: props.checkOut,
         nights: props.totalNights,
-        quantity: 1,
+        quantity: props.rooms.length,
         guests: Math.max(1, props.adults + props.childrenCount),
         subtotal: subtotalAmount,
         bookingChannel: "website",
@@ -97,7 +104,8 @@ export default function StepPayment(props: StepPaymentProps) {
     props.guest.email,
     props.guest.phone,
     props.hotelId,
-    props.room.id,
+    primaryRoom?.id,
+    props.rooms.length,
     props.totalNights,
     subtotalAmount,
   ]);
@@ -159,11 +167,11 @@ export default function StepPayment(props: StepPaymentProps) {
     setIsCheckingDiscount(true);
     const result = await evaluateBookingPromotion({
       hotelId: props.hotelId,
-      roomTypeId: props.room.id,
+      roomTypeId: primaryRoom?.id || "",
       checkInDate: props.checkIn,
       checkOutDate: props.checkOut,
       nights: props.totalNights,
-      quantity: 1,
+      quantity: props.rooms.length,
       guests: Math.max(1, props.adults + props.childrenCount),
       subtotal: subtotalAmount,
       bookingChannel: "website",
@@ -407,19 +415,45 @@ export default function StepPayment(props: StepPaymentProps) {
       <div>
         <div className="bg-white rounded-xl p-5 shadow-md sticky top-24">
           <h4 className="font-semibold text-forest-dark mb-3">{labels.summary}</h4>
-          <div className="relative h-32 rounded-lg overflow-hidden mb-3">
-            <Image
-              src={props.room.coverImageUrl}
-              alt={props.room.name}
-              fill
-              className="object-cover"
-              sizes="300px"
-            />
-          </div>
-          <p className="font-[family-name:var(--font-serif)] text-lg font-semibold text-forest-dark">
-            {props.room.name}
-          </p>
-          <div className="mt-3 space-y-2 text-sm text-earth">
+          {primaryRoom && (
+            <div className="relative h-32 rounded-lg overflow-hidden mb-3">
+              <Image
+                src={primaryRoom.coverImageUrl}
+                alt={primaryRoom.name}
+                fill
+                className="object-cover"
+                sizes="300px"
+              />
+              {props.rooms.length > 1 && (
+                <div className="absolute top-2 right-2 rounded-full bg-forest-dark/90 px-2.5 py-1 text-[11px] font-bold text-white">
+                  {props.labels.locale === "th"
+                    ? "+" + String(props.rooms.length - 1) + " ห้อง"
+                    : "+" + String(props.rooms.length - 1) + " more"}
+                </div>
+              )}
+            </div>
+          )}
+          <ul className="space-y-1.5 mb-3">
+            {props.rooms.map(function (room, index) {
+              return (
+                <li
+                  key={room.id + "-" + String(index)}
+                  className="flex items-start justify-between gap-2 text-sm"
+                >
+                  <span className="font-[family-name:var(--font-serif)] font-semibold text-forest-dark flex-1 min-w-0 truncate">
+                    {room.name}
+                  </span>
+                  <span className="text-forest-dark font-medium whitespace-nowrap">
+                    {props.labels.shared.thb +
+                      formatPrice(
+                        calculateBookingRoomTotal(room, props.totalNights, totalGuests)
+                      )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-3 space-y-2 text-sm text-earth border-t border-stone-light pt-3">
             <div className="flex justify-between">
               <span>{props.labels.shared.checkIn}</span>
               <span className="font-medium text-forest-dark">{props.checkIn}</span>
@@ -442,10 +476,9 @@ export default function StepPayment(props: StepPaymentProps) {
           <div className="mt-4 pt-3 border-t border-stone-light">
             <div className="flex justify-between text-sm text-earth">
               <span>
-                {props.labels.shared.thb +
-                  formatPrice(props.room.basePrice) +
-                  " x " +
-                  props.labels.guestInfo.nights(props.totalNights)}
+                {props.labels.locale === "th"
+                  ? "ราคารวม " + String(props.rooms.length) + " ห้อง"
+                  : "Subtotal (" + String(props.rooms.length) + " room" + (props.rooms.length === 1 ? "" : "s") + ")"}
               </span>
               <span>{props.labels.shared.thb + formatPrice(subtotalAmount)}</span>
             </div>
@@ -460,6 +493,7 @@ export default function StepPayment(props: StepPaymentProps) {
               <span className="text-gold">{props.labels.shared.thb + formatPrice(totalAmount)}</span>
             </div>
           </div>
+
 
           <div className="mt-4 pt-3 border-t border-stone-light">
             <div className="flex items-center gap-2">

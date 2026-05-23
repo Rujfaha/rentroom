@@ -272,13 +272,14 @@ export default function BookingFlow({
 
       {step === 1 && selectedRoom && (
         <StepGuestInfo
-          room={selectedRoom}
+          rooms={[selectedRoom]}
           checkIn={checkIn}
           checkOut={checkOut}
           totalNights={totalNights}
           adults={adults}
           childrenCount={children}
           initialInfo={guestInfo}
+          cartSubtotal={selectedRoom.stayTotal ?? selectedRoom.basePrice * totalNights}
           onSubmit={handleGuestSubmit}
           onBack={handleBack}
           labels={labels}
@@ -288,13 +289,14 @@ export default function BookingFlow({
       {step === 2 && selectedRoom && guestInfo && (
         <StepPayment
           hotelId={hotelId}
-          room={selectedRoom}
+          rooms={[selectedRoom]}
           checkIn={checkIn}
           checkOut={checkOut}
           totalNights={totalNights}
           adults={adults}
           childrenCount={children}
           guest={guestInfo}
+          cartSubtotal={selectedRoom.stayTotal ?? selectedRoom.basePrice * totalNights}
           onConfirm={handlePaymentConfirm}
           onBack={handleBack}
           labels={labels}
@@ -305,7 +307,7 @@ export default function BookingFlow({
 
       {step === 3 && selectedRoom && guestInfo && (
         <StepConfirmation
-          room={selectedRoom}
+          rooms={[selectedRoom]}
           hotelName={hotelName}
           checkIn={checkIn}
           checkOut={checkOut}

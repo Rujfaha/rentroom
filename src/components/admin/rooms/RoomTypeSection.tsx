@@ -35,6 +35,8 @@ interface RoomTypeFormData {
   description: string;
   base_price: string;
   max_guests: string;
+  extra_bed_price: string;
+  max_extra_beds: string;
   amenities: string[];
   is_active: boolean;
   id?: string;
@@ -58,6 +60,8 @@ function normalizeRoomType(roomType: Partial<AdminRoomType>): AdminRoomType {
     description: safeString(roomType?.description),
     base_price: roomType?.base_price ?? "",
     max_guests: roomType?.max_guests ?? 2,
+    extra_bed_price: roomType?.extra_bed_price ?? "",
+    max_extra_beds: roomType?.max_extra_beds ?? "",
     amenities: Array.isArray(roomType?.amenities) ? roomType.amenities : [],
     is_active: safeBoolean(roomType?.is_active, true),
     images: Array.isArray(roomType?.images) ? roomType.images : [],
@@ -115,6 +119,8 @@ export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange, onRoomsCh
     formData.set("description", data.description);
     formData.set("base_price", data.base_price);
     formData.set("max_guests", data.max_guests);
+    formData.set("extra_bed_price", data.extra_bed_price);
+    formData.set("max_extra_beds", data.max_extra_beds);
     formData.set("amenities", JSON.stringify(data.amenities));
     formData.set("is_active", data.is_active.toString());
     if (data.id) formData.set("id", data.id);
@@ -218,6 +224,12 @@ export function RoomTypeSection({ roomTypes, rooms, onRoomTypesChange, onRoomsCh
                       <span>{rt.max_guests} คน</span>
                     </div>
                   </div>
+                  {Number(rt.max_extra_beds) > 0 && (
+                    <div className="mt-2 text-xs text-[#8b7355] flex flex-wrap gap-x-3 gap-y-1">
+                      <span>เตียงเสริมสูงสุด: {rt.max_extra_beds} เตียง</span>
+                      <span>({Number(rt.extra_bed_price).toLocaleString()} บาท/เตียง/คืน)</span>
+                    </div>
+                  )}
 
                   {/* Amenities */}
                   {displayAmenities.length > 0 && (
@@ -305,6 +317,8 @@ function RoomTypeModal({
   const [description, setDescription] = useState(safeString(roomType?.description));
   const [basePrice, setBasePrice] = useState(safeString(roomType?.base_price));
   const [maxGuests, setMaxGuests] = useState(safeString(roomType?.max_guests, "2"));
+  const [extraBedPrice, setExtraBedPrice] = useState(safeString(roomType?.extra_bed_price));
+  const [maxExtraBeds, setMaxExtraBeds] = useState(safeString(roomType?.max_extra_beds, "0"));
   const [isActive, setIsActive] = useState(safeBoolean(roomType?.is_active, true));
   const [amenities, setAmenities] = useState<string[]>(Array.isArray(roomType?.amenities) ? roomType.amenities : []);
   const [customAmenity, setCustomAmenity] = useState("");
@@ -328,6 +342,8 @@ function RoomTypeModal({
     if (!name.trim()) errs.name = "กรุณากรอกชื่อประเภทห้อง";
     if (!basePrice || isNaN(parseFloat(basePrice)) || parseFloat(basePrice) <= 0) errs.basePrice = "ราคาต้องเป็นตัวเลขมากกว่า 0";
     if (!maxGuests || isNaN(parseInt(maxGuests)) || parseInt(maxGuests) <= 0) errs.maxGuests = "ต้องมากกว่า 0";
+    if (extraBedPrice && (isNaN(parseFloat(extraBedPrice)) || parseFloat(extraBedPrice) < 0)) errs.extraBedPrice = "ราคาต้องไม่ติดลบ";
+    if (maxExtraBeds && (isNaN(parseInt(maxExtraBeds)) || parseInt(maxExtraBeds) < 0)) errs.maxExtraBeds = "จำนวนต้องไม่ติดลบ";
     if (Object.keys(errs).length > 0) { setErrors(errs); return; }
     setErrors({});
     onSave({
@@ -335,6 +351,8 @@ function RoomTypeModal({
       description: description.trim(),
       base_price: basePrice,
       max_guests: maxGuests,
+      extra_bed_price: extraBedPrice,
+      max_extra_beds: maxExtraBeds,
       amenities,
       is_active: isActive,
       id: roomType?.id,
@@ -400,6 +418,28 @@ function RoomTypeModal({
                 placeholder="2"
               />
               {errors.maxGuests && <p className="text-xs text-red-500 mt-1">{errors.maxGuests}</p>}
+            </div>
+          </div>
+
+          {/* Extra Bed Settings */}
+          <div className="grid grid-cols-2 gap-3 border-t border-[#e8e2d6] pt-4">
+            <div>
+              <label className="block text-xs font-medium text-[#8b7355] mb-1.5">ราคาเตียงเสริม/คืน (บาท)</label>
+              <input
+                type="number" step="0.01" value={extraBedPrice ?? ""} onChange={(e) => setExtraBedPrice(e.target.value)}
+                className="w-full px-3 py-2.5 bg-[#faf7f0] border border-[#e8e2d6] rounded-lg focus:ring-2 focus:ring-[#c9a84c]/30 focus:border-[#c9a84c] outline-none text-sm transition-colors"
+                placeholder="0.00"
+              />
+              {errors.extraBedPrice && <p className="text-xs text-red-500 mt-1">{errors.extraBedPrice}</p>}
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-[#8b7355] mb-1.5">จำนวนเตียงเสริมสูงสุด</label>
+              <input
+                type="number" value={maxExtraBeds ?? ""} onChange={(e) => setMaxExtraBeds(e.target.value)}
+                className="w-full px-3 py-2.5 bg-[#faf7f0] border border-[#e8e2d6] rounded-lg focus:ring-2 focus:ring-[#c9a84c]/30 focus:border-[#c9a84c] outline-none text-sm transition-colors"
+                placeholder="0"
+              />
+              {errors.maxExtraBeds && <p className="text-xs text-red-500 mt-1">{errors.maxExtraBeds}</p>}
             </div>
           </div>
 

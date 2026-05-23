@@ -18,6 +18,7 @@ import {
   validateWebsiteBookingInput,
   type NormalizedGuestInfo,
 } from "@/lib/booking/validation";
+import { calculateBookingRoomSubtotal } from "@/lib/booking/pricing-summary";
 import type { BookingSource, PaymentMethod, RoomStatus } from "@/types/database.types";
 import type { BookingStatus, PaymentStatus } from "@/types/database.types";
 import type { GuestInfo, RoomAmenity, RoomTypeDisplay } from "@/types/landing.types";
@@ -42,6 +43,8 @@ interface RoomTypeRow {
   description: string | null;
   base_price: number | string | null;
   max_guests: number | null;
+  extra_bed_price?: number | string | null;
+  max_extra_beds?: number | null;
   bed_type?: string | null;
   room_size?: number | string | null;
   amenities: unknown[] | null;
@@ -155,6 +158,8 @@ export interface AdminBookingRoomTypeOption {
   name: string;
   basePrice: number;
   maxGuests: number;
+  extraBedPrice: number;
+  maxExtraBeds: number;
   rooms: AdminBookingRoomOption[];
 }
 
@@ -406,6 +411,10 @@ const amenityIconMap: Record<string, string> = {
   "สระส่วนตัว": "jacuzzi",
 };
 
+function getRoomTypeBaseStayTotal(roomType: RoomTypeRow, nights: number): number {
+  return (Number(roomType.base_price) || 0) * Math.max(1, nights);
+}
+
 export async function getBookingPageData(
   checkIn: string,
   checkOut: string,
@@ -452,7 +461,6 @@ export async function searchAvailableRoomTypes(input: BookingRoomSearchInput): P
     `)
     .eq("hotel_id", input.hotelId)
     .eq("is_active", true)
-    .gte("max_guests", totalGuests)
     .order("created_at", { ascending: false })
     .returns<RoomTypeRow[]>();
 
@@ -461,9 +469,18 @@ export async function searchAvailableRoomTypes(input: BookingRoomSearchInput): P
     return [];
   }
 
+  const filteredRoomTypesData = roomTypesData.filter((roomType) => {
+    const standardMax = roomType.max_guests || 2;
+    const extraMax = Number(roomType.max_extra_beds) || 0;
+    return totalGuests <= (standardMax + extraMax);
+  });
+
+  if (!filteredRoomTypesData.length) {
+    return [];
+  }
+
   const [
     { data: roomsData, error: roomsError },
-    pricing,
     { data: bookingsData, error: bookingsError },
   ] = await Promise.all([
     supabase
@@ -473,7 +490,6 @@ export async function searchAvailableRoomTypes(input: BookingRoomSearchInput): P
       .eq("is_active", true)
       .in("status", BOOKABLE_ROOM_STATUSES)
       .returns<RoomRow[]>(),
-    getPricingContext(input.hotelId),
     supabase
       .from("bookings")
       .select("room_id")
@@ -486,9 +502,13 @@ export async function searchAvailableRoomTypes(input: BookingRoomSearchInput): P
 
   if (roomsError || !roomsData?.length) {
     if (roomsError) console.error("searchAvailableRoomTypes rooms error:", roomsError);
-    return roomTypesData.map((roomType) => {
-      const stayTotal = getStayTotal(roomType, input.checkIn, input.checkOut, pricing);
-      return toRoomTypeDisplay(roomType, 0, getAverageNightlyPrice(roomType, input.checkIn, input.checkOut, pricing), stayTotal);
+    return filteredRoomTypesData.map((roomType) => {
+      const nights = calculateNights(input.checkIn, input.checkOut);
+      const baseStayTotal = getRoomTypeBaseStayTotal(roomType, nights);
+      const extraGuests = Math.max(0, totalGuests - (roomType.max_guests || 2));
+      const extraBedPrice = Number(roomType.extra_bed_price) || 0;
+      const stayTotal = baseStayTotal + (extraGuests * extraBedPrice * nights);
+      return toRoomTypeDisplay(roomType, 0, undefined, stayTotal);
     });
   }
 
@@ -505,12 +525,16 @@ export async function searchAvailableRoomTypes(input: BookingRoomSearchInput): P
     return counts;
   }, {});
 
-  return roomTypesData.map((roomType) => {
-    const stayTotal = getStayTotal(roomType, input.checkIn, input.checkOut, pricing);
+  return filteredRoomTypesData.map((roomType) => {
+    const nights = calculateNights(input.checkIn, input.checkOut);
+    const baseStayTotal = getRoomTypeBaseStayTotal(roomType, nights);
+    const extraGuests = Math.max(0, totalGuests - (roomType.max_guests || 2));
+    const extraBedPrice = Number(roomType.extra_bed_price) || 0;
+    const stayTotal = baseStayTotal + (extraGuests * extraBedPrice * nights);
     return toRoomTypeDisplay(
       roomType,
       availableCounts[roomType.id] || 0,
-      getAverageNightlyPrice(roomType, input.checkIn, input.checkOut, pricing),
+      undefined,
       stayTotal
     );
   });
@@ -595,8 +619,15 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
     return { success: false, error: "ไม่พบประเภทห้องพักที่เลือก" };
   }
 
-  const pricing = await getPricingContext(input.hotelId);
-  const totalAmount = getStayTotal(roomType, input.checkIn, input.checkOut, pricing);
+  const nights = calculateNights(input.checkIn, input.checkOut);
+  const totalGuests = Math.max(1, input.adults + input.children);
+  const totalAmount = calculateBookingRoomSubtotal({
+    roomBaseTotal: getRoomTypeBaseStayTotal(roomType, nights),
+    totalGuests,
+    standardGuests: roomType.max_guests || 2,
+    extraBedPrice: Number(roomType.extra_bed_price) || 0,
+    totalNights: nights,
+  });
   const promotion = await evaluateBookingPromotion({
     hotelId: input.hotelId,
     roomTypeId: input.roomTypeId,
@@ -664,6 +695,312 @@ export async function createWebsiteBooking(input: CreateWebsiteBookingInput): Pr
   await recordBookingAttempt(supabase, attemptContext, { success: true, reason: "allowed", riskScore: rateLimit.riskScore });
 
   return { success: true, bookingNumber: booking.bookingNumber, totalAmount, discountAmount, netAmount };
+}
+
+// ────────────────────────────────────────────────────────────
+// Multi-room booking (cart) — สร้าง bookings หลายห้องในตะกร้าเดียว
+// ใช้เลขกลุ่ม (booking_group_id) เพื่อโยงทุก booking ที่มาจาก
+// การจองครั้งเดียวกัน
+// ────────────────────────────────────────────────────────────
+
+export interface CreateWebsiteBookingGroupInput {
+  hotelId: string;
+  roomTypeIds: string[]; // unique room type ids ในตะกร้า
+  checkIn: string;
+  checkOut: string;
+  adults: number;
+  children: number;
+  guest: GuestInfo;
+  slipUrl: string;
+  promotionCode?: string;
+  antiSpam?: {
+    companyName?: string;
+    formStartedAt?: number;
+  };
+}
+
+export interface BookingGroupRoomResult {
+  roomTypeId: string;
+  roomTypeName: string;
+  bookingNumber: string;
+  totalAmount: number;
+  discountAmount: number;
+  netAmount: number;
+}
+
+export interface CreateWebsiteBookingGroupResult {
+  success: boolean;
+  groupId?: string;
+  primaryBookingNumber?: string;
+  rooms?: BookingGroupRoomResult[];
+  totalAmount?: number;
+  discountAmount?: number;
+  netAmount?: number;
+  error?: string;
+}
+
+export async function createWebsiteBookingGroup(
+  input: CreateWebsiteBookingGroupInput
+): Promise<CreateWebsiteBookingGroupResult> {
+  const normalizedGuest = normalizeGuestInfo(input.guest);
+  // อนุญาตให้มี roomTypeIds ซ้ำได้ (1 entry = 1 booking = 1 ห้องจริง)
+  // ใช้ uniqueRoomTypeIds เฉพาะตอน validate / load room type definitions
+  const requestedRoomTypeIds = input.roomTypeIds.filter(Boolean);
+  const uniqueRoomTypeIds = Array.from(new Set(requestedRoomTypeIds));
+
+  if (requestedRoomTypeIds.length === 0) {
+    return { success: false, error: "กรุณาเลือกห้องพักอย่างน้อย 1 ห้อง" };
+  }
+
+  if (requestedRoomTypeIds.length > 10) {
+    return { success: false, error: "จองได้สูงสุด 10 ห้องต่อรายการ" };
+  }
+
+  // ใช้ห้องแรกเป็นตัวแทนใน validate ทั่วไป (date range, slip, guest)
+  const validationError = validateWebsiteBookingInput(
+    {
+      hotelId: input.hotelId,
+      roomTypeId: uniqueRoomTypeIds[0],
+      checkIn: input.checkIn,
+      checkOut: input.checkOut,
+      slipUrl: input.slipUrl,
+    },
+    normalizedGuest
+  );
+  if (validationError) {
+    return { success: false, error: validationError };
+  }
+
+  const supabase = await createServiceClient();
+  const attemptContext = await buildBookingAttemptContext({
+    hotelId: input.hotelId,
+    action: "booking_create",
+    email: normalizedGuest.email,
+    phone: normalizedGuest.phone,
+    roomTypeId: uniqueRoomTypeIds[0],
+    checkInDate: input.checkIn,
+    checkOutDate: input.checkOut,
+  });
+
+  if (input.antiSpam?.companyName?.trim()) {
+    await recordBookingAttempt(supabase, attemptContext, { success: false, reason: "honeypot", riskScore: 100 });
+    return { success: false, error: "กรุณาตรวจสอบข้อมูลการจองอีกครั้ง" };
+  }
+
+  if (!isValidFormTiming(input.antiSpam?.formStartedAt)) {
+    await recordBookingAttempt(supabase, attemptContext, { success: false, reason: "too_fast", riskScore: 50 });
+    return { success: false, error: "กรุณาตรวจสอบข้อมูลการจองอีกครั้ง" };
+  }
+
+  const rateLimit = await evaluateBookingRateLimit(supabase, attemptContext);
+  if (rateLimit.blocked) {
+    await recordBookingAttempt(supabase, attemptContext, {
+      success: false,
+      reason: "blocked_rate_limit",
+      riskScore: rateLimit.riskScore,
+    });
+    return { success: false, error: BOOKING_RATE_LIMIT_MESSAGE };
+  }
+
+  const totalGuests = Math.max(1, input.adults + input.children);
+  const nights = calculateNights(input.checkIn, input.checkOut);
+
+  // โหลด room type definitions แค่ครั้งเดียวต่อ unique id แล้วเก็บใน Map ใช้ซ้ำสำหรับ duplicates
+  const roomTypeCache = new Map<string, { row: RoomTypeRow; subtotal: number }>();
+  for (const roomTypeId of uniqueRoomTypeIds) {
+    const roomType = await getRoomTypeForPricing(input.hotelId, roomTypeId);
+    if (!roomType) {
+      return { success: false, error: "ไม่พบประเภทห้องพักที่เลือก" };
+    }
+    const subtotal = calculateBookingRoomSubtotal({
+      roomBaseTotal: getRoomTypeBaseStayTotal(roomType, nights),
+      totalGuests,
+      standardGuests: roomType.max_guests || 2,
+      extraBedPrice: Number(roomType.extra_bed_price) || 0,
+      totalNights: nights,
+    });
+    roomTypeCache.set(roomTypeId, { row: roomType, subtotal });
+  }
+
+  // ขยายตามคำขอจริง (รวม duplicates เพื่อรองรับ quantity ของแต่ละ room type)
+  // 1 entry = 1 ห้องจริง = 1 booking row
+  const bookingItems: { id: string; row: RoomTypeRow; subtotal: number }[] = requestedRoomTypeIds.map(
+    (roomTypeId) => {
+      const cached = roomTypeCache.get(roomTypeId);
+      // unreachable เพราะเรา validate ใน loop ด้านบนแล้ว แต่ใส่ไว้เพื่อ type safety
+      if (!cached) throw new Error("Room type cache miss: " + roomTypeId);
+      return { id: roomTypeId, row: cached.row, subtotal: cached.subtotal };
+    }
+  );
+  const combinedSubtotal = bookingItems.reduce((sum, item) => sum + item.subtotal, 0);
+
+  // ประเมินโปรโมชั่นบน subtotal รวมทั้งตะกร้า (quantity = จำนวนห้องจริง)
+  const promotion = await evaluateBookingPromotion({
+    hotelId: input.hotelId,
+    roomTypeId: requestedRoomTypeIds[0],
+    checkInDate: input.checkIn,
+    checkOutDate: input.checkOut,
+    nights,
+    quantity: bookingItems.length,
+    guests: totalGuests,
+    subtotal: combinedSubtotal,
+    bookingChannel: "website",
+    promotionCode: input.promotionCode || "",
+    customer: { phone: normalizedGuest.phone, email: normalizedGuest.email },
+  });
+
+  if (input.promotionCode?.trim() && !promotion.valid) {
+    await recordBookingAttempt(supabase, attemptContext, { success: false, reason: "invalid_promotion", riskScore: 20 });
+    return { success: false, error: promotion.message || "code ส่วนลดไม่ถูกต้อง" };
+  }
+
+  const selectedPromotion = promotion.selectedPromotion;
+  const totalDiscount = selectedPromotion ? promotion.discountAmount : 0;
+  const combinedNet = Math.max(0, combinedSubtotal - totalDiscount);
+
+  // สร้าง group id ขึ้นมาเอง (ไม่ต้องแก้ RPC) — เก็บไว้ใช้ใน UPDATE post-insert
+  const groupId =
+    typeof globalThis.crypto?.randomUUID === "function"
+      ? globalThis.crypto.randomUUID()
+      : "grp-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 10);
+
+  // กระจายส่วนลดแบบสัดส่วนต่อราคาแต่ละห้อง (รักษายอดรวม)
+  function allocateDiscount(subtotal: number, isLast: boolean, accumulated: number): number {
+    if (totalDiscount <= 0 || combinedSubtotal <= 0) return 0;
+    if (isLast) return Math.max(0, totalDiscount - accumulated);
+    const raw = totalDiscount * (subtotal / combinedSubtotal);
+    return Math.round(raw * 100) / 100;
+  }
+
+  const createdBookingIds: string[] = [];
+  const roomResults: BookingGroupRoomResult[] = [];
+  let allocatedDiscount = 0;
+
+  for (let i = 0; i < bookingItems.length; i += 1) {
+    const item = bookingItems[i];
+    const isLast = i === bookingItems.length - 1;
+    const roomDiscount = allocateDiscount(item.subtotal, isLast, allocatedDiscount);
+    allocatedDiscount += roomDiscount;
+    const roomNet = Math.max(0, item.subtotal - roomDiscount);
+
+    const booking = await createAtomicBooking(supabase, {
+      hotelId: input.hotelId,
+      roomTypeId: item.id,
+      preferredRoomId: null,
+      checkIn: input.checkIn,
+      checkOut: input.checkOut,
+      totalGuests,
+      source: "website",
+      totalAmount: item.subtotal,
+      discountAmount: roomDiscount,
+      netAmount: roomNet,
+      guest: normalizedGuest,
+      customerNotes: normalizedGuest.specialRequests || null,
+      specialRequests: normalizedGuest.specialRequests || null,
+      bookingNotes:
+        bookingItems.length > 1
+          ? "Multi-room booking (group " + groupId + ", " + String(i + 1) + "/" + String(bookingItems.length) + ")"
+          : null,
+      createdBy: null,
+      payment: {
+        amount: roomNet,
+        method: "promptpay",
+        status: "pending",
+        slipUrl: input.slipUrl || null,
+        transactionRef: null,
+        notes: null,
+      },
+    });
+
+    if (!booking.success) {
+      // best-effort rollback: ยกเลิก booking ที่สร้างไว้แล้ว เพื่อปลดล็อกห้องและให้แอดมินรู้
+      if (createdBookingIds.length > 0) {
+        const rollbackTable = supabase.from("bookings") as unknown as UpdateScopedTable<BookingAdminUpdate>;
+        for (const createdId of createdBookingIds) {
+          await rollbackTable
+            .update({
+              status: "cancelled",
+              cancelled_at: new Date().toISOString(),
+              cancel_reason: "Multi-room booking failed: " + booking.error,
+            })
+            .eq("id", createdId)
+            .eq("hotel_id", input.hotelId);
+        }
+      }
+      return {
+        success: false,
+        error:
+          bookingItems.length > 1
+            ? "ไม่สามารถจอง " + item.row.name + " ได้: " + booking.error
+            : booking.error,
+      };
+    }
+
+    createdBookingIds.push(booking.bookingId);
+    roomResults.push({
+      roomTypeId: item.id,
+      roomTypeName: item.row.name,
+      bookingNumber: booking.bookingNumber,
+      totalAmount: item.subtotal,
+      discountAmount: roomDiscount,
+      netAmount: roomNet,
+    });
+  }
+
+  // ผูก booking_group_id เข้ากับทุก booking ในกลุ่ม
+  if (createdBookingIds.length > 0) {
+    interface BookingGroupUpdateClient {
+      from(table: "bookings"): {
+        update(value: { booking_group_id: string }): {
+          in(column: string, values: string[]): {
+            eq(column: string, value: string): Promise<{ error: { message?: string } | null }>;
+          };
+        };
+      };
+    }
+    const groupUpdateClient = supabase as unknown as BookingGroupUpdateClient;
+    const { error: groupError } = await groupUpdateClient
+      .from("bookings")
+      .update({ booking_group_id: groupId })
+      .in("id", createdBookingIds)
+      .eq("hotel_id", input.hotelId);
+    if (groupError) {
+      console.error("createWebsiteBookingGroup group update error:", groupError);
+      // ไม่ rollback เพราะการจองสำเร็จแล้ว แค่กลุ่มไม่ได้ผูก
+    }
+  }
+
+  if (selectedPromotion && createdBookingIds[0]) {
+    await recordPromotionUsage(
+      supabase,
+      createdBookingIds[0],
+      selectedPromotion,
+      normalizedGuest.phone,
+      normalizedGuest.email
+    );
+  }
+
+  // ส่งอีเมลครั้งเดียวให้ booking แรก (อีเมลเดียว → guest ลูกค้าเดียว)
+  if (createdBookingIds[0]) {
+    await sendBookingStatusEmailForBooking(
+      supabase,
+      createdBookingIds[0],
+      input.hotelId,
+      "createWebsiteBookingGroup"
+    );
+  }
+
+  await recordBookingAttempt(supabase, attemptContext, { success: true, reason: "allowed", riskScore: rateLimit.riskScore });
+
+  return {
+    success: true,
+    groupId,
+    primaryBookingNumber: roomResults[0]?.bookingNumber,
+    rooms: roomResults,
+    totalAmount: combinedSubtotal,
+    discountAmount: totalDiscount,
+    netAmount: combinedNet,
+  };
 }
 
 interface AtomicBookingInput {
@@ -812,6 +1149,8 @@ export async function getAdminBookingFormOptions(): Promise<AdminBookingRoomType
       name,
       base_price,
       max_guests,
+      extra_bed_price,
+      max_extra_beds,
       rooms (
         id,
         room_number,
@@ -827,6 +1166,8 @@ export async function getAdminBookingFormOptions(): Promise<AdminBookingRoomType
       name: string;
       base_price: number | string | null;
       max_guests: number | null;
+      extra_bed_price: number | string | null;
+      max_extra_beds: number | null;
       rooms: Array<{
         id: string;
         room_number: string;
@@ -845,6 +1186,8 @@ export async function getAdminBookingFormOptions(): Promise<AdminBookingRoomType
     name: roomType.name,
     basePrice: Number(roomType.base_price) || 0,
     maxGuests: roomType.max_guests || 1,
+    extraBedPrice: Number(roomType.extra_bed_price) || 0,
+    maxExtraBeds: roomType.max_extra_beds || 0,
     rooms: (roomType.rooms ?? [])
       .filter((room) => room.is_active)
       .map((room) => ({
@@ -902,7 +1245,12 @@ export async function createAdminBooking(
   }
 
   const pricing = await getPricingContext(session.hotelId);
-  const calculatedTotal = getStayTotal(roomType, checkIn, checkOut, pricing);
+  const baseCalculatedTotal = getStayTotal(roomType, checkIn, checkOut, pricing);
+  const nights = calculateNights(checkIn, checkOut);
+  const extraGuests = Math.max(0, totalGuests - (roomType.max_guests || 2));
+  const extraBedPrice = Number(roomType.extra_bed_price) || 0;
+  const extraBedCharge = extraGuests * extraBedPrice * nights;
+  const calculatedTotal = baseCalculatedTotal + extraBedCharge;
   const overrideTotal = parseOptionalMoney(formData.get("total_amount"));
   const totalAmount = overrideTotal ?? calculatedTotal;
   const netAmount = Math.max(0, totalAmount);
@@ -1596,16 +1944,6 @@ async function getPricingContext(hotelId: string): Promise<{
   };
 }
 
-function getAverageNightlyPrice(
-  roomType: RoomTypeRow,
-  checkIn: string,
-  checkOut: string,
-  pricing: { seasons: SeasonPricingRow[]; rules: PricingRuleRow[] }
-): number {
-  const nights = calculateNights(checkIn, checkOut);
-  return Math.round(getStayTotal(roomType, checkIn, checkOut, pricing) / nights);
-}
-
 function getStayTotal(
   roomType: RoomTypeRow,
   checkIn: string,
@@ -1695,6 +2033,8 @@ function toRoomTypeDisplay(
     basePrice: priceOverride ?? Number(roomType.base_price) ?? 0,
     stayTotal,
     maxGuests: roomType.max_guests || 2,
+    extraBedPrice: Number(roomType.extra_bed_price) || 0,
+    maxExtraBeds: roomType.max_extra_beds || 0,
     bedType: roomType.bed_type || "King Size",
     roomSize: Number(roomType.room_size) || 45,
     amenities,

@@ -134,7 +134,15 @@ export function CreateBookingModal({ options, prefill, onClose, onSuccess }: Cre
   const selectedRoomType = safeOptions.find((option) => option.id === roomTypeId) || null;
   const availableRooms = selectedRoomType?.rooms ?? [];
   const nights = calculateNights(checkIn, checkOut);
-  const calculatedTotal = nights > 0 && selectedRoomType ? nights * selectedRoomType.basePrice : 0;
+
+  const standardMax = selectedRoomType?.maxGuests ?? 2;
+  const extraBedPrice = selectedRoomType?.extraBedPrice ?? 0;
+  const guestsNum = Number(numGuests) || 1;
+  const extraGuests = Math.max(0, guestsNum - standardMax);
+  const extraBedCharge = extraGuests * extraBedPrice * (nights > 0 ? nights : 0);
+  const baseRoomTotal = (nights > 0 && selectedRoomType) ? nights * selectedRoomType.basePrice : 0;
+  const calculatedTotal = baseRoomTotal + extraBedCharge;
+
   const overrideTotalValue = Number(overrideTotal) || 0;
   const effectiveTotal = overrideTotalValue > 0 ? overrideTotalValue : calculatedTotal;
   const checkOutMin = checkIn ? tomorrowIsoFrom(checkIn) : "";
@@ -267,12 +275,17 @@ export function CreateBookingModal({ options, prefill, onClose, onSuccess }: Cre
                   name="num_guests"
                   type="number"
                   min={1}
-                  max={20}
+                  max={selectedRoomType ? selectedRoomType.maxGuests + selectedRoomType.maxExtraBeds : 20}
                   value={numGuests}
                   onChange={(event) => setNumGuests(event.currentTarget.value)}
                   required
                   className="w-full px-3 py-2 bg-[#faf7f0] border border-[#e8e2d6] rounded-lg text-sm focus:ring-2 focus:ring-[#c9a84c]/30 focus:border-[#c9a84c] outline-none"
                 />
+                {selectedRoomType && (
+                  <p className="mt-1 text-[11px] text-[#8b7355]">
+                    พักปกติได้ {selectedRoomType.maxGuests} คน, เตียงเสริมสูงสุดอีก {selectedRoomType.maxExtraBeds} คน
+                  </p>
+                )}
               </Field>
               <Field label="เช็คอิน" required>
                 <input
@@ -374,6 +387,12 @@ export function CreateBookingModal({ options, prefill, onClose, onSuccess }: Cre
                   THB {calculatedTotal.toLocaleString("th-TH")}
                 </div>
               </Field>
+              {extraGuests > 0 && extraBedPrice > 0 && (
+                <div className="sm:col-span-2 text-xs text-[#8b7355] space-y-1">
+                  <div>ค่าห้องพักปกติ: THB {baseRoomTotal.toLocaleString("th-TH")} ({nights} คืน)</div>
+                  <div>ค่าเตียงเสริม ({extraGuests} ท่าน): THB {extraBedCharge.toLocaleString("th-TH")} (THB {extraBedPrice.toLocaleString("th-TH")} บาท/เตียง/คืน)</div>
+                </div>
+              )}
               <Field label="แทนที่ยอดรวม (ถ้าจำเป็น)">
                 <input
                   name="total_amount"

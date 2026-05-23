@@ -8,7 +8,7 @@ import LoadingLink from "@/components/ui/LoadingLink";
 import { downloadBookingReceipt, type BookingReceiptData } from "@/lib/booking/receipt";
 
 interface StepConfirmationProps {
-  room: RoomTypeDisplay;
+  rooms: RoomTypeDisplay[];
   hotelName: string;
   checkIn: string;
   checkOut: string;
@@ -27,8 +27,15 @@ function formatPrice(price: number): string {
 }
 
 export default function StepConfirmation(props: StepConfirmationProps) {
+  const room = props.rooms[0];
   const labels = props.labels.confirmation;
-  const totalAmount = props.totalAmount ?? props.room.stayTotal ?? props.room.basePrice * props.totalNights;
+  const totalAmount = props.totalAmount ?? room.stayTotal ?? room.basePrice * props.totalNights;
+  const totalGuests = props.adults + props.childrenCount;
+  const standardMax = room.maxGuests || 2;
+  const extraGuests = Math.max(0, totalGuests - standardMax);
+  const extraBedPrice = room.extraBedPrice || 0;
+  const extraBedTotal = extraGuests * extraBedPrice * props.totalNights;
+  const baseRoomTotal = room.basePrice * props.totalNights;
   const hasDownloadedRef = useRef(false);
   const receiptLabels = props.labels.locale === "th"
     ? {
@@ -40,10 +47,11 @@ export default function StepConfirmation(props: StepConfirmationProps) {
         downloadedHint: "Your receipt will download automatically. If you do not see it, you can download it again.",
       };
   const receiptData = useMemo<BookingReceiptData>(function () {
+    const combinedRoomName = props.rooms.map(function (r) { return r.name; }).join(", ");
     return {
       bookingRef: props.bookingRef,
       hotelName: props.hotelName,
-      roomName: props.room.name,
+      roomName: combinedRoomName || room.name,
       checkIn: props.checkIn,
       checkOut: props.checkOut,
       totalNights: props.totalNights,
@@ -57,6 +65,9 @@ export default function StepConfirmation(props: StepConfirmationProps) {
       slipSubmitted: Boolean(props.slipUrl),
       locale: props.labels.locale,
       createdAt: new Date(),
+      basePrice: room.basePrice,
+      extraBedPrice: room.extraBedPrice,
+      maxGuests: room.maxGuests,
       checkBookingUrl: typeof window === "undefined" ? "/check-booking" : window.location.origin + "/check-booking",
     };
   }, [
@@ -71,7 +82,8 @@ export default function StepConfirmation(props: StepConfirmationProps) {
     props.guest.specialRequests,
     props.hotelName,
     props.labels.locale,
-    props.room.name,
+    props.rooms,
+    room,
     props.slipUrl,
     props.totalNights,
     totalAmount,
@@ -108,9 +120,26 @@ export default function StepConfirmation(props: StepConfirmationProps) {
         <div className="mt-8 text-left">
           <h3 className="font-semibold text-forest-dark border-b border-stone-light pb-2 mb-4">{labels.bookingDetails}</h3>
           <div className="space-y-3 text-sm">
-            <div className="flex justify-between">
-              <span className="text-earth">{labels.room}</span>
-              <span className="font-medium text-forest-dark">{props.room.name}</span>
+            <div className="flex justify-between gap-3">
+              <span className="text-earth flex-shrink-0">{labels.room}</span>
+              <div className="flex-1 min-w-0 text-right">
+                {props.rooms.length === 1 ? (
+                  <span className="font-medium text-forest-dark">{props.rooms[0].name}</span>
+                ) : (
+                  <ul className="space-y-1">
+                    {props.rooms.map(function (r, i) {
+                      return (
+                        <li key={r.id + "-" + String(i)} className="font-medium text-forest-dark">
+                          <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-gold/15 text-gold-dark text-[10px] font-bold mr-1.5 align-middle">
+                            {String(i + 1)}
+                          </span>
+                          {r.name}
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
             </div>
             <div className="flex justify-between">
               <span className="text-earth">{props.labels.shared.checkIn}</span>
@@ -152,7 +181,43 @@ export default function StepConfirmation(props: StepConfirmationProps) {
             )}
           </div>
 
-          <div className="mt-6 pt-4 border-t-2 border-gold/30">
+          <div className="mt-6 pt-4 border-t border-stone-light">
+            {props.rooms.length === 1 ? (
+              <>
+                <div className="flex justify-between text-sm text-earth">
+                  <span>
+                    {props.labels.shared.thb +
+                      formatPrice(room.basePrice) +
+                      " x " +
+                      props.labels.guestInfo.nights(props.totalNights)}
+                  </span>
+                  <span>{props.labels.shared.thb + formatPrice(baseRoomTotal)}</span>
+                </div>
+                {extraGuests > 0 && extraBedPrice > 0 && (
+                  <div className="flex justify-between text-xs text-earth mt-1">
+                    <span>{props.labels.locale === "th" ? `เตียงเสริม (${extraGuests} คน) x ${props.totalNights} คืน` : `Extra Bed (${extraGuests} guests) x ${props.totalNights} nights`}</span>
+                    <span>{props.labels.shared.thb + formatPrice(extraBedTotal)}</span>
+                  </div>
+                )}
+              </>
+            ) : (
+              <ul className="space-y-1.5 text-sm text-earth">
+                {props.rooms.map(function (r, i) {
+                  const stay = r.stayTotal ?? r.basePrice * props.totalNights;
+                  return (
+                    <li key={r.id + "-" + String(i)} className="flex justify-between gap-3">
+                      <span className="truncate">{r.name}</span>
+                      <span className="text-forest-dark font-medium whitespace-nowrap">
+                        {props.labels.shared.thb + formatPrice(stay)}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            )}
+          </div>
+
+          <div className="mt-4 pt-4 border-t-2 border-gold/30">
             <div className="flex justify-between text-lg font-bold text-forest-dark">
               <span>{labels.totalAmount}</span>
               <span className="text-gold">{props.labels.shared.thb + formatPrice(totalAmount)}</span>

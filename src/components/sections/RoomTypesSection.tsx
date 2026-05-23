@@ -126,12 +126,20 @@ function RoomCard({ room, onImageClick }: { room: RoomTypeDisplay; onImageClick:
           {room.name}
         </h3>
 
-        <div className="mt-2 flex items-center gap-4 text-sm text-earth">
+        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-earth">
           <span>{String(room.roomSize) + " sqm"}</span>
           <span className="w-1 h-1 bg-stone rounded-full" />
           <span>{room.bedType}</span>
           <span className="w-1 h-1 bg-stone rounded-full" />
-          <span>{"Max " + String(room.maxGuests) + " guests"}</span>
+          <span className="inline-flex items-center">
+            {"Max " + String(room.maxGuests)}
+            {Number(room.maxExtraBeds) > 0 && (
+              <span className="text-[11px] text-[#8b7355] font-medium ml-1">
+                {"(+" + String(room.maxExtraBeds) + " extra)"}
+              </span>
+            )}
+            {" guests"}
+          </span>
         </div>
 
         <p className="mt-3 text-sm text-earth-light leading-relaxed line-clamp-2">
@@ -157,18 +165,9 @@ function RoomCard({ room, onImageClick }: { room: RoomTypeDisplay; onImageClick:
           )}
         </div>
 
-        <div className="mt-auto pt-6 flex flex-col gap-2">
+        <div className="mt-auto pt-6">
           <Button
-            href={"/rooms/" + room.id}
-            variant="outline"
-            size="sm"
-            className="w-full"
-            loadingLabel="กำลังโหลด..."
-          >
-            ดูรายละเอียด
-          </Button>
-          <Button
-            href={isFull ? undefined : "/booking?room=" + room.id}
+            href={isFull ? undefined : "/rooms/" + room.id}
             variant="primary"
             size="sm"
             className="w-full"

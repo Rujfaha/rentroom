@@ -5,14 +5,17 @@ import Image from "next/image";
 import type { RoomTypeDisplay, GuestInfo } from "@/types/landing.types";
 import type { BookingLabels } from "./booking-i18n";
 import { useGuestInfoDraft } from "./useGuestInfoDraft";
+import { calculateBookingRoomTotal } from "@/lib/booking/pricing-summary";
 
 interface StepGuestInfoProps {
-  room: RoomTypeDisplay;
+  /** ห้องในตะกร้า — รองรับ multi-room */
+  rooms: RoomTypeDisplay[];
   checkIn: string;
   checkOut: string;
   totalNights: number;
   adults: number;
   childrenCount: number;
+  cartSubtotal: number;
   /** ข้อมูลที่กรอกไว้ก่อนหน้า (กรณีกลับมาจาก step ถัดไป) */
   initialInfo?: GuestInfo | null;
   onSubmit: (info: GuestInfo) => void;
@@ -38,7 +41,9 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const totalAmount = props.room.stayTotal ?? props.room.basePrice * props.totalNights;
+  const totalGuests = props.adults + props.childrenCount;
+  const primaryRoom = props.rooms[0];
+  const totalAmount = props.cartSubtotal;
 
   function getPhoneError(value: string): string {
     if (!value.trim()) return labels.errors.phone;
@@ -211,11 +216,40 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
       <div>
         <div className="bg-white rounded-xl p-5 shadow-md sticky top-24">
           <h4 className="font-semibold text-forest-dark mb-3">{labels.summary}</h4>
-          <div className="relative h-32 rounded-lg overflow-hidden mb-3">
-            <Image src={props.room.coverImageUrl} alt={props.room.name} fill className="object-cover" sizes="300px" />
-          </div>
-          <p className="font-[family-name:var(--font-serif)] text-lg font-semibold text-forest-dark">{props.room.name}</p>
-          <div className="mt-3 space-y-2 text-sm text-earth">
+          {primaryRoom && (
+            <div className="relative h-32 rounded-lg overflow-hidden mb-3">
+              <Image src={primaryRoom.coverImageUrl} alt={primaryRoom.name} fill className="object-cover" sizes="300px" />
+              {props.rooms.length > 1 && (
+                <div className="absolute top-2 right-2 rounded-full bg-forest-dark/90 px-2.5 py-1 text-[11px] font-bold text-white">
+                  {props.labels.locale === "th"
+                    ? "+" + String(props.rooms.length - 1) + " ห้อง"
+                    : "+" + String(props.rooms.length - 1) + " more"}
+                </div>
+              )}
+            </div>
+          )}
+          {/* รายการห้องในตะกร้า */}
+          <ul className="space-y-1.5 mb-3">
+            {props.rooms.map(function (room, index) {
+              return (
+                <li
+                  key={room.id + "-" + String(index)}
+                  className="flex items-start justify-between gap-2 text-sm"
+                >
+                  <span className="font-[family-name:var(--font-serif)] font-semibold text-forest-dark flex-1 min-w-0 truncate">
+                    {room.name}
+                  </span>
+                  <span className="text-forest-dark font-medium whitespace-nowrap">
+                    {props.labels.shared.thb +
+                      formatPrice(
+                        calculateBookingRoomTotal(room, props.totalNights, totalGuests)
+                      )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          <div className="mt-3 space-y-2 text-sm text-earth border-t border-stone-light pt-3">
             <div className="flex justify-between">
               <span>{props.labels.shared.checkIn}</span>
               <span className="font-medium text-forest-dark">{props.checkIn}</span>
@@ -234,9 +268,6 @@ export default function StepGuestInfo(props: StepGuestInfoProps) {
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-stone-light">
-            <div className="flex justify-between text-sm text-earth">
-              <span>{props.labels.shared.thb + formatPrice(props.room.basePrice) + " x " + labels.nights(props.totalNights)}</span>
-            </div>
             <div className="flex justify-between mt-2 text-lg font-bold text-forest-dark">
               <span>{labels.total}</span>
               <span>{props.labels.shared.thb + formatPrice(totalAmount)}</span>

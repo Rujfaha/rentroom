@@ -72,7 +72,12 @@ export interface AdminBookingRow {
   rooms: {
     room_number: string;
     room_types: {
+      id: string;
       name: string;
+      base_price: number | string | null;
+      max_guests: number | null;
+      extra_bed_price?: number | string | null;
+      max_extra_beds?: number | null;
     } | null;
   } | null;
   payments: AdminBookingPaymentRow[] | null;

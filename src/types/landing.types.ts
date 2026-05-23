@@ -40,6 +40,8 @@ export interface RoomTypeDisplay {
   basePrice: number;
   stayTotal?: number;
   maxGuests: number;
+  extraBedPrice?: number;
+  maxExtraBeds?: number;
   bedType: string;
   roomSize: number;
   amenities: RoomAmenity[];

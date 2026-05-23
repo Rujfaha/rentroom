@@ -18,6 +18,9 @@ export interface BookingReceiptData {
   locale: BookingLocale;
   createdAt: Date;
   checkBookingUrl?: string;
+  basePrice?: number;
+  extraBedPrice?: number;
+  maxGuests?: number;
 }
 
 interface ReceiptCopy {
@@ -348,6 +351,10 @@ export function buildBookingReceiptHtml(data: BookingReceiptData): string {
     <section>
       <dl>
         ${buildRow(copy.payment, escapeHtml(data.slipSubmitted ? copy.slipSubmitted : "-"))}
+        ${(data.basePrice ?? 0) > 0 ? buildRow(data.locale === "th" ? "ค่าห้องพักปกติ" : "Standard Room Rate", formatPrice((data.basePrice ?? 0) * data.totalNights) + " (" + formatPrice(data.basePrice ?? 0) + " x " + buildNightsText(data) + ")") : ""}
+        ${(Math.max(0, (data.adults + data.childrenCount) - (data.maxGuests ?? 2)) > 0 && (data.extraBedPrice ?? 0) > 0)
+          ? buildRow(data.locale === "th" ? "เตียงเสริม" : "Extra Bed", formatPrice(Math.max(0, (data.adults + data.childrenCount) - (data.maxGuests ?? 2)) * (data.extraBedPrice ?? 0) * data.totalNights) + " (" + formatPrice(data.extraBedPrice ?? 0) + " x " + String(Math.max(0, (data.adults + data.childrenCount) - (data.maxGuests ?? 2))) + " คน x " + buildNightsText(data) + ")")
+          : ""}
       </dl>
     </section>
     <section>

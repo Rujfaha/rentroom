@@ -142,6 +142,12 @@ export function BookingDetailModal({ booking, onClose }: BookingDetailModalProps
   const payment = booking.payments?.[0] ?? null;
   const promotion = booking.booking_promotions?.[0] ?? null;
   const nights = calculateNights(booking.check_in_date, booking.check_out_date);
+  const roomType = booking.rooms?.room_types;
+  const maxGuests = roomType?.max_guests ?? 2;
+  const extraBedPrice = Number(roomType?.extra_bed_price) || 0;
+  const extraGuests = Math.max(0, booking.num_guests - maxGuests);
+  const extraBedCharge = extraGuests * extraBedPrice * nights;
+  const baseRoomTotal = Math.max(0, Number(booking.total_amount) - extraBedCharge);
   const customerEmail = booking.customers?.email || "";
   const customerPhone = booking.customers?.phone || "";
 
@@ -316,6 +322,15 @@ export function BookingDetailModal({ booking, onClose }: BookingDetailModalProps
 
           {/* Pricing */}
           <Section title="ราคาและการชำระเงิน" icon={CreditCard}>
+            {extraGuests > 0 && extraBedPrice > 0 && (
+              <>
+                <Field label="ค่าห้องพักปกติ" value={`THB ${formatPrice(baseRoomTotal)}`} />
+                <Field
+                  label={`เตียงเสริม (${extraGuests} ท่าน)`}
+                  value={`THB ${formatPrice(extraBedCharge)} (${formatPrice(extraBedPrice)} บาท/เตียง/คืน)`}
+                />
+              </>
+            )}
             <Field label="ยอดรวม" value={`THB ${formatPrice(booking.total_amount)}`} />
             <Field label="ส่วนลด" value={`THB ${formatPrice(booking.discount_amount)}`} />
             <Field

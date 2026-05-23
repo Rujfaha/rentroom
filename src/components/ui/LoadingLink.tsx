@@ -27,7 +27,7 @@ export default function LoadingLink({ href, children, className = "", loadingLab
       {isLoading && (
         <span className="h-4 w-4 rounded-full border-2 border-current border-r-transparent animate-spin" aria-hidden="true" />
       )}
-      <span>{isLoading ? loadingLabel : children}</span>
+      <span className="inline-flex items-center gap-[inherit]">{isLoading ? loadingLabel : children}</span>
     </Link>
   );
 }

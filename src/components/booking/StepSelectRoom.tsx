@@ -2,10 +2,12 @@
 
 import Image from "next/image";
 import { useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import type { RoomTypeDisplay } from "@/types/landing.types";
 import type { BookingLabels } from "@/components/booking/booking-i18n";
 import DateRangePicker from "./DateRangePicker";
 import GuestSelector from "./GuestSelector";
+import type { BookingCartItem } from "./useBookingCart";
 
 interface StepSelectRoomProps {
   roomTypes: RoomTypeDisplay[];
@@ -20,7 +22,15 @@ interface StepSelectRoomProps {
   onCheckOutChange: (v: string) => void;
   onAdultsChange: (v: number) => void;
   onChildrenChange: (v: number) => void;
-  onSelect: (room: RoomTypeDisplay) => void;
+  /** เพิ่มห้องเข้าตะกร้า (multi-room) */
+  onAddToCart: (room: RoomTypeDisplay) => void;
+  /** ลบห้องออกจากตะกร้า */
+  onRemoveFromCart: (roomTypeId: string) => void;
+  /** ปรับจำนวนห้องของ room type นี้ในตะกร้า (multi-quantity) */
+  onSetQuantity: (roomTypeId: string, qty: number) => void;
+  /** ดำเนินการต่อ → ไปขั้นตอนถัดไป (ต้องมีของในตะกร้า) */
+  onContinue: () => void;
+  cartItems: BookingCartItem[];
   labels: BookingLabels;
 }
 
@@ -148,16 +158,49 @@ function AmenityIcon({ icon, label }: AmenityIconProps) {
 export default function StepSelectRoom(props: StepSelectRoomProps) {
   const labels = props.labels.selectRoom;
   const locale = props.labels.locale;
-  const [selectingRoomId, setSelectingRoomId] = useState("");
+  const router = useRouter();
+  const [navigatingRoomId, setNavigatingRoomId] = useState("");
   const [activeImageByRoom, setActiveImageByRoom] = useState<Record<string, number>>({});
   const [sortKey, setSortKey] = useState<SortKey>("recommended");
   const [onlyAvailable, setOnlyAvailable] = useState(false);
+
+  const cartIds = useMemo(
+    function () {
+      return new Set(props.cartItems.map(function (item) { return item.roomTypeId; }));
+    },
+    [props.cartItems]
+  );
+
+  const cartTotal = useMemo(
+    function () {
+      return props.cartItems.reduce(function (sum, item) {
+        const total = item.snapshot.stayTotal ?? item.snapshot.basePrice * Math.max(1, props.totalNights);
+        return sum + total * Math.max(1, item.quantity);
+      }, 0);
+    },
+    [props.cartItems, props.totalNights]
+  );
+
+  const cartTotalRoomCount = useMemo(
+    function () {
+      return props.cartItems.reduce(function (sum, item) { return sum + Math.max(1, item.quantity); }, 0);
+    },
+    [props.cartItems]
+  );
+
+  function navigateToRoomDetail(roomId: string) {
+    setNavigatingRoomId(roomId);
+    // booking เป็นเจ้าของ trip state (เก็บใน sessionStorage แล้ว) — ส่ง URL แค่ ?from=booking
+    // เพื่อให้ปุ่มย้อนกลับใน /rooms รู้ว่าควรกลับไปไหน
+    const params = new URLSearchParams({ from: "booking" });
+    router.push("/rooms/" + roomId + "?" + params.toString());
+  }
 
   const filteredRooms = useMemo(
     function () {
       const list = onlyAvailable
         ? props.roomTypes.filter(function (room) {
-            return room.availableRoomsCount > 0 && room.maxGuests >= props.totalGuests;
+            return room.availableRoomsCount > 0 && ((room.maxGuests || 2) + (room.maxExtraBeds || 0)) >= props.totalGuests;
           })
         : props.roomTypes;
 
@@ -180,7 +223,7 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
   const availableCount = useMemo(
     function () {
       return props.roomTypes.filter(function (r) {
-        return r.availableRoomsCount > 0 && r.maxGuests >= props.totalGuests;
+        return r.availableRoomsCount > 0 && ((r.maxGuests || 2) + (r.maxExtraBeds || 0)) >= props.totalGuests;
       }).length;
     },
     [props.roomTypes, props.totalGuests]
@@ -346,9 +389,8 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
         <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
           {filteredRooms.map(function (room) {
             const hasVacancy = room.availableRoomsCount > 0;
-            const fitsGuests = room.maxGuests >= props.totalGuests;
+            const fitsGuests = ((room.maxGuests || 2) + (room.maxExtraBeds || 0)) >= props.totalGuests;
             const isAvailable = hasVacancy && fitsGuests;
-            const isSelecting = selectingRoomId === room.id;
             const galleryImages = room.galleryUrls.length
               ? room.galleryUrls
               : [room.coverImageUrl];
@@ -503,6 +545,11 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
                         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                       </svg>
                       {labels.maxGuests(room.maxGuests)}
+                      {Number(room.maxExtraBeds) > 0 && (
+                        <span className="text-[11px] text-[#8b7355] ml-1">
+                          {locale === "th" ? `(เสริมได้อีก ${room.maxExtraBeds} คน)` : `(+${room.maxExtraBeds} extra)`}
+                        </span>
+                      )}
                     </span>
                   </div>
 
@@ -537,7 +584,14 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
                         <div className="text-xl font-bold leading-tight text-forest-dark">
                           ฿{formatPrice(stayTotal)}
                         </div>
-                        <div className="text-[11px] text-earth-light">
+                        {props.totalGuests > (room.maxGuests || 2) && (room.extraBedPrice || 0) > 0 && (
+                          <div className="text-[10px] text-[#8b7355] font-medium leading-none mt-0.5">
+                            {locale === "th"
+                              ? `(รวมเตียงเสริม ฿${formatPrice((props.totalGuests - (room.maxGuests || 2)) * (room.extraBedPrice || 0) * Math.max(1, totalNights))})`
+                              : `(incl. extra bed ฿${formatPrice((props.totalGuests - (room.maxGuests || 2)) * (room.extraBedPrice || 0) * Math.max(1, totalNights))})`}
+                          </div>
+                        )}
+                        <div className="text-[11px] text-earth-light mt-0.5">
                           ฿{formatPrice(room.basePrice)}
                           {labels.perNight}
                         </div>
@@ -547,27 +601,23 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
                         type="button"
                         onClick={function () {
                           if (!isAvailable) return;
-                          setSelectingRoomId(room.id);
-                          window.setTimeout(function () {
-                            props.onSelect(room);
-                            setSelectingRoomId("");
-                          }, 150);
+                          navigateToRoomDetail(room.id);
                         }}
-                        disabled={!isAvailable || Boolean(selectingRoomId)}
+                        disabled={!isAvailable || Boolean(navigatingRoomId)}
                         className={
                           "inline-flex flex-shrink-0 items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition-all " +
-                          (isAvailable && !selectingRoomId
+                          (isAvailable && !navigatingRoomId
                             ? "bg-gradient-to-br from-gold to-gold-dark text-white shadow-md shadow-gold/30 hover:shadow-lg hover:shadow-gold/40 active:scale-95"
                             : "cursor-not-allowed bg-stone-light text-earth")
                         }
                       >
-                        {isSelecting ? (
+                        {navigatingRoomId === room.id ? (
                           <>
                             <span
                               className="h-3.5 w-3.5 rounded-full border-2 border-current border-r-transparent animate-spin"
                               aria-hidden="true"
                             />
-                            {locale === "th" ? "กำลังโหลด..." : "Loading..."}
+                            {locale === "th" ? "กำลังเปิด..." : "Opening..."}
                           </>
                         ) : (
                           <>
@@ -593,24 +643,145 @@ export default function StepSelectRoom(props: StepSelectRoomProps) {
                       </button>
                     </div>
 
-                    {/* Detail link */}
-                    <a
-                      href={"/rooms/" + room.id}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-stone/60 py-2 text-xs font-medium text-earth transition-colors hover:border-gold/60 hover:text-gold"
-                    >
-                      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <circle cx="11" cy="11" r="8" />
-                        <path d="m21 21-4.3-4.3" />
-                      </svg>
-                      {locale === "th" ? "ดูรายละเอียดห้อง" : "View room details"}
-                    </a>
+                    {/* Add-to-cart toggle (secondary) — รองรับ multi-room */}
+                    {(function () {
+                      const inCart = cartIds.has(room.id);
+                      const cartItem = inCart
+                        ? props.cartItems.find(function (i) { return i.roomTypeId === room.id; })
+                        : undefined;
+                      const qty = cartItem?.quantity ?? 0;
+                      return (
+                        <button
+                          type="button"
+                          disabled={!isAvailable}
+                          onClick={function () {
+                            if (!isAvailable) return;
+                            if (inCart) {
+                              props.onRemoveFromCart(room.id);
+                            } else {
+                              props.onAddToCart(room);
+                            }
+                          }}
+                          className={
+                            "flex w-full items-center justify-center gap-1.5 rounded-xl border py-2 text-xs font-semibold transition-colors " +
+                            (!isAvailable
+                              ? "cursor-not-allowed border-stone/40 text-stone"
+                              : inCart
+                              ? "border-forest bg-forest/10 text-forest hover:bg-forest/15"
+                              : "border-gold/60 text-gold-dark hover:bg-gold/10")
+                          }
+                          aria-pressed={inCart}
+                        >
+                          {inCart ? (
+                            <>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                              {labels.inCart}
+                              {qty > 1 && (
+                                <span className="ml-0.5 inline-flex items-center justify-center rounded-full bg-forest text-white px-1.5 py-0.5 text-[10px] font-bold">
+                                  ×{qty}
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <>
+                              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                <path d="M12 5v14" />
+                                <path d="M5 12h14" />
+                              </svg>
+                              {labels.addAnother}
+                            </>
+                          )}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               </article>
             );
           })}
+        </div>
+      )}
+
+      {/* Sticky cart bar (multi-room) */}
+      {props.cartItems.length > 0 && (
+        <div className="sticky bottom-3 z-30 mx-auto max-w-3xl rounded-2xl border border-gold/40 bg-white/95 p-3 shadow-2xl shadow-forest-dark/10 backdrop-blur sm:bottom-4 sm:p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-earth sm:text-xs">
+                {labels.cartTitle}
+              </div>
+              <div className="mt-0.5 truncate text-sm font-bold text-forest-dark sm:text-base">
+                {labels.cartCount(cartTotalRoomCount)}
+                <span className="ml-2 text-earth-light font-normal">
+                  · {labels.cartSubtotal} ฿{formatPrice(cartTotal)}
+                </span>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={props.onContinue}
+              className="inline-flex flex-shrink-0 items-center gap-1.5 rounded-xl bg-gradient-to-br from-gold to-gold-dark px-4 py-2.5 text-xs font-semibold text-white shadow-md shadow-gold/30 transition-all hover:shadow-lg hover:shadow-gold/40 active:scale-95 sm:text-sm"
+            >
+              {labels.continueWithCart}
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+              </svg>
+            </button>
+          </div>
+          {/* รายการห้องในตะกร้า — แสดงเป็น chip พร้อม qty stepper */}
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {props.cartItems.map(function (item) {
+              const maxAvail = Math.max(1, Math.min(5, item.snapshot.availableRoomsCount));
+              return (
+                <div
+                  key={item.roomTypeId}
+                  className="inline-flex items-center gap-1 rounded-full bg-cream/70 border border-stone/40 pl-2.5 pr-1 py-0.5 text-[11px] font-medium text-forest-dark"
+                >
+                  <span className="truncate max-w-[140px]">{item.snapshot.name}</span>
+                  <div className="flex items-center gap-0.5 ml-1.5 mr-0.5">
+                    <button
+                      type="button"
+                      onClick={function () { props.onSetQuantity(item.roomTypeId, item.quantity - 1); }}
+                      disabled={item.quantity <= 1}
+                      aria-label="ลดจำนวน"
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-earth hover:bg-white hover:text-gold-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M5 12h14" />
+                      </svg>
+                    </button>
+                    <span className="w-4 text-center font-bold text-forest-dark">×{item.quantity}</span>
+                    <button
+                      type="button"
+                      onClick={function () { props.onSetQuantity(item.roomTypeId, item.quantity + 1); }}
+                      disabled={item.quantity >= maxAvail}
+                      aria-label="เพิ่มจำนวน"
+                      className="flex h-5 w-5 items-center justify-center rounded-full text-earth hover:bg-white hover:text-gold-dark transition-colors disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+                    >
+                      <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M12 5v14" />
+                        <path d="M5 12h14" />
+                      </svg>
+                    </button>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={function () { props.onRemoveFromCart(item.roomTypeId); }}
+                    aria-label={labels.remove + " " + item.snapshot.name}
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-earth hover:bg-red-50 hover:text-red-500 transition-colors cursor-pointer"
+                  >
+                    <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <line x1="18" y1="6" x2="6" y2="18" />
+                      <line x1="6" y1="6" x2="18" y2="18" />
+                    </svg>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

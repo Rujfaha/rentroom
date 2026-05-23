@@ -13,6 +13,8 @@ export interface AdminRoomType {
   description?: string | null;
   base_price?: number | string | null;
   max_guests?: number | string | null;
+  extra_bed_price?: number | string | null;
+  max_extra_beds?: number | string | null;
   amenities?: string[] | null;
   is_active?: boolean | null;
   room_type_images?: AdminRoomTypeImage[] | null;

@@ -25,6 +25,16 @@ export interface BookingLabels {
     select: string;
     notAvailable: string;
     perNight: string;
+    viewDetails: string;
+    inCart: string;
+    addAnother: string;
+    cartTitle: string;
+    cartEmpty: string;
+    cartCount: (count: number) => string;
+    cartSubtotal: string;
+    remove: string;
+    continueWithCart: string;
+    addMoreRooms: string;
   };
   guestInfo: {
     title: string;
@@ -127,6 +137,16 @@ export const bookingMessages: Record<BookingLocale, BookingLabels> = {
       select: "เลือกห้องนี้",
       notAvailable: "ไม่พร้อมให้จอง",
       perNight: " / คืน",
+      viewDetails: "ดูรายละเอียดห้อง",
+      inCart: "อยู่ในตะกร้าแล้ว",
+      addAnother: "เพิ่มอีกห้อง",
+      cartTitle: "ห้องที่เลือกไว้",
+      cartEmpty: "ยังไม่ได้เลือกห้อง — เลือกห้องด้านล่างเพื่อเริ่มการจอง",
+      cartCount: (count) => String(count) + " ห้องในตะกร้า",
+      cartSubtotal: "รวมก่อนส่วนลด",
+      remove: "ลบ",
+      continueWithCart: "ดำเนินการจอง",
+      addMoreRooms: "เพิ่มห้องอีก",
     },
     guestInfo: {
       title: "ข้อมูลผู้เข้าพัก",
@@ -227,6 +247,16 @@ export const bookingMessages: Record<BookingLocale, BookingLabels> = {
       select: "Select",
       notAvailable: "Not Available",
       perNight: " / night",
+      viewDetails: "View room details",
+      inCart: "In cart",
+      addAnother: "Add another",
+      cartTitle: "Selected rooms",
+      cartEmpty: "No rooms selected yet — pick a room below to start your booking",
+      cartCount: (count) => String(count) + " room(s) in cart",
+      cartSubtotal: "Subtotal",
+      remove: "Remove",
+      continueWithCart: "Continue to booking",
+      addMoreRooms: "Add another room",
     },
     guestInfo: {
       title: "Guest Information",
