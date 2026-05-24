@@ -110,6 +110,22 @@ describe("HOSPIQ AI Flow Refactor - Group Booking", () => {
     expect(result.reply).toContain("20 ท่าน");
     expect(result.reply).toContain("ประสานทีมงาน");
   });
+
+  it("shows unconfident warning instead of repeating static request when group booking provides unconfident dates", async () => {
+    const result = await generateLineConciergeReply("วันที่เข้าพักพรุ่งนี้เลยครับ ออกอีกทีวันที่ 30 สนใจห้องที่แพงสุดครับ", {
+      memory: {
+        bookingLead: {
+          guests: 20,
+          isGroupBooking: true,
+          leadScore: "high",
+          source: { guests: "customer" }
+        }
+      }
+    });
+    expect(result.reply).toContain("30 เดือนหน้า"); // Unconfident checkout confirmation warning
+    expect(result.reply).toContain("ยืนยันวันที่เข้าพัก"); // Requesting confirmation
+    expect(result.reply).not.toContain("รบกวนแจ้งวันที่เข้าพัก"); // Doesn't repeat static request
+  });
 });
 
 describe("HOSPIQ AI Flow Refactor - Direct Answers & Multi-Intent", () => {

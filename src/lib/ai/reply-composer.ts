@@ -41,11 +41,33 @@ export function composeLineReply(input: ComposeLineReplyInput): string | null {
                          (input.memory.bookingLead?.isGroupBooking && hasBookingOrAvailabilityIntent(rawIntents));
 
   if (hasGroupIntent) {
-    const guests = input.memory.bookingLead?.guests || 10;
-    const groupText = input.language === "th"
-      ? `สำหรับ ${guests} ท่าน แนะนำเป็นการจองหลายห้องค่ะ โดยอาจจัดเป็นหลายห้องตามจำนวนผู้เข้าพักและรูปแบบการนอนที่ต้องการ\n\nรบกวนแจ้งวันที่เข้าพัก จำนวนผู้ใหญ่/เด็ก และสะดวกแยกหลายห้องไหมคะ เดี๋ยวช่วยประสานทีมงานเช็กห้องว่างและข้อเสนอสำหรับกรุ๊ปให้ค่ะ`
-      : `For ${guests} guests, we recommend booking multiple rooms. Please provide your stay dates, guest breakdown (adults/children), and whether multiple rooms are suitable. We will coordinate with our team for group offers.`;
-    parts.push(groupText);
+    const lead = input.memory.bookingLead;
+    const guests = lead?.guests || 10;
+    const hasDates = lead?.checkIn && lead?.checkOut;
+    const isUnconfident = lead?.source?.checkIn === "inferred" || lead?.source?.checkOut === "inferred";
+
+    if (input.language === "th") {
+      let groupText = "";
+      if (isUnconfident) {
+        const requestedRoomName = lead?.roomTypeName || "ห้องพัก";
+        groupText = `รับทราบค่ะ สำหรับกรุ๊ป ${guests} ท่าน สนใจ ${requestedRoomName} โดยต้องการเข้าพักพรุ่งนี้ และเช็กเอาต์วันที่ 30 เดือนหน้าใช่ไหมคะ\n\nเพื่อความถูกต้อง รบกวนยืนยันวันที่เข้าพักเป็นรูปแบบวัน/เดือนให้อีกครั้งได้ไหมคะ เดี๋ยวช่วยประสานทีมงานตรวจสอบข้อเสนอให้ค่ะ`;
+      } else if (hasDates) {
+        groupText = `ได้รับข้อมูลช่วงวันที่เข้าพัก ${lead.checkIn} ถึง ${lead.checkOut} สำหรับกรุ๊ป ${guests} ท่านแล้วค่ะ เดี๋ยวแอดมินประสานงานทีมงานเช็กห้องว่างและส่งข้อเสนอสำหรับกรุ๊ปพิเศษให้โดยเร็วที่สุดนะคะ`;
+      } else {
+        groupText = `สำหรับ ${guests} ท่าน แนะนำเป็นการจองหลายห้องค่ะ โดยอาจจัดเป็นหลายห้องตามจำนวนผู้เข้าพักและรูปแบบการนอนที่ต้องการ\n\nรบกวนแจ้งวันที่เข้าพัก จำนวนผู้ใหญ่/เด็ก และสะดวกแยกหลายห้องไหมคะ เดี๋ยวช่วยประสานทีมงานเช็กห้องว่างและข้อเสนอสำหรับกรุ๊ปให้ค่ะ`;
+      }
+      parts.push(groupText);
+    } else {
+      let groupText = "";
+      if (isUnconfident) {
+        groupText = `Received your inquiry for a group of ${guests} guests. You want to check in tomorrow and check out on the 30th of next month, correct? Please confirm the dates so we can coordinate with our team.`;
+      } else if (hasDates) {
+        groupText = `Received your stay dates ${lead.checkIn} to ${lead.checkOut} for a group of ${guests} guests. We will coordinate with our team to check availability and send you a group proposal shortly.`;
+      } else {
+        groupText = `For ${guests} guests, we recommend booking multiple rooms. Please provide your stay dates, guest breakdown (adults/children), and whether multiple rooms are suitable. We will coordinate with our team for group offers.`;
+      }
+      parts.push(groupText);
+    }
   } else if (rawIntents.includes("cheapest_room")) {
     const cheapest = input.context.roomTypes.reduce((min, r) => r.basePrice < min.basePrice ? r : min, input.context.roomTypes[0]);
     if (cheapest) {

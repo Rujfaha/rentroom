@@ -162,7 +162,6 @@ LINE_BOT_ENABLED=true
 
 AI_PROVIDER=gemini
 GEMINI_API_KEY=
-GEMINI_MODEL=gemini-2.5-flash
 
 NEXT_PUBLIC_SITE_URL=https://your-domain.com
 ```
