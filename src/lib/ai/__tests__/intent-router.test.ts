@@ -43,6 +43,10 @@ describe("detectLineIntent", () => {
       "payment",
     ]);
   });
+
+  it("includes handoff intent for risky staff cases", () => {
+    expect(detectLineIntents("โอนแล้วแต่สลิปมีปัญหา ช่วยให้แอดมินตรวจให้หน่อย")).toContain("handoff");
+  });
 });
 
 describe("buildDeterministicReply", () => {

@@ -56,4 +56,19 @@ describe("composeLineReply", () => {
     expect(reply).toContain("booking");
     expect(reply).not.toContain("ครับ");
   });
+
+  it("adds a staff handoff response without claiming the issue is resolved", () => {
+    const reply = composeLineReply({
+      language: "th",
+      intents: ["handoff", "payment"],
+      context,
+      bookingUrl: "https://example.com/booking",
+      memory: {},
+      handoff: { required: true, reason: "payment_issue", priority: "high" },
+    });
+
+    expect(reply).toContain("ทีมงาน");
+    expect(reply).toContain("ชื่อ/เบอร์");
+    expect(reply).not.toContain("ยืนยันแล้ว");
+  });
 });

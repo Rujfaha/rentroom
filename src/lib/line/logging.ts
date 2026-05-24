@@ -1,4 +1,4 @@
-import type { AiGenerateResult, LineConversationMemory, LineMessageHistoryItem } from "@/types/line-ai.types";
+import type { AiGenerateResult, LineConversationMemory, LineHandoffRequest, LineMessageHistoryItem } from "@/types/line-ai.types";
 
 type ServiceClient = Awaited<ReturnType<typeof import("../supabase/service").createServiceClient>>;
 
@@ -107,6 +107,17 @@ interface LineMessageInsert {
   metadata: Record<string, unknown>;
 }
 
+interface LineHandoffEventInsert {
+  hotel_id: string;
+  line_user_id: string | null;
+  conversation_id: string | null;
+  reason: string;
+  priority: string;
+  status: string;
+  source_message: string | null;
+  metadata: Record<string, unknown>;
+}
+
 export interface LineMessageLogInput {
   hotelId: string;
   lineUserId: string | null;
@@ -188,6 +199,34 @@ export async function recordLineMessage(supabase: ServiceClient, input: LineMess
   });
 
   if (error) console.error("LINE message log error:", error);
+}
+
+export async function recordLineHandoffEvent(
+  supabase: ServiceClient,
+  input: {
+    hotelId: string;
+    lineUserId: string | null;
+    conversationId: string | null;
+    handoff: LineHandoffRequest | null;
+    sourceMessage: string;
+    metadata?: Record<string, unknown>;
+  }
+): Promise<void> {
+  if (!input.handoff?.required) return;
+
+  const handoffTable = supabase.from("line_handoff_events") as unknown as InsertOnlyTable<LineHandoffEventInsert>;
+  const { error } = await handoffTable.insert({
+    hotel_id: input.hotelId,
+    line_user_id: input.lineUserId,
+    conversation_id: input.conversationId,
+    reason: input.handoff.reason,
+    priority: input.handoff.priority,
+    status: "open",
+    source_message: input.sourceMessage.slice(0, 1000),
+    metadata: input.metadata ?? {},
+  });
+
+  if (error) console.error("LINE handoff event log error:", error);
 }
 
 export async function getLineConversationMemory(supabase: ServiceClient, conversationId: string | null): Promise<LineConversationMemory> {

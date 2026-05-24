@@ -7,6 +7,7 @@ import {
   ensureLineConversation,
   getLineConversationMemory,
   getRecentLineMessages,
+  recordLineHandoffEvent,
   recordLineMessage,
   updateLineConversationMemory,
 } from "@/lib/line/logging";
@@ -100,6 +101,14 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
       messageType: "text",
       text: result.reply,
       ai: { provider: result.provider, model: result.model },
+      metadata: { intent: result.intent },
+    });
+    await recordLineHandoffEvent(supabase, {
+      hotelId: result.hotelId,
+      lineUserId,
+      conversationId,
+      handoff: result.handoff,
+      sourceMessage: event.message.text || "",
       metadata: { intent: result.intent },
     });
     await updateLineConversationMemory(supabase, conversationId, result.memory, result.intent);

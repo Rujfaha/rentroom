@@ -2,6 +2,7 @@ import { LINE_AI_FALLBACK_REPLY, LINE_TEXT_LIMIT } from "../../constants/line-ai
 import type { AiGenerateResult, AvailabilityRequest, LineConversationMemory, LineMessageHistoryItem } from "@/types/line-ai.types";
 import { parseThaiDateRange } from "../../utils/thai-date-parser";
 import { buildHotelContext, formatHotelContextPrompt, summarizeAvailability } from "./hotel-context";
+import { detectLineHandoff } from "./handoff";
 import { detectLineIntent, detectLineIntents, mergeBookingLead } from "./intent-router";
 import { detectLineLanguage } from "./language";
 import { getAiProvider } from "./provider";
@@ -48,6 +49,7 @@ export interface LineConciergeReply {
   model: string;
   memory: LineConversationMemory;
   intent: string;
+  handoff: ReturnType<typeof detectLineHandoff>;
 }
 
 export interface GenerateLineConciergeReplyOptions {
@@ -59,12 +61,13 @@ export async function generateLineConciergeReply(message: string, options: Gener
   const intent = detectLineIntent(message);
   const intents = detectLineIntents(message);
   const language = detectLineLanguage(message);
+  const handoff = detectLineHandoff(message);
   const parsedRequest = extractAvailabilityRequest(message);
   const memory = parsedRequest ? mergeBookingLead(options.memory ?? {}, parsedRequest) : options.memory ?? {};
   const availabilityRequest = parsedRequest ?? getAvailabilityFromMemory(memory, intent);
   const context = await buildHotelContext(availabilityRequest);
   const bookingUrl = buildBookingUrl(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000", availabilityRequest);
-  const deterministicReply = composeLineReply({ language, intents, context, bookingUrl, memory });
+  const deterministicReply = composeLineReply({ language, intents, context, bookingUrl, memory, handoff });
   if (deterministicReply) {
     return {
       hotelId: context.hotelId,
@@ -73,6 +76,7 @@ export async function generateLineConciergeReply(message: string, options: Gener
       model: "deterministic",
       memory,
       intent: intents.join(","),
+      handoff,
     };
   }
 
@@ -106,6 +110,7 @@ export async function generateLineConciergeReply(message: string, options: Gener
     model: result.model,
     memory,
     intent: intents.join(","),
+    handoff,
   };
 }
 

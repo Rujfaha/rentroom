@@ -46,8 +46,23 @@ export interface AvailabilityRequest {
   guests?: number;
 }
 
-export type LineIntent = "availability" | "availability_payment" | "payment" | "price" | "promotion" | "contact" | "booking" | "general";
+export type LineIntent = "availability" | "availability_payment" | "payment" | "price" | "promotion" | "contact" | "booking" | "handoff" | "general";
 export type SupportedLineLanguage = "th" | "zh" | "en" | "ja" | "es" | "ar";
+
+export type LineHandoffReason =
+  | "payment_issue"
+  | "refund"
+  | "complaint"
+  | "cancellation"
+  | "special_approval"
+  | "group_booking"
+  | "booking_ready";
+
+export interface LineHandoffRequest {
+  required: boolean;
+  reason: LineHandoffReason;
+  priority: "normal" | "high";
+}
 
 export interface AvailableRoomTypeSummary {
   id: string;

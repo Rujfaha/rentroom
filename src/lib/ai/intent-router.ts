@@ -1,4 +1,5 @@
 import type { AvailabilityRequest, HotelContext, LineConversationMemory, LineIntent } from "@/types/line-ai.types";
+import { detectLineHandoff } from "./handoff";
 
 interface DeterministicReplyInput {
   intent: LineIntent;
@@ -16,6 +17,7 @@ export function detectLineIntent(message: string): LineIntent {
 export function detectLineIntents(message: string): LineIntent[] {
   const text = message.toLowerCase();
   const intents: LineIntent[] = [];
+  if (detectLineHandoff(message)) intents.push("handoff");
   if (/(ว่าง|ห้องว่าง|เข้าพัก|เช็คอิน|เช็กอิน|check.?in|check.?out|available|availability|room|stay|tomorrow|tonight|有没有|空房|部屋|空室|habitación|disponible|غرفة|متاح|คืน|คน|ท่าน|พรุ่งนี้|มะรืน|วันนี้)/i.test(text)) intents.push("availability");
   if (/(ราคา|เท่าไหร่|กี่บาท|เรท|rate|price|cheap|cheapest|lowest|budget|ถูกสุด|ถูกที่สุด|ประหยัด|价格|料金|precio|سعر)/i.test(text)) intents.push("price");
   if (/(โปร|โปรโมชั่น|ส่วนลด|ลดราคา|promotion|discount|deal|offer|优惠|割引|promoción|descuento|عرض|خصم)/i.test(text)) intents.push("promotion");
