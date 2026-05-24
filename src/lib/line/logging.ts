@@ -1,4 +1,4 @@
-import type { AiGenerateResult, LineConversationMemory, LineHandoffReason, LineHandoffRequest, LineMessageHistoryItem } from "@/types/line-ai.types";
+import type { AiGenerateResult, BookingLead, LineConversationMemory, LineHandoffReason, LineHandoffRequest, LineMessageHistoryItem } from "@/types/line-ai.types";
 
 type ServiceClient = Awaited<ReturnType<typeof import("../supabase/service").createServiceClient>>;
 
@@ -334,6 +334,13 @@ function normalizeConversationMemory(value: Record<string, unknown>): LineConver
     ...(typeof lead.roomTypeName === "string" ? { roomTypeName: lead.roomTypeName } : {}),
     ...(typeof lead.guestName === "string" ? { guestName: lead.guestName } : {}),
     ...(typeof lead.phone === "string" ? { phone: lead.phone } : {}),
+    ...(typeof lead.adults === "number" ? { adults: lead.adults } : {}),
+    ...(typeof lead.children === "number" ? { children: lead.children } : {}),
+    ...(Array.isArray(lead.roomPreference) ? { roomPreference: lead.roomPreference as string[] } : {}),
+    ...(Array.isArray(lead.dislikedFeatures) ? { dislikedFeatures: lead.dislikedFeatures as string[] } : {}),
+    ...(typeof lead.isGroupBooking === "boolean" ? { isGroupBooking: lead.isGroupBooking } : {}),
+    ...(typeof lead.leadScore === "string" ? { leadScore: lead.leadScore as BookingLead["leadScore"] } : {}),
+    ...(lead.source && typeof lead.source === "object" ? { source: lead.source as BookingLead["source"] } : {}),
   };
   return memory;
 }

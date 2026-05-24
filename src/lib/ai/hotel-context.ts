@@ -28,6 +28,8 @@ interface RoomTypeRow {
   name: string;
   base_price: number | string | null;
   max_guests: number | null;
+  description?: string | null;
+  amenities?: unknown[] | null;
 }
 
 interface RoomInventoryRow {
@@ -48,11 +50,99 @@ interface PromotionRow {
 
 type ServiceClient = Awaited<ReturnType<typeof import("../supabase/service").createServiceClient>>;
 
+export type RoomInfo = AvailableRoomTypeSummary & {
+  style: string[];
+  suitableFor: string[];
+  notSuitableFor: string[];
+  description: string;
+  amenities: string[];
+};
+
+export const ROOM_STATIC_DETAILS: Record<string, {
+  style?: string[];
+  suitableFor?: string[];
+  notSuitableFor?: string[];
+  description?: string;
+  amenities?: string[];
+}> = {
+  "warmly house": {
+    style: ["simple", "minimalist", "wooden-house"],
+    suitableFor: ["budget-friendly", "simple-stay", "couple", "starter", "customer-who-wants-cheapest-room"],
+    notSuitableFor: ["large-group-in-one-room"],
+    description: "ห้องพักเริ่มต้น บรรยากาศเรียบง่าย และคุ้มค่าที่สุด",
+    amenities: ["WiFi", "แอร์", "ตู้เย็น", "เครื่องทำน้ำอุ่น"],
+  },
+  "honeymoon house": {
+    style: ["romantic", "luxury", "wooden-house"],
+    suitableFor: ["couple", "honeymoon", "special-occasion"],
+    notSuitableFor: ["large-group-in-one-room"],
+    description: "ห้องพักสุดโรแมนติก เหมาะสำหรับคู่รักในโอกาสพิเศษ",
+    amenities: ["WiFi", "แอร์", "ตู้เย็น", "เครื่องทำน้ำอุ่น", "อ่างอาบน้ำ"],
+  },
+  "slowly house": {
+    style: ["slow-life", "cozy", "wooden-house"],
+    suitableFor: ["relaxation", "couple"],
+    notSuitableFor: ["large-group-in-one-room"],
+    description: "ห้องพักสไตล์อบอุ่น เน้นการพักผ่อนอย่างช้าๆ ชิลๆ",
+    amenities: ["WiFi", "แอร์", "ตู้เย็น", "เครื่องทำน้ำอุ่น"],
+  },
+  "forest hill": {
+    style: ["nature", "photo-friendly", "not-wooden", "modern"],
+    suitableFor: [
+      "customer-who-wants-beautiful-room",
+      "customer-who-dislikes-wooden-house",
+      "couple",
+      "small-family"
+    ],
+    notSuitableFor: ["large-group-in-one-room"],
+    description: "เหมาะกับลูกค้าที่ชอบบรรยากาศธรรมชาติ แต่ไม่อยากได้ฟีลบ้านไม้",
+    amenities: ["WiFi", "แอร์", "ตู้เย็น", "เครื่องทำน้ำอุ่น", "ระเบียง"],
+  }
+};
+
+export function enrichRoomInfo(room: AvailableRoomTypeSummary): RoomInfo {
+  const key = room.name.toLowerCase();
+  const staticDetail = ROOM_STATIC_DETAILS[key] || {};
+  
+  let dbAmenities: string[] = [];
+  if (room.amenities) {
+    if (Array.isArray(room.amenities)) {
+      dbAmenities = room.amenities.filter((a): a is string => typeof a === "string");
+    } else if (typeof room.amenities === "string") {
+      try {
+        const parsed = JSON.parse(room.amenities);
+        if (Array.isArray(parsed)) {
+          dbAmenities = parsed.filter((a): a is string => typeof a === "string");
+        }
+      } catch {
+        dbAmenities = [room.amenities];
+      }
+    }
+  }
+
+  return {
+    ...room,
+    style: staticDetail.style || [],
+    suitableFor: staticDetail.suitableFor || [],
+    notSuitableFor: staticDetail.notSuitableFor || [],
+    description: room.description || staticDetail.description || "",
+    amenities: dbAmenities.length > 0 ? dbAmenities : (staticDetail.amenities || []),
+  };
+}
+
+export function enrichRoomTypes(roomTypes: AvailableRoomTypeSummary[]): RoomInfo[] {
+  return roomTypes.map(enrichRoomInfo);
+}
+
 export function formatHotelContextPrompt(context: HotelContext): string {
-  const roomLines = context.roomTypes.map(
-    (roomType) =>
-      `- ${roomType.name}: ราคาเริ่มต้น ${formatCurrency(roomType.basePrice)} บาท, รองรับ ${roomType.maxGuests} ท่าน, ห้อง active ${roomType.availableRooms} ห้อง`
-  );
+  const roomLines = context.roomTypes.map((roomType) => {
+    const desc = roomType.description ? `, รายละเอียด: ${roomType.description}` : "";
+    const amenities = roomType.amenities && roomType.amenities.length > 0 ? `, สิ่งอำนวยความสะดวก: ${roomType.amenities.join(", ")}` : "";
+    const style = roomType.style && roomType.style.length > 0 ? `, สไตล์: ${roomType.style.join(", ")}` : "";
+    const suitable = roomType.suitableFor && roomType.suitableFor.length > 0 ? `, เหมาะสำหรับ: ${roomType.suitableFor.join(", ")}` : "";
+    const notSuitable = roomType.notSuitableFor && roomType.notSuitableFor.length > 0 ? `, ไม่เหมาะสำหรับ: ${roomType.notSuitableFor.join(", ")}` : "";
+    return `- ${roomType.name}: ราคาเริ่มต้น ${formatCurrency(roomType.basePrice)} บาท, รองรับ ${roomType.maxGuests} ท่าน, ห้อง active ${roomType.availableRooms} ห้อง${desc}${amenities}${style}${suitable}${notSuitable}`;
+  });
   const contactLines = context.contacts.map((contact) => `- ${contact.label || contact.type}: ${contact.value}`);
   const promotionLines = context.promotions.map((promotion) =>
     `- ${promotion.title}${promotion.discountText ? ` (${promotion.discountText})` : ""}${promotion.validUntil ? ` ถึง ${promotion.validUntil}` : ""}`
@@ -173,7 +263,7 @@ async function fetchRoomTypes(supabase: ServiceClient, hotelId: string): Promise
   const [{ data: roomTypes, error: roomTypesError }, { data: rooms, error: roomsError }] = await Promise.all([
     supabase
       .from("room_types")
-      .select("id, name, base_price, max_guests")
+      .select("id, name, base_price, max_guests, description, amenities")
       .eq("hotel_id", hotelId)
       .eq("is_active", true)
       .order("base_price", { ascending: true })
@@ -193,13 +283,21 @@ async function fetchRoomTypes(supabase: ServiceClient, hotelId: string): Promise
   }
 
   const activeRoomCountByType = countRoomsByType(rooms ?? []);
-  return (roomTypes ?? []).map((roomType) => ({
+  const rawRoomTypes = (roomTypes ?? []).map((roomType) => ({
     id: roomType.id,
     name: roomType.name,
     basePrice: Number(roomType.base_price || 0),
     maxGuests: roomType.max_guests || 1,
     availableRooms: activeRoomCountByType.get(roomType.id) ?? 0,
+    description: roomType.description || null,
+    amenities: Array.isArray(roomType.amenities)
+      ? roomType.amenities.map(String)
+      : typeof roomType.amenities === "string"
+      ? [roomType.amenities]
+      : null,
   }));
+
+  return enrichRoomTypes(rawRoomTypes);
 }
 
 async function fetchPromotions(supabase: ServiceClient, hotelId: string): Promise<HotelPromotionSummary[]> {

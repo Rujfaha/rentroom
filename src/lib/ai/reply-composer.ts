@@ -12,6 +12,7 @@ interface ComposeLineReplyInput {
 }
 
 export function composeLineReply(input: ComposeLineReplyInput): string | null {
+  const rawIntents = input.intents;
   const intents = normalizeIntents(input.intents);
   const handoffPart = input.handoff?.required ? handoffSection(input.language, input.handoff, input.memory) : null;
   const intro = input.isFirstInteraction
@@ -22,17 +23,110 @@ export function composeLineReply(input: ComposeLineReplyInput): string | null {
     return joinParagraphs([intro, handoffPart]);
   }
 
-  const parts = [
-    handoffPart,
-    intents.includes("availability") ? availabilitySection(input.context, input.bookingUrl, input.language) : null,
-    intents.includes("price") && !input.context.availability ? priceSection(input.context, input.bookingUrl, input.language) : null,
-    intents.includes("promotion") ? promotionSection(input.context, input.language) : null,
-    intents.includes("payment") ? paymentSection(input.context, input.bookingUrl, input.language, !intents.includes("availability")) : null,
-    intents.includes("contact") ? contactSection(input.context, input.language) : null,
-    intents.includes("booking") && !intents.includes("availability") ? bookingSection(input.bookingUrl, input.memory, input.language) : null,
-  ].filter((part): part is string => Boolean(part));
+  const parts: Array<string | null> = [handoffPart];
 
-  if (!parts.length) return null;
+  if (rawIntents.includes("group_booking") || input.memory.bookingLead?.isGroupBooking) {
+    const guests = input.memory.bookingLead?.guests || 10;
+    const groupText = input.language === "th"
+      ? `สำหรับ ${guests} ท่าน แนะนำเป็นการจองหลายห้องค่ะ โดยอาจจัดเป็นหลายห้องตามจำนวนผู้เข้าพักและรูปแบบการนอนที่ต้องการ\n\nรบกวนแจ้งวันที่เข้าพัก จำนวนผู้ใหญ่/เด็ก และสะดวกแยกหลายห้องไหมคะ เดี๋ยวช่วยประสานทีมงานเช็กห้องว่างและข้อเสนอสำหรับกรุ๊ปให้ค่ะ`
+      : `For ${guests} guests, we recommend booking multiple rooms. Please provide your stay dates, guest breakdown (adults/children), and whether multiple rooms are suitable. We will coordinate with our team for group offers.`;
+    parts.push(groupText);
+  } else if (rawIntents.includes("cheapest_room")) {
+    const cheapest = input.context.roomTypes.reduce((min, r) => r.basePrice < min.basePrice ? r : min, input.context.roomTypes[0]);
+    if (cheapest) {
+      const roomName = cheapest.name;
+      const basePrice = cheapest.basePrice.toLocaleString("th-TH");
+      const maxGuests = cheapest.maxGuests;
+      const cheapText = input.language === "th"
+        ? `ห้องที่ราคาถูกที่สุดตอนนี้คือ ${roomName} ค่ะ ราคาเริ่มต้น ${basePrice} บาท สำหรับ ${maxGuests} ท่าน\n\nเหมาะกับลูกค้าที่ต้องการห้องพักเริ่มต้น บรรยากาศเรียบง่าย และคุ้มค่าที่สุดค่ะ\n\nคุณลูกค้าต้องการเข้าพักวันไหน และเข้าพักกี่ท่านคะ เดี๋ยวช่วยดูความเหมาะสมให้ค่ะ`
+        : `The most affordable room is ${roomName}, starting at ${basePrice} THB for ${maxGuests} guests. It is suitable for budget-conscious stays. Could you please specify your preferred check-in date and guest count?`;
+      parts.push(cheapText);
+    }
+  } else if (rawIntents.includes("room_recommendation")) {
+    const dislikes = input.memory.bookingLead?.dislikedFeatures || [];
+    let candidates = input.context.roomTypes;
+    if (dislikes.includes("wooden") || dislikes.includes("wooden-house")) {
+      candidates = candidates.filter(r => !r.style?.includes("wooden-house"));
+    }
+    
+    const recommended = candidates.find(r => r.style?.includes("nature") || r.style?.includes("photo-friendly")) || candidates[0];
+    if (recommended) {
+      const recText = input.language === "th"
+        ? `ถ้าเน้นสวยและถ่ายรูปง่าย แนะนำ ${recommended.name} ค่ะ เพราะบรรยากาศดูโปร่ง เป็นธรรมชาติ และเหมาะกับคนที่อยากได้ห้องพักฟีลสบาย ๆ ค่ะ\n\nคุณลูกค้าเข้าพักกี่ท่าน และต้องการเข้าพักวันไหนคะ เดี๋ยวช่วยดูตัวเลือกที่เหมาะที่สุดให้ค่ะ`
+        : `We highly recommend ${recommended.name} for a scenic and photogenic stay. How many guests and which dates are you planning to stay?`;
+      parts.push(recText);
+    } else {
+      parts.push(input.language === "th" ? "จากข้อมูลห้องพักที่มีตอนนี้ ยังไม่พบตัวเลือกที่ตรงกับความต้องการของคุณลูกค้าค่ะ" : "We currently don't have matching room types.");
+    }
+  } else if (rawIntents.includes("amenities_question")) {
+    const requestedRoomName = input.memory.bookingLead?.roomTypeName;
+    const room = input.context.roomTypes.find(r => r.name.toLowerCase() === requestedRoomName?.toLowerCase());
+    
+    if (room) {
+      const amenities = room.amenities && room.amenities.length > 0 ? room.amenities : null;
+      if (amenities) {
+        parts.push(input.language === "th"
+          ? `${room.name} เป็นห้องพักยอดนิยมค่ะ ส่วนสิ่งอำนวยความสะดวกที่ยืนยันได้จากข้อมูลตอนนี้มีดังนี้ค่ะ:\n- ${amenities.join("\n- ")}\n\nส่วนเรื่องวันว่าง รบกวนแจ้งวันที่ต้องการเข้าพักและวันที่เช็กเอาต์ก่อนนะคะ เดี๋ยวช่วยตรวจสอบให้ค่ะ`
+          : `${room.name} amenities include: ${amenities.join(", ")}. Please let us know your check-in and check-out dates to check availability.`);
+      } else {
+        parts.push(input.language === "th"
+          ? `ตอนนี้ข้อมูลสิ่งอำนวยความสะดวกของ ${room.name} ในระบบยังไม่ครบค่ะ เดี๋ยวสามารถประสานทีมงานให้ตรวจสอบเพิ่มเติมได้ค่ะ\n\nส่วนเรื่องวันว่าง รบกวนแจ้งวันที่เข้าพักและวันที่เช็กเอาต์ก่อนนะคะ`
+          : `Amenities information for ${room.name} is currently incomplete. We can verify this with our team.`);
+      }
+    } else {
+      parts.push(input.language === "th"
+        ? `ตอนนี้ข้อมูลสิ่งอำนวยความสะดวกในระบบยังไม่ครบค่ะ เดี๋ยวสามารถประสานทีมงานให้ตรวจสอบเพิ่มเติมได้ค่ะ\n\nรบกวนระบุห้องที่สนใจ และช่วงวันที่เข้าพักเพื่อให้แอดมินเช็กให้ค่ะ`
+        : `Amenities details are currently unavailable. Please let us know which room you are interested in.`);
+    }
+  } else if (rawIntents.includes("room_detail") || rawIntents.includes("booking_intent")) {
+    const requestedRoomName = input.memory.bookingLead?.roomTypeName;
+    const room = input.context.roomTypes.find(r => r.name.toLowerCase() === requestedRoomName?.toLowerCase()) || input.context.roomTypes[0];
+    
+    if (room) {
+      const lead = input.memory.bookingLead;
+      const isUnconfident = lead?.source?.checkIn === "inferred" || lead?.source?.checkOut === "inferred";
+      
+      if (isUnconfident) {
+        parts.push(input.language === "th"
+          ? `รับทราบค่ะ คุณลูกค้าสนใจ ${room.name} โดยต้องการเข้าพักพรุ่งนี้ และเช็กเอาต์วันที่ 30 เดือนหน้าใช่ไหมคะ\n\nเพื่อความถูกต้อง รบกวนยืนยันวันที่เข้าพักเป็นรูปแบบวัน/เดือนให้อีกครั้งได้ไหมคะ และเข้าพักกี่ท่านคะ`
+          : `Got it, you are interested in ${room.name} checking in tomorrow and checking out on the 30th of next month, right? Please confirm the dates and guest count.`);
+      } else {
+        const hasDates = lead?.checkIn && lead?.checkOut;
+        const hasGuests = lead?.guests;
+        
+        if (hasDates && hasGuests) {
+          parts.push(input.language === "th"
+            ? `ได้เลยค่ะ สนใจ ${room.name} ในวันที่ ${lead.checkIn} ถึง ${lead.checkOut} สำหรับ ${hasGuests} ท่านนะคะ สามารถกดจองผ่านลิงก์ด้านล่างได้เลยค่ะ`
+            : `Sure, you're interested in ${room.name} from ${lead.checkIn} to ${lead.checkOut} for ${hasGuests} guests. You can book using the link below.`);
+        } else {
+          parts.push(input.language === "th"
+            ? `ได้เลยค่ะ ${room.name} เป็นห้องพักที่คุ้มค่าและน่าพักผ่อนมากค่ะ\n\nรบกวนแจ้งวันที่เข้าพัก วันที่เช็กเอาต์ และจำนวนผู้เข้าพักได้ไหมคะ เดี๋ยวช่วยดูข้อมูลให้ต่อค่ะ`
+            : `Sure! ${room.name} is a great choice. Could you please let us know your check-in date, check-out date, and number of guests?`);
+        }
+      }
+    }
+  } else {
+    if (intents.includes("availability")) {
+      parts.push(availabilitySection(input.context, input.bookingUrl, input.language));
+    }
+    if (intents.includes("price") && !input.context.availability) {
+      parts.push(priceSection(input.context, input.bookingUrl, input.language));
+    }
+    if (intents.includes("promotion")) {
+      parts.push(promotionSection(input.context, input.language));
+    }
+    if (intents.includes("payment")) {
+      parts.push(paymentSection(input.context, input.bookingUrl, input.language, !intents.includes("availability")));
+    }
+    if (intents.includes("contact")) {
+      parts.push(contactSection(input.context, input.language));
+    }
+    if (intents.includes("booking") && !intents.includes("availability")) {
+      parts.push(bookingSection(input.bookingUrl, input.memory, input.language));
+    }
+  }
+
+  if (parts.filter(Boolean).length === 0) return null;
   return joinParagraphs([intro, ...parts]);
 }
 

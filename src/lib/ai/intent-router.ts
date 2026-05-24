@@ -11,21 +11,81 @@ interface DeterministicReplyInput {
 export function detectLineIntent(message: string): LineIntent {
   const intents = detectLineIntents(message);
   if (intents.includes("availability") && intents.includes("payment")) return "availability_payment";
-  return intents[0] ?? "general";
+  
+  // For backward compatibility, return the first base intent if available
+  const baseIntents: LineIntent[] = ["availability", "payment", "price", "promotion", "contact", "booking", "handoff"];
+  const matchedBase = intents.find((i) => baseIntents.includes(i));
+  return matchedBase ?? intents[0] ?? "general";
 }
 
 export function detectLineIntents(message: string): LineIntent[] {
   const text = message.toLowerCase();
   const intents: LineIntent[] = [];
+  
   if (detectLineHandoff(message)) intents.push("handoff");
-  if (hasAvailabilityIntent(text)) intents.push("availability");
-  if (/(ราคา|เท่าไหร่|กี่บาท|เรท|rate|price|cheap|cheapest|lowest|budget|ถูกสุด|ถูกที่สุด|ประหยัด|价格|料金|precio|سعر)/i.test(text)) intents.push("price");
-  if (/(โปร|โปรโมชั่น|ส่วนลด|ลดราคา|promotion|discount|deal|offer|优惠|割引|promoción|descuento|عرض|خصم)/i.test(text)) intents.push("promotion");
-  if (/(ชำระ|จ่าย|โอน|พร้อมเพย์|promptpay|สลิป|บัญชี|payment|pay|transfer|slip|付款|支付|支払い|pagar|pago|دفع|تحويل)/i.test(text)) intents.push("payment");
-  if (/(ติดต่อ|เบอร์|โทร|line|แผนที่|อยู่ที่ไหน|ที่อยู่|location|contact|phone|call|map|address|联系|電話|連絡|contacto|teléfono|اتصال|هاتف|عنوان)/i.test(text)) intents.push("contact");
-  if (/(จอง|จองห้อง|booking|book|reserve|reservation|เอาห้อง|สนใจ|预订|予約|reservar|reserva|حجز)/i.test(text)) intents.push("booking");
 
-  return intents.length ? intents : ["general"];
+  // 1. Group booking (10+ people or keywords)
+  if (/(1\d|[2-9]\d|\d{3,})\s*(คน|ท่าน)|(กรุ๊ป|หมู่คณะ|หลายคน|มาเป็นกลุ่ม|ทัวร์|บริษัท|group booking)/i.test(text)) {
+    intents.push("group_booking");
+  }
+
+  // 2. Cheapest room
+  if (/(ถูกที่สุด|ถูกสุด|ราคาถูก|ประหยัดสุด|cheapest|lowest price)/i.test(text)) {
+    intents.push("cheapest_room");
+  }
+
+  // 3. Room recommendation
+  if (/(ห้องไหนดี|แนะนำห้อง|ที่ไหนสวยสุด|ห้องไหนสวยสุด|วิวดี|ถ่ายรูปสวย|ไม่ชอบบ้านไม้|ไม่ชอบแบบบ้านไม้)/i.test(text)) {
+    intents.push("room_recommendation");
+  }
+
+  // 4. Amenities question
+  if (/(สิ่งอำนวยความสะดวก|มีอะไรบ้าง|facility|amenities|ของใช้|อุปกรณ์)/i.test(text)) {
+    intents.push("amenities_question");
+  }
+
+  // 5. Availability check
+  if (/(ว่างไหม|ว่างวันไหน|มีห้องไหม|เช็กห้อง|เช็คห้อง)/i.test(text)) {
+    intents.push("availability_check");
+  }
+
+  // 6. Price inquiry
+  if (/(ราคา|เท่าไหร่|กี่บาท|เรท|rate|price|budget|价格|料金|precio|سعر)/i.test(text)) {
+    intents.push("price_inquiry");
+  }
+
+  // 7. Room detail
+  if (/(รายละเอียด|ข้อมูลเพิ่มเติม|สนใจ|ห้อง|house|warmly|honeymoon|slowly|forest)/i.test(text)) {
+    intents.push("room_detail");
+  }
+
+  // 8. Booking intent
+  if (/(จอง|จองห้อง|booking|book|reserve|reservation|เอาห้อง|สนใจ|预订|予約|reservar|reserva|حجز)/i.test(text)) {
+    intents.push("booking_intent");
+  }
+
+  // Map to traditional base intents for compatibility
+  if (hasAvailabilityIntent(text) || intents.includes("availability_check")) {
+    intents.push("availability");
+  }
+  if (intents.includes("price_inquiry") || intents.includes("cheapest_room")) {
+    intents.push("price");
+  }
+  if (/(โปร|โปรโมชั่น|ส่วนลด|ลดราคา|promotion|discount|deal|offer|优惠|割引|promoción|descuento|عرض|خصม)/i.test(text)) {
+    intents.push("promotion");
+  }
+  if (/(ชำระ|จ่าย|โอน|พร้อมเพย์|promptpay|สลิป|บัญชี|payment|pay|transfer|slip|付款|支付|支払い|pagar|pago|دفع|تحويل)/i.test(text)) {
+    intents.push("payment");
+  }
+  if (/(ติดต่อ|เบอร์|โทร|line|แผนที่|อยู่ที่ไหน|ที่อยู่|location|contact|phone|call|map|address|联系|電話|連絡|contacto|teléfono|اتصال|هاتف|عنوان)/i.test(text)) {
+    intents.push("contact");
+  }
+  if (intents.includes("booking_intent") || intents.includes("group_booking")) {
+    intents.push("booking");
+  }
+
+  const uniqueIntents = Array.from(new Set(intents));
+  return uniqueIntents.length ? uniqueIntents : ["general"];
 }
 
 function hasAvailabilityIntent(text: string): boolean {
@@ -79,13 +139,13 @@ export function mergeBookingLead(memory: LineConversationMemory, next: Partial<A
 
 function buildPaymentReply(context: HotelContext, bookingUrl: string, includeBookingUrl = true): string {
   const methods = context.payment?.promptPayConfigured
-    ? `ชำระผ่าน PromptPay/โอนเงินได้ครับ${context.payment.accountName ? ` ชื่อบัญชี ${context.payment.accountName}` : ""}`
-    : "ชำระผ่านการโอนเงินตามขั้นตอนในหน้าจองได้ครับ";
+    ? `ชำระผ่าน PromptPay/โอนเงินได้ค่ะ${context.payment.accountName ? ` ชื่อบัญชี ${context.payment.accountName}` : ""}`
+    : "ชำระผ่านการโอนเงินตามขั้นตอนในหน้าจองได้ค่ะ";
 
   const lines = [
     methods,
-    "หลังชำระเงินแล้วให้อัปโหลดสลิปในหน้าจอง เพื่อให้ทีมงานตรวจสอบและยืนยันการจองครับ",
-    "ถ้าโอนแล้วแต่ลืมอัปโหลดสลิป ให้กลับไปอัปโหลดในหน้าจอง หรือแจ้งทีมงานพร้อมชื่อ/เบอร์ที่ใช้จองเพื่อช่วยตรวจสอบครับ",
+    "หลังชำระเงินแล้วให้อัปโหลดสลิปในหน้าจอง เพื่อให้ทีมงานตรวจสอบและยืนยันการจองค่ะ",
+    "ถ้าโอนแล้วแต่ลืมอัปโหลดสลิป ให้กลับไปอัปโหลดในหน้าจอง หรือแจ้งทีมงานพร้อมชื่อ/เบอร์ที่ใช้จองเพื่อช่วยตรวจสอบค่ะ",
   ];
 
   if (includeBookingUrl) lines.push(`เริ่มจองได้ที่ ${bookingUrl}`);
@@ -97,32 +157,32 @@ function buildAvailabilityReply(context: HotelContext, bookingUrl: string): stri
 
   const { request, roomTypes } = context.availability;
   if (!roomTypes.length) {
-    return `ช่วงวันที่ ${request.checkIn} ถึง ${request.checkOut}${request.guests ? ` สำหรับ ${request.guests} ท่าน` : ""} ตอนนี้ยังไม่พบห้องว่างจากระบบครับ`;
+    return `ช่วงวันที่ ${request.checkIn} ถึง ${request.checkOut}${request.guests ? ` สำหรับ ${request.guests} ท่าน` : ""} ตอนนี้ยังไม่พบห้องว่างจากระบบค่ะ`;
   }
 
   const roomLines = roomTypes
     .slice(0, 5)
     .map((roomType) => `- ${roomType.name}: ว่าง ${roomType.availableRooms} ห้อง เริ่มต้น ${formatCurrency(roomType.basePrice)} บาท/คืน`);
   return [
-    `ช่วงวันที่ ${request.checkIn} ถึง ${request.checkOut}${request.guests ? ` สำหรับ ${request.guests} ท่าน` : ""} มีตัวเลือกดังนี้ครับ`,
+    `ช่วงวันที่ ${request.checkIn} ถึง ${request.checkOut}${request.guests ? ` สำหรับ ${request.guests} ท่าน` : ""} มีตัวเลือกดังนี้ค่ะ`,
     ...roomLines,
     `จองต่อได้ที่ ${bookingUrl}`,
   ].join("\n");
 }
 
 function buildPriceReply(context: HotelContext, bookingUrl: string): string {
-  if (!context.roomTypes.length) return `ตอนนี้ยังไม่มีข้อมูลราคาห้องในระบบครับ ดูรายละเอียดเพิ่มเติมได้ที่ ${bookingUrl}`;
+  if (!context.roomTypes.length) return `ตอนนี้ยังไม่มีข้อมูลราคาห้องในระบบค่ะ ดูรายละเอียดเพิ่มเติมได้ที่ ${bookingUrl}`;
 
   const roomLines = context.roomTypes
     .slice(0, 5)
     .map((roomType) => `- ${roomType.name}: เริ่มต้น ${formatCurrency(roomType.basePrice)} บาท/คืน รองรับ ${roomType.maxGuests} ท่าน`);
 
-  return [`ราคาห้องพักเริ่มต้นมีดังนี้ครับ`, ...roomLines, `ยอดรวมจริงขึ้นกับวันที่เข้าพักและโปรโมชัน ดู/จองได้ที่ ${bookingUrl}`].join("\n");
+  return [`ราคาห้องพักเริ่มต้นมีดังนี้ค่ะ`, ...roomLines, `ยอดรวมจริงขึ้นกับวันที่เข้าพักและโปรโมชัน ดู/จองได้ที่ ${bookingUrl}`].join("\n");
 }
 
 function buildPromotionReply(context: HotelContext): string {
-  if (!context.promotions.length) return "ตอนนี้ยังไม่พบโปรโมชั่นที่เปิดใช้งานในระบบครับ";
-  return ["โปรโมชั่นที่มีตอนนี้ครับ", ...context.promotions.map((promo) => `- ${promo.title}${promo.discountText ? ` (${promo.discountText})` : ""}`)].join("\n");
+  if (!context.promotions.length) return "ตอนนี้ยังไม่พบโปรโมชั่นที่เปิดใช้งานในระบบค่ะ";
+  return ["โปรโมชั่นที่มีตอนนี้ค่ะ", ...context.promotions.map((promo) => `- ${promo.title}${promo.discountText ? ` (${promo.discountText})` : ""}`)].join("\n");
 }
 
 function buildContactReply(context: HotelContext): string {
@@ -133,13 +193,13 @@ function buildContactReply(context: HotelContext): string {
     ...context.contacts.map((contact) => `${contact.label || contact.type}: ${contact.value}`),
   ].filter((line): line is string => Boolean(line));
 
-  return lines.length ? lines.join("\n") : "ตอนนี้ยังไม่มีข้อมูลติดต่อในระบบครับ";
+  return lines.length ? lines.join("\n") : "ตอนนี้ยังไม่มีข้อมูลติดต่อในระบบค่ะ";
 }
 
 function buildBookingReply(bookingUrl: string, memory: LineConversationMemory): string {
   const lead = memory.bookingLead;
   const summary = lead?.checkIn && lead.checkOut ? `วันที่ ${lead.checkIn} ถึง ${lead.checkOut}${lead.guests ? ` สำหรับ ${lead.guests} ท่าน` : ""}` : null;
-  return [summary ? `ได้ครับ สรุปข้อมูลที่มีตอนนี้: ${summary}` : "ได้ครับ สามารถเริ่มจองผ่านหน้าเว็บได้เลย", `ลิงก์จอง: ${bookingUrl}`].join("\n");
+  return [summary ? `ได้ค่ะ สรุปข้อมูลที่มีตอนนี้: ${summary}` : "ได้ค่ะ สามารถเริ่มจองผ่านหน้าเว็บได้เลย", `ลิงก์จอง: ${bookingUrl}`].join("\n");
 }
 
 function formatCurrency(value: number): string {

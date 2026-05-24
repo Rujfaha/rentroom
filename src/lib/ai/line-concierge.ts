@@ -1,14 +1,14 @@
 import { LINE_AI_FALLBACK_REPLY, LINE_TEXT_LIMIT } from "../../constants/line-ai";
-import type { AiGenerateResult, AvailabilityRequest, LineConversationMemory, LineMessageHistoryItem } from "@/types/line-ai.types";
+import type { AiGenerateResult, AvailabilityRequest, BookingLead, LineConversationMemory, LineMessageHistoryItem } from "@/types/line-ai.types";
 import { parseThaiDateRange } from "../../utils/thai-date-parser";
 import { detectPrivacyRestrictedQuestion, validateAiAnswer } from "./guardrails";
 import { buildHotelContext, formatHotelContextPrompt, summarizeAvailability } from "./hotel-context";
 import { detectLineHandoff } from "./handoff";
-import { detectLineIntent, detectLineIntents, mergeBookingLead } from "./intent-router";
+import { detectLineIntent, detectLineIntents } from "./intent-router";
 import { detectLineLanguage } from "./language";
 import { getAiProvider } from "./provider";
 import { composeLineReply } from "./reply-composer";
-import { HOSPIQ_ASSISTANT_PROFILE, buildAssistantFirstContactInstruction, buildAssistantSystemPrompt } from "./assistant-profile";
+import { HOSPIQ_ASSISTANT_PROFILE, buildAssistantFirstContactInstruction, buildAssistantSystemPrompt, sanitizeResponse } from "./assistant-profile";
 
 const ISO_DATE_PATTERN = /\b(20\d{2}-\d{2}-\d{2})\b/g;
 
@@ -69,7 +69,7 @@ export async function generateLineConciergeReply(message: string, options: Gener
     const context = await buildHotelContext(null);
     return {
       hotelId: context.hotelId,
-      reply: normalizeLineReply(privacy.safeAnswer),
+      reply: normalizeLineReply(sanitizeResponse(privacy.safeAnswer)),
       provider: "gemini",
       model: "guardrail",
       memory: existingMemory,
@@ -83,16 +83,19 @@ export async function generateLineConciergeReply(message: string, options: Gener
   const intents = pendingHandoff ? (["handoff"] as const) : detectLineIntents(message);
   const intent = pendingHandoff ? "handoff" : detectLineIntent(message);
   const parsedRequest = pendingHandoff ? null : extractAvailabilityRequest(message);
-  const replyMemory = parsedRequest ? mergeBookingLead(existingMemory, parsedRequest) : existingMemory;
+  
+  const extractedLeadInfo = pendingHandoff ? {} : extractLeadInfo(message);
+  const replyMemory = mergeLeadMemory(existingMemory, parsedRequest, extractedLeadInfo, message);
   const memory = updateHandoffMemory(replyMemory, handoff, message);
   const availabilityRequest = parsedRequest ?? getAvailabilityFromMemory(memory, intent);
   const context = await buildHotelContext(availabilityRequest);
   const bookingUrl = buildBookingUrl(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000", availabilityRequest);
+  
   const deterministicReply = composeLineReply({ language, intents: [...intents], context, bookingUrl, memory: replyMemory, handoff, isFirstInteraction });
   if (deterministicReply) {
     return {
       hotelId: context.hotelId,
-      reply: normalizeLineReply(deterministicReply),
+      reply: normalizeLineReply(sanitizeResponse(deterministicReply)),
       provider: "gemini",
       model: "deterministic",
       memory,
@@ -131,7 +134,7 @@ export async function generateLineConciergeReply(message: string, options: Gener
 
   return {
     hotelId: context.hotelId,
-    reply: normalizeLineReply(validation.allowed ? result.text : validation.safeAnswer ?? LINE_AI_FALLBACK_REPLY),
+    reply: normalizeLineReply(sanitizeResponse(validation.allowed ? result.text : validation.safeAnswer ?? LINE_AI_FALLBACK_REPLY)),
     provider: result.provider,
     model: result.model,
     memory,
@@ -182,10 +185,108 @@ function isFirstLineInteraction(memory: LineConversationMemory, history: LineMes
   return !hasMeaningfulMemory && !hasOutboundHistory;
 }
 
+export function extractLeadInfo(message: string): Partial<BookingLead> {
+  const text = message.toLowerCase();
+  const lead: Partial<BookingLead> = {};
+
+  if (text.includes("warmly")) lead.roomTypeName = "Warmly House";
+  else if (text.includes("honeymoon")) lead.roomTypeName = "Honeymoon House";
+  else if (text.includes("slowly")) lead.roomTypeName = "Slowly House";
+  else if (text.includes("forest")) lead.roomTypeName = "Forest Hill";
+
+  if (text.includes("ไม่ชอบบ้านไม้") || text.includes("ไม่ชอบแบบบ้านไม้")) {
+    lead.dislikedFeatures = ["wooden-house"];
+  }
+
+  if (text.includes("สวย") || text.includes("วิวดี") || text.includes("ถ่ายรูป")) {
+    lead.roomPreference = ["beautiful", "photo-friendly"];
+  }
+
+  if (/(1\d|[2-9]\d|\d{3,})\s*(คน|ท่าน)|(กรุ๊ป|หมู่คณะ|หลายคน|มาเป็นกลุ่ม|ทัวร์|บริษัท|group booking)/i.test(text)) {
+    lead.isGroupBooking = true;
+    lead.leadScore = "high";
+    
+    const guestsMatch = text.match(/(\d+)\s*(คน|ท่าน)/);
+    if (guestsMatch?.[1]) {
+      lead.guests = Number(guestsMatch[1]);
+    }
+  } else {
+    const guestsMatch = text.match(/(\d{1,2})\s*(คน|ท่าน)/);
+    if (guestsMatch?.[1]) {
+      lead.guests = Number(guestsMatch[1]);
+    }
+  }
+
+  return lead;
+}
+
+export function mergeLeadMemory(
+  existing: LineConversationMemory,
+  parsedRequest: AvailabilityRequest | null,
+  extracted: Partial<BookingLead>,
+  message: string
+): LineConversationMemory {
+  const prevLead = existing.bookingLead ?? {};
+  const prevSource = prevLead.source ?? {};
+  
+  const nextLead: BookingLead = {
+    ...prevLead,
+    ...extracted,
+    source: {
+      ...prevSource,
+    }
+  };
+
+  if (extracted.roomTypeName) {
+    nextLead.roomTypeName = extracted.roomTypeName;
+    nextLead.source!.roomId = "customer";
+  }
+
+  if (extracted.dislikedFeatures) {
+    nextLead.dislikedFeatures = extracted.dislikedFeatures;
+  }
+
+  if (extracted.roomPreference) {
+    nextLead.roomPreference = extracted.roomPreference;
+  }
+
+  if (extracted.isGroupBooking) {
+    nextLead.isGroupBooking = extracted.isGroupBooking;
+    nextLead.leadScore = extracted.leadScore;
+  }
+
+  if (parsedRequest) {
+    if (parsedRequest.checkIn) {
+      nextLead.checkIn = parsedRequest.checkIn;
+      nextLead.source!.checkIn = "customer";
+    }
+    if (parsedRequest.checkOut) {
+      nextLead.checkOut = parsedRequest.checkOut;
+      const text = message.toLowerCase();
+      const hasUnparsedCheckoutDetails = /(ออกวันที่|เช็กเอาต์|เช็คเอาต์|ถึงวันที่|30|เดือนหน้า)/i.test(text);
+      if (hasUnparsedCheckoutDetails && !message.includes(parsedRequest.checkOut)) {
+        nextLead.source!.checkOut = "inferred";
+      } else {
+        nextLead.source!.checkOut = "customer";
+      }
+    }
+    if (parsedRequest.guests) {
+      nextLead.guests = parsedRequest.guests;
+      nextLead.source!.guests = "customer";
+    }
+  }
+
+  return {
+    ...existing,
+    bookingLead: nextLead
+  };
+}
+
 function getAvailabilityFromMemory(memory: LineConversationMemory, intent: string): AvailabilityRequest | null {
-  if (intent !== "availability" && intent !== "availability_payment" && intent !== "booking") return null;
+  if (intent !== "availability" && intent !== "availability_payment" && intent !== "booking" && intent !== "availability_check") return null;
   const lead = memory.bookingLead;
   if (!lead?.checkIn || !lead.checkOut) return null;
+  if (lead.source?.checkIn !== "customer" || lead.source?.checkOut !== "customer") return null;
   return {
     checkIn: lead.checkIn,
     checkOut: lead.checkOut,

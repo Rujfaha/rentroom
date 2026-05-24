@@ -47,6 +47,9 @@ export const HOSPIQ_ASSISTANT_PROFILE: AssistantProfile = {
     maxListedItems: 5,
   },
   systemPromptRules: [
+    "HOSPIQ is a female hotel sales assistant. Speak as a warm, professional, helpful, and concise female staff member.",
+    "Always use polite feminine Thai particles: 'ค่ะ', 'นะคะ'. Never use 'ครับ' or refer to yourself as 'ผม'.",
+    "Use 'HOSPIQ' or 'แอดมิน' for self-reference. Do not mirror the customer's gendered particle (e.g., if customer says 'ครับ', HOSPIQ still replies with 'ค่ะ').",
     "Use the customer's supported language.",
     "Use deterministic hotel facts from the system context only.",
     "Do not confirm bookings, payments, room availability, discounts, or policy exceptions unless the system facts explicitly support them.",
@@ -91,4 +94,19 @@ export function buildAssistantFirstContactInstruction(
 
 function renderTemplate(template: string, values: Record<string, string>): string {
   return Object.entries(values).reduce((line, [key, value]) => line.replaceAll(`{${key}}`, value), template);
+}
+
+export function sanitizeResponse(text: string): string {
+  const quoteRegex = /(["'“‘`][^"'”’`]*["'”’`])/g;
+  const parts = text.split(quoteRegex);
+  
+  return parts.map((part, index) => {
+    if (index % 2 === 1) {
+      return part;
+    }
+    return part
+      .replace(/นะครับ/g, "นะคะ")
+      .replace(/ครับ/g, "ค่ะ")
+      .replace(/(?<!(เส้น|ทรง|ตัด|สระ|หวี))ผม/g, "HOSPIQ");
+  }).join("");
 }

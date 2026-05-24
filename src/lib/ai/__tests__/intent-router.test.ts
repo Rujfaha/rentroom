@@ -37,6 +37,7 @@ describe("detectLineIntent", () => {
 
   it("detects multiple intents in one customer message", () => {
     expect(detectLineIntents("Do you have the cheapest room for 2 tomorrow, any promotion, and how can I pay?")).toEqual([
+      "cheapest_room",
       "availability",
       "price",
       "promotion",

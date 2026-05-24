@@ -46,7 +46,27 @@ export interface AvailabilityRequest {
   guests?: number;
 }
 
-export type LineIntent = "availability" | "availability_payment" | "payment" | "price" | "promotion" | "contact" | "booking" | "handoff" | "general";
+export type LineIntent =
+  | "availability"
+  | "availability_payment"
+  | "payment"
+  | "price"
+  | "promotion"
+  | "contact"
+  | "booking"
+  | "handoff"
+  | "general"
+  | "greeting"
+  | "room_detail"
+  | "room_recommendation"
+  | "amenities_question"
+  | "availability_check"
+  | "price_inquiry"
+  | "cheapest_room"
+  | "group_booking"
+  | "booking_intent"
+  | "handoff_required"
+  | "fallback";
 export type SupportedLineLanguage = "th" | "zh" | "en" | "ja" | "es" | "ar";
 
 export type LineHandoffReason =
@@ -71,6 +91,11 @@ export interface AvailableRoomTypeSummary {
   basePrice: number;
   maxGuests: number;
   availableRooms: number;
+  description?: string | null;
+  amenities?: string[] | null;
+  style?: string[];
+  suitableFor?: string[];
+  notSuitableFor?: string[];
 }
 
 export interface HotelContactSummary {
@@ -121,6 +146,18 @@ export interface BookingLead {
   roomTypeName?: string;
   guestName?: string;
   phone?: string;
+  adults?: number;
+  children?: number;
+  roomPreference?: string[];
+  dislikedFeatures?: string[];
+  isGroupBooking?: boolean;
+  leadScore?: "low" | "medium" | "high";
+  source?: {
+    roomId?: "customer" | "system_default" | "inferred";
+    checkIn?: "customer" | "system_default" | "inferred";
+    checkOut?: "customer" | "system_default" | "inferred";
+    guests?: "customer" | "system_default" | "inferred";
+  };
 }
 
 export interface LineConversationMemory {
