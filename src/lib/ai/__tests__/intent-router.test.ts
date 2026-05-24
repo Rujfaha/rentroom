@@ -30,6 +30,10 @@ describe("detectLineIntent", () => {
     expect(detectLineIntent("ติดต่อยังไง")).toBe("contact");
     expect(detectLineIntent("อยากจอง")).toBe("booking");
   });
+
+  it("keeps mixed availability and payment questions as availability first", () => {
+    expect(detectLineIntent("ขอห้องที่ถูกสุดสำหรับ 2 คน เช็กอินพรุ่งนี้ เช็กเอาต์มะรืน แล้วชำระเงินทางไหน")).toBe("availability_payment");
+  });
 });
 
 describe("buildDeterministicReply", () => {
@@ -57,6 +61,26 @@ describe("buildDeterministicReply", () => {
     expect(reply).toContain("Deluxe");
     expect(reply).toContain("1,200");
     expect(reply).toContain("Family");
+  });
+
+  it("answers mixed availability and payment questions in one deterministic reply", () => {
+    const reply = buildDeterministicReply({
+      intent: "availability_payment",
+      context: {
+        ...context,
+        availability: {
+          request: { checkIn: "2026-05-26", checkOut: "2026-05-27", guests: 2 },
+          roomTypes: context.roomTypes,
+        },
+      },
+      bookingUrl: "https://example.com/booking?checkIn=2026-05-26&checkOut=2026-05-27&guests=2",
+      memory: {},
+    });
+
+    expect(reply).toContain("Deluxe");
+    expect(reply).toContain("1,200");
+    expect(reply).toContain("PromptPay");
+    expect(reply).toContain("https://example.com/booking?checkIn=2026-05-26&checkOut=2026-05-27&guests=2");
   });
 });
 

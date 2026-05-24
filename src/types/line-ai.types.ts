@@ -46,7 +46,7 @@ export interface AvailabilityRequest {
   guests?: number;
 }
 
-export type LineIntent = "availability" | "payment" | "price" | "promotion" | "contact" | "booking" | "general";
+export type LineIntent = "availability" | "availability_payment" | "payment" | "price" | "promotion" | "contact" | "booking" | "general";
 
 export interface AvailableRoomTypeSummary {
   id: string;

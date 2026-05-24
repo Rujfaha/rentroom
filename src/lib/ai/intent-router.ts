@@ -9,9 +9,14 @@ interface DeterministicReplyInput {
 
 export function detectLineIntent(message: string): LineIntent {
   const text = message.toLowerCase();
-  if (/(ชำระ|จ่าย|โอน|พร้อมเพย์|promptpay|สลิป|บัญชี|payment)/i.test(text)) return "payment";
-  if (/(ว่าง|ห้องว่าง|เข้าพัก|เช็คอิน|check.?in|คืน|คน|ท่าน)/i.test(text)) return "availability";
-  if (/(ราคา|เท่าไหร่|กี่บาท|เรท|rate|price)/i.test(text)) return "price";
+  const hasPaymentIntent = /(ชำระ|จ่าย|โอน|พร้อมเพย์|promptpay|สลิป|บัญชี|payment)/i.test(text);
+  const hasAvailabilityIntent = /(ว่าง|ห้องว่าง|เข้าพัก|เช็คอิน|เช็กอิน|check.?in|เช็คเอาต์|เช็กเอาต์|คืน|คน|ท่าน|พรุ่งนี้|มะรืน|วันนี้)/i.test(text);
+  const hasPriceIntent = /(ราคา|เท่าไหร่|กี่บาท|เรท|rate|price|ถูกสุด|ถูกที่สุด|ประหยัด)/i.test(text);
+
+  if (hasPaymentIntent && (hasAvailabilityIntent || hasPriceIntent)) return "availability_payment";
+  if (hasAvailabilityIntent) return "availability";
+  if (hasPriceIntent) return "price";
+  if (hasPaymentIntent) return "payment";
   if (/(โปร|โปรโมชั่น|ส่วนลด|ลดราคา|promotion|discount)/i.test(text)) return "promotion";
   if (/(ติดต่อ|เบอร์|โทร|line|แผนที่|อยู่ที่ไหน|ที่อยู่|location|contact)/i.test(text)) return "contact";
   if (/(จอง|จองห้อง|booking|book|เอาห้อง|สนใจ)/i.test(text)) return "booking";
@@ -20,6 +25,8 @@ export function detectLineIntent(message: string): LineIntent {
 
 export function buildDeterministicReply(input: DeterministicReplyInput): string | null {
   switch (input.intent) {
+    case "availability_payment":
+      return buildAvailabilityPaymentReply(input.context, input.bookingUrl);
     case "payment":
       return buildPaymentReply(input.context, input.bookingUrl);
     case "price":
@@ -37,6 +44,14 @@ export function buildDeterministicReply(input: DeterministicReplyInput): string 
   }
 }
 
+function buildAvailabilityPaymentReply(context: HotelContext, bookingUrl: string): string | null {
+  const availabilityReply = buildAvailabilityReply(context, bookingUrl);
+  const paymentReply = buildPaymentReply(context, bookingUrl, false);
+
+  if (!availabilityReply) return paymentReply;
+  return [availabilityReply, paymentReply].join("\n\n");
+}
+
 export function mergeBookingLead(memory: LineConversationMemory, next: Partial<AvailabilityRequest>): LineConversationMemory {
   return {
     ...memory,
@@ -47,16 +62,19 @@ export function mergeBookingLead(memory: LineConversationMemory, next: Partial<A
   };
 }
 
-function buildPaymentReply(context: HotelContext, bookingUrl: string): string {
+function buildPaymentReply(context: HotelContext, bookingUrl: string, includeBookingUrl = true): string {
   const methods = context.payment?.promptPayConfigured
     ? `ชำระผ่าน PromptPay/โอนเงินได้ครับ${context.payment.accountName ? ` ชื่อบัญชี ${context.payment.accountName}` : ""}`
     : "ชำระผ่านการโอนเงินตามขั้นตอนในหน้าจองได้ครับ";
 
-  return [
+  const lines = [
     methods,
     "หลังชำระเงินแล้วให้อัปโหลดสลิปในหน้าจอง เพื่อให้ทีมงานตรวจสอบและยืนยันการจองครับ",
-    `เริ่มจองได้ที่ ${bookingUrl}`,
-  ].join("\n");
+    "ถ้าโอนแล้วแต่ลืมอัปโหลดสลิป ให้กลับไปอัปโหลดในหน้าจอง หรือแจ้งทีมงานพร้อมชื่อ/เบอร์ที่ใช้จองเพื่อช่วยตรวจสอบครับ",
+  ];
+
+  if (includeBookingUrl) lines.push(`เริ่มจองได้ที่ ${bookingUrl}`);
+  return lines.join("\n");
 }
 
 function buildAvailabilityReply(context: HotelContext, bookingUrl: string): string | null {

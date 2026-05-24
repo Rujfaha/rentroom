@@ -114,7 +114,7 @@ function buildSystemPrompt(): string {
 }
 
 function getAvailabilityFromMemory(memory: LineConversationMemory, intent: string): AvailabilityRequest | null {
-  if (intent !== "availability" && intent !== "booking") return null;
+  if (intent !== "availability" && intent !== "availability_payment" && intent !== "booking") return null;
   const lead = memory.bookingLead;
   if (!lead?.checkIn || !lead.checkOut) return null;
   return {
