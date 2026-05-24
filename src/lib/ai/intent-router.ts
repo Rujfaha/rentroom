@@ -8,19 +8,22 @@ interface DeterministicReplyInput {
 }
 
 export function detectLineIntent(message: string): LineIntent {
-  const text = message.toLowerCase();
-  const hasPaymentIntent = /(ชำระ|จ่าย|โอน|พร้อมเพย์|promptpay|สลิป|บัญชี|payment)/i.test(text);
-  const hasAvailabilityIntent = /(ว่าง|ห้องว่าง|เข้าพัก|เช็คอิน|เช็กอิน|check.?in|เช็คเอาต์|เช็กเอาต์|คืน|คน|ท่าน|พรุ่งนี้|มะรืน|วันนี้)/i.test(text);
-  const hasPriceIntent = /(ราคา|เท่าไหร่|กี่บาท|เรท|rate|price|ถูกสุด|ถูกที่สุด|ประหยัด)/i.test(text);
+  const intents = detectLineIntents(message);
+  if (intents.includes("availability") && intents.includes("payment")) return "availability_payment";
+  return intents[0] ?? "general";
+}
 
-  if (hasPaymentIntent && (hasAvailabilityIntent || hasPriceIntent)) return "availability_payment";
-  if (hasAvailabilityIntent) return "availability";
-  if (hasPriceIntent) return "price";
-  if (hasPaymentIntent) return "payment";
-  if (/(โปร|โปรโมชั่น|ส่วนลด|ลดราคา|promotion|discount)/i.test(text)) return "promotion";
-  if (/(ติดต่อ|เบอร์|โทร|line|แผนที่|อยู่ที่ไหน|ที่อยู่|location|contact)/i.test(text)) return "contact";
-  if (/(จอง|จองห้อง|booking|book|เอาห้อง|สนใจ)/i.test(text)) return "booking";
-  return "general";
+export function detectLineIntents(message: string): LineIntent[] {
+  const text = message.toLowerCase();
+  const intents: LineIntent[] = [];
+  if (/(ว่าง|ห้องว่าง|เข้าพัก|เช็คอิน|เช็กอิน|check.?in|check.?out|available|availability|room|stay|tomorrow|tonight|有没有|空房|部屋|空室|habitación|disponible|غرفة|متاح|คืน|คน|ท่าน|พรุ่งนี้|มะรืน|วันนี้)/i.test(text)) intents.push("availability");
+  if (/(ราคา|เท่าไหร่|กี่บาท|เรท|rate|price|cheap|cheapest|lowest|budget|ถูกสุด|ถูกที่สุด|ประหยัด|价格|料金|precio|سعر)/i.test(text)) intents.push("price");
+  if (/(โปร|โปรโมชั่น|ส่วนลด|ลดราคา|promotion|discount|deal|offer|优惠|割引|promoción|descuento|عرض|خصم)/i.test(text)) intents.push("promotion");
+  if (/(ชำระ|จ่าย|โอน|พร้อมเพย์|promptpay|สลิป|บัญชี|payment|pay|transfer|slip|付款|支付|支払い|pagar|pago|دفع|تحويل)/i.test(text)) intents.push("payment");
+  if (/(ติดต่อ|เบอร์|โทร|line|แผนที่|อยู่ที่ไหน|ที่อยู่|location|contact|phone|call|map|address|联系|電話|連絡|contacto|teléfono|اتصال|هاتف|عنوان)/i.test(text)) intents.push("contact");
+  if (/(จอง|จองห้อง|booking|book|reserve|reservation|เอาห้อง|สนใจ|预订|予約|reservar|reserva|حجز)/i.test(text)) intents.push("booking");
+
+  return intents.length ? intents : ["general"];
 }
 
 export function buildDeterministicReply(input: DeterministicReplyInput): string | null {

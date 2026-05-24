@@ -2,8 +2,10 @@ import { LINE_AI_FALLBACK_REPLY, LINE_TEXT_LIMIT } from "../../constants/line-ai
 import type { AiGenerateResult, AvailabilityRequest, LineConversationMemory, LineMessageHistoryItem } from "@/types/line-ai.types";
 import { parseThaiDateRange } from "../../utils/thai-date-parser";
 import { buildHotelContext, formatHotelContextPrompt, summarizeAvailability } from "./hotel-context";
-import { buildDeterministicReply, detectLineIntent, mergeBookingLead } from "./intent-router";
+import { detectLineIntent, detectLineIntents, mergeBookingLead } from "./intent-router";
+import { detectLineLanguage } from "./language";
 import { getAiProvider } from "./provider";
+import { composeLineReply } from "./reply-composer";
 
 const ISO_DATE_PATTERN = /\b(20\d{2}-\d{2}-\d{2})\b/g;
 
@@ -55,12 +57,14 @@ export interface GenerateLineConciergeReplyOptions {
 
 export async function generateLineConciergeReply(message: string, options: GenerateLineConciergeReplyOptions = {}): Promise<LineConciergeReply> {
   const intent = detectLineIntent(message);
+  const intents = detectLineIntents(message);
+  const language = detectLineLanguage(message);
   const parsedRequest = extractAvailabilityRequest(message);
   const memory = parsedRequest ? mergeBookingLead(options.memory ?? {}, parsedRequest) : options.memory ?? {};
   const availabilityRequest = parsedRequest ?? getAvailabilityFromMemory(memory, intent);
   const context = await buildHotelContext(availabilityRequest);
   const bookingUrl = buildBookingUrl(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000", availabilityRequest);
-  const deterministicReply = buildDeterministicReply({ intent, context, bookingUrl, memory });
+  const deterministicReply = composeLineReply({ language, intents, context, bookingUrl, memory });
   if (deterministicReply) {
     return {
       hotelId: context.hotelId,
@@ -68,7 +72,7 @@ export async function generateLineConciergeReply(message: string, options: Gener
       provider: "gemini",
       model: "deterministic",
       memory,
-      intent,
+      intent: intents.join(","),
     };
   }
 
@@ -85,7 +89,11 @@ export async function generateLineConciergeReply(message: string, options: Gener
       formatMemoryPrompt(memory),
       availabilityRequest ? `สรุปห้องว่างจากระบบ: ${summarizeAvailability(context)}` : null,
       `ลิงก์จองที่ต้องใช้เมื่อมี intent จอง: ${bookingUrl}`,
-      "ตอบกลับลูกค้าเป็นภาษาไทย กระชับ และห้ามแต่งข้อมูลที่ไม่มีในข้อมูลจริงจากระบบ",
+      `ภาษาที่ลูกค้าใช้: ${language}`,
+      "ตอบกลับเป็นภาษาเดียวกับลูกค้าเท่านั้น รองรับ th/zh/en/ja/es/ar",
+      "ตอบแบบสบายเหมือนคนจริง สุภาพ กระชับ ใส่ emoji ได้เล็กน้อย 0-2 ตัว",
+      "ถ้าลูกค้าถามหลายเรื่องในข้อความเดียว ให้ตอบให้ครบทุกเรื่องเป็นหัวข้อสั้น ๆ",
+      "ห้ามแต่งข้อมูลที่ไม่มีในข้อมูลจริงจากระบบ",
     ]
       .filter((line): line is string => Boolean(line))
       .join("\n"),
@@ -97,7 +105,7 @@ export async function generateLineConciergeReply(message: string, options: Gener
     provider: result.provider,
     model: result.model,
     memory,
-    intent,
+    intent: intents.join(","),
   };
 }
 

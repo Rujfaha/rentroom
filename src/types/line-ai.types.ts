@@ -47,6 +47,7 @@ export interface AvailabilityRequest {
 }
 
 export type LineIntent = "availability" | "availability_payment" | "payment" | "price" | "promotion" | "contact" | "booking" | "general";
+export type SupportedLineLanguage = "th" | "zh" | "en" | "ja" | "es" | "ar";
 
 export interface AvailableRoomTypeSummary {
   id: string;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildDeterministicReply, detectLineIntent, mergeBookingLead } from "../intent-router";
+import { buildDeterministicReply, detectLineIntent, detectLineIntents, mergeBookingLead } from "../intent-router";
 import type { HotelContext, LineConversationMemory } from "@/types/line-ai.types";
 
 const context: HotelContext = {
@@ -33,6 +33,15 @@ describe("detectLineIntent", () => {
 
   it("keeps mixed availability and payment questions as availability first", () => {
     expect(detectLineIntent("ขอห้องที่ถูกสุดสำหรับ 2 คน เช็กอินพรุ่งนี้ เช็กเอาต์มะรืน แล้วชำระเงินทางไหน")).toBe("availability_payment");
+  });
+
+  it("detects multiple intents in one customer message", () => {
+    expect(detectLineIntents("Do you have the cheapest room for 2 tomorrow, any promotion, and how can I pay?")).toEqual([
+      "availability",
+      "price",
+      "promotion",
+      "payment",
+    ]);
   });
 });
 
