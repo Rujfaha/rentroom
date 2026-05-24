@@ -12,6 +12,10 @@ describe("notifyLineStaffHandoff", () => {
       sourceMessage: "โอนแล้วแต่สลิปมีปัญหา",
       conversationId: "conversation-1",
       lineUserId: "line-user-1",
+      customerContact: {
+        displayName: "Mina",
+        chatLink: "https://line.me/R/oaMessage/@arkkarawin",
+      },
       push,
     });
 
@@ -20,7 +24,10 @@ describe("notifyLineStaffHandoff", () => {
     expect(text).toContain("ลูกค้าต้องการให้ทีมงานช่วยดู");
     expect(text).toContain("ปัญหาการชำระเงิน/สลิป");
     expect(text).toContain("โอนแล้วแต่สลิปมีปัญหา");
-    expect(text).toContain("conversation-1");
+    expect(text).toContain("Mina");
+    expect(text).toContain("https://line.me/R/oaMessage/@arkkarawin");
+    expect(text).not.toContain("conversation-1");
+    expect(text).not.toContain("line-user-1");
     expect(text).not.toContain("[LINE AI Handoff]");
     expect(text).not.toContain("Reason:");
     expect(text).not.toContain("Priority:");

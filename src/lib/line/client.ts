@@ -17,6 +17,10 @@ interface PushLineMessageInput {
   fetcher?: LineFetch;
 }
 
+interface LineUserProfile {
+  displayName: string;
+}
+
 export async function replyLineMessage({
   accessToken,
   replyToken,
@@ -59,4 +63,28 @@ export async function pushLineMessage({
     const details = await response.text();
     throw new Error(`LINE push failed: ${response.status} ${details}`);
   }
+}
+
+export async function getLineUserProfile(
+  accessToken: string,
+  userId: string,
+  fetcher: LineFetch = fetch
+): Promise<LineUserProfile | null> {
+  const token = accessToken.trim();
+  const trimmedUserId = userId.trim();
+  if (!token || !trimmedUserId) return null;
+
+  const response = await fetcher(`https://api.line.me/v2/bot/profile/${encodeURIComponent(trimmedUserId)}`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!response.ok) return null;
+
+  const data: unknown = await response.json();
+  if (!data || typeof data !== "object") return null;
+
+  const displayName = (data as { displayName?: unknown }).displayName;
+  return typeof displayName === "string" && displayName.trim() ? { displayName } : null;
 }

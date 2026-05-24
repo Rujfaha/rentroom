@@ -6,6 +6,7 @@ import type { HotelContext, LineConversationMemory } from "@/types/line-ai.types
 const state = vi.hoisted(() => ({
   memory: {} as LineConversationMemory,
   replyLineMessage: vi.fn(),
+  getLineUserProfile: vi.fn(),
   notifyLineStaffHandoff: vi.fn(),
   updateLineConversationMemory: vi.fn(),
 }));
@@ -31,6 +32,7 @@ vi.mock("@/lib/ai/hotel-context", () => ({
 }));
 
 vi.mock("@/lib/line/client", () => ({
+  getLineUserProfile: state.getLineUserProfile,
   replyLineMessage: state.replyLineMessage,
 }));
 
@@ -58,8 +60,11 @@ describe("LINE webhook AI route", () => {
     process.env.LINE_CHANNEL_SECRET = "test-secret";
     process.env.LINE_CHANNEL_ACCESS_TOKEN = "test-token";
     process.env.LINE_STAFF_NOTIFY_TARGET_ID = "staff-target";
+    process.env.LINE_OA_ID = "@arkkarawin";
     process.env.LINE_BOT_ENABLED = "true";
     state.memory = {};
+    state.getLineUserProfile.mockReset();
+    state.getLineUserProfile.mockResolvedValue({ displayName: "Mina" });
     state.replyLineMessage.mockReset();
     state.notifyLineStaffHandoff.mockReset();
     state.updateLineConversationMemory.mockReset();
@@ -79,6 +84,12 @@ describe("LINE webhook AI route", () => {
     expect(firstReply).not.toContain("PromptPay");
     expect(firstReply).not.toContain("ที่อยู่");
     expect(state.notifyLineStaffHandoff).toHaveBeenCalledTimes(1);
+    expect(state.notifyLineStaffHandoff.mock.calls[0]?.[0]).toMatchObject({
+      customerContact: {
+        displayName: "Mina",
+        chatLink: "https://line.me/R/oaMessage/@arkkarawin",
+      },
+    });
     expect(state.memory.handoffPending?.reason).toBe("payment_issue");
 
     const second = await POST(buildLineRequest("มีนา คนะยก 0817963289", "reply-2"));

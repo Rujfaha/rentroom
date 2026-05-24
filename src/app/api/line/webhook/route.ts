@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { LINE_AI_FALLBACK_REPLY, LINE_UNSUPPORTED_MESSAGE_REPLY } from "@/constants/line-ai";
 import { generateLineConciergeReply } from "@/lib/ai/line-concierge";
 import { resolveActiveHotelId } from "@/lib/ai/hotel-context";
-import { replyLineMessage } from "@/lib/line/client";
+import { getLineUserProfile, replyLineMessage } from "@/lib/line/client";
 import {
   ensureLineConversation,
   getLineConversationMemory,
@@ -123,6 +123,7 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
         conversationId,
       })
     );
+    const customerContact = await resolveLineCustomerContact(accessToken, lineUserId);
     await notifyLineStaffHandoff({
       accessToken,
       staffTargetId: process.env.LINE_STAFF_NOTIFY_TARGET_ID,
@@ -130,6 +131,7 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
       sourceMessage: event.message.text || "",
       conversationId,
       lineUserId,
+      customerContact,
     });
     await updateLineConversationMemory(supabase, conversationId, result.memory, result.intent);
   } catch (error) {
@@ -205,4 +207,31 @@ function describeLineTarget(targetId: string | undefined): { configured: boolean
     prefix: trimmed ? trimmed.slice(0, 1) : null,
     length: trimmed?.length ?? 0,
   };
+}
+
+async function resolveLineCustomerContact(accessToken: string, lineUserId: string | null) {
+  const profile = lineUserId ? await safeGetLineUserProfile(accessToken, lineUserId) : null;
+
+  return {
+    displayName: profile?.displayName ?? null,
+    chatLink: buildLineChatLink(),
+  };
+}
+
+async function safeGetLineUserProfile(accessToken: string, lineUserId: string) {
+  try {
+    return await getLineUserProfile(accessToken, lineUserId);
+  } catch (error) {
+    console.error("LINE profile fetch error:", error);
+    return null;
+  }
+}
+
+function buildLineChatLink(): string | null {
+  const rawId = process.env.LINE_OFFICIAL_ACCOUNT_ID ?? process.env.LINE_OA_ID ?? process.env.NEXT_PUBLIC_LINE_OA_ID;
+  const lineId = rawId?.trim();
+  if (!lineId) return null;
+
+  const encodedLineId = encodeURIComponent(lineId).replaceAll("%40", "@");
+  return `https://line.me/R/oaMessage/${encodedLineId}`;
 }
