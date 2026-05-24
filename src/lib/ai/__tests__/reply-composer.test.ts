@@ -72,6 +72,46 @@ describe("composeLineReply", () => {
     expect(reply).not.toContain("ยืนยันแล้ว");
   });
 
+  it("does not expose internal handoff reason codes to customers", () => {
+    const reply = composeLineReply({
+      language: "th",
+      intents: ["handoff"],
+      context,
+      bookingUrl: "https://example.com/booking",
+      memory: {},
+      handoff: { required: true, reason: "admin_request", priority: "normal" },
+    });
+
+    expect(reply).toContain("ทีมงาน");
+    expect(reply).not.toContain("admin request");
+    expect(reply).not.toContain("admin_request");
+    expect(reply).not.toContain("(");
+    expect(reply).not.toContain(")");
+  });
+
+  it("does not expose internal handoff reason codes when acknowledging details", () => {
+    const reply = composeLineReply({
+      language: "th",
+      intents: ["handoff"],
+      context,
+      bookingUrl: "https://example.com/booking",
+      memory: {
+        handoffPending: {
+          reason: "admin_request",
+          priority: "normal",
+          requestedAt: "2026-05-24T08:00:00.000Z",
+        },
+      },
+      handoff: { required: true, reason: "admin_request", priority: "normal" },
+    });
+
+    expect(reply).toContain("รับข้อมูลแล้ว");
+    expect(reply).not.toContain("admin request");
+    expect(reply).not.toContain("admin_request");
+    expect(reply).not.toContain("(");
+    expect(reply).not.toContain(")");
+  });
+
   it("acknowledges customer details during a pending handoff instead of asking again", () => {
     const reply = composeLineReply({
       language: "th",

@@ -33,9 +33,8 @@ export function composeLineReply(input: ComposeLineReplyInput): string | null {
 }
 
 function handoffSection(language: SupportedLineLanguage, handoff: LineHandoffRequest, memory: LineConversationMemory): string {
-  const reason = handoff.reason.replaceAll("_", " ");
-  if (memory.handoffPending) return text(language, "handoffReceived", { reason });
-  return text(language, "handoff", { reason });
+  if (memory.handoffPending) return text(language, "handoffReceived");
+  return text(language, "handoff");
 }
 
 function shouldUseHandoffOnly(reason: LineHandoffRequest["reason"]): boolean {
@@ -128,8 +127,8 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       noContact: "ตอนนี้ยังไม่มีข้อมูลติดต่อในระบบครับ",
       bookingSummary: "ข้อมูลจองที่จำไว้: {dateText}",
       bookingStart: "เริ่มจองผ่านหน้าเว็บได้เลยครับ",
-      handoff: "เคสนี้ผมส่งต่อให้ทีมงานช่วยตรวจสอบให้นะครับ ({reason}) รบกวนแจ้งชื่อ/เบอร์ที่ใช้จอง และรายละเอียดสั้น ๆ เพิ่มได้เลยครับ",
-      handoffReceived: "รับข้อมูลแล้วครับ ผมจะส่งต่อให้ทีมงานช่วยตรวจสอบเคสนี้ให้นะครับ ({reason})",
+      handoff: "เคสนี้ผมส่งต่อให้ทีมงานช่วยตรวจสอบให้นะครับ รบกวนแจ้งชื่อ/เบอร์ที่ใช้จอง และรายละเอียดสั้น ๆ เพิ่มได้เลยครับ",
+      handoffReceived: "รับข้อมูลแล้วครับ ผมจะส่งต่อให้ทีมงานช่วยตรวจสอบเคสนี้ให้นะครับ",
     },
     en: {
       availability: "Available options for {dateText}:",
@@ -148,8 +147,8 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       noContact: "Contact details are not available in the system yet.",
       bookingSummary: "Saved booking details: {dateText}",
       bookingStart: "You can start booking on the website.",
-      handoff: "I'll pass this to the team to review ({reason}). Please send the booking name/phone number and a short detail.",
-      handoffReceived: "Got it. I'll pass these details to the team for review ({reason}).",
+      handoff: "I'll pass this to the team to review. Please send the booking name/phone number and a short detail.",
+      handoffReceived: "Got it. I'll pass these details to the team for review.",
     },
     zh: {
       availability: "{dateText} 可预订的房型：",
@@ -168,8 +167,8 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       noContact: "系统暂时没有联系方式。",
       bookingSummary: "已记录的预订信息：{dateText}",
       bookingStart: "可以从网站开始预订。",
-      handoff: "我会转给工作人员协助处理（{reason}）。请提供预订姓名/电话和简短说明。",
-      handoffReceived: "已收到信息，我会转给工作人员协助处理（{reason}）。",
+      handoff: "我会转给工作人员协助处理。请提供预订姓名/电话和简短说明。",
+      handoffReceived: "已收到信息，我会转给工作人员协助处理。",
     },
     ja: {
       availability: "{dateText} の空室候補はこちらです：",
@@ -188,8 +187,8 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       noContact: "連絡先情報はまだ登録されていません。",
       bookingSummary: "記録中の予約情報：{dateText}",
       bookingStart: "ウェブサイトから予約を開始できます。",
-      handoff: "スタッフに確認を引き継ぎます（{reason}）。予約名/電話番号と簡単な詳細を送ってください。",
-      handoffReceived: "情報を受け取りました。スタッフに確認を引き継ぎます（{reason}）。",
+      handoff: "スタッフに確認を引き継ぎます。予約名/電話番号と簡単な詳細を送ってください。",
+      handoffReceived: "情報を受け取りました。スタッフに確認を引き継ぎます。",
     },
     es: {
       availability: "Opciones disponibles para {dateText}:",
@@ -208,8 +207,8 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       noContact: "Aún no hay datos de contacto en el sistema.",
       bookingSummary: "Datos guardados de la reserva: {dateText}",
       bookingStart: "Puedes empezar la reserva en la web.",
-      handoff: "Voy a pasar este caso al equipo para revisarlo ({reason}). Envíanos el nombre/teléfono de la reserva y un breve detalle.",
-      handoffReceived: "Recibido. Pasaré estos datos al equipo para revisarlo ({reason}).",
+      handoff: "Voy a pasar este caso al equipo para revisarlo. Envíanos el nombre/teléfono de la reserva y un breve detalle.",
+      handoffReceived: "Recibido. Pasaré estos datos al equipo para revisarlo.",
     },
     ar: {
       availability: "الخيارات المتاحة لـ {dateText}:",
@@ -228,8 +227,8 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       noContact: "لا توجد بيانات تواصل في النظام حاليا.",
       bookingSummary: "تفاصيل الحجز المحفوظة: {dateText}",
       bookingStart: "يمكنك بدء الحجز من الموقع.",
-      handoff: "سأحوّل هذه الحالة إلى الفريق للمراجعة ({reason}). يرجى إرسال اسم/هاتف الحجز وتفاصيل قصيرة.",
-      handoffReceived: "تم استلام المعلومات. سأحوّلها إلى الفريق للمراجعة ({reason}).",
+      handoff: "سأحوّل هذه الحالة إلى الفريق للمراجعة. يرجى إرسال اسم/هاتف الحجز وتفاصيل قصيرة.",
+      handoffReceived: "تم استلام المعلومات. سأحوّلها إلى الفريق للمراجعة.",
     },
   };
   return Object.entries(values).reduce((line, [keyName, value]) => line.replaceAll(`{${keyName}}`, value), templates[language][key] ?? templates.th[key] ?? key);

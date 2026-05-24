@@ -16,8 +16,16 @@ describe("notifyLineStaffHandoff", () => {
     });
 
     expect(push).toHaveBeenCalledOnce();
-    expect(push.mock.calls[0]?.[0].messages[0].text).toContain("payment_issue");
-    expect(push.mock.calls[0]?.[0].messages[0].text).toContain("conversation-1");
+    const text = push.mock.calls[0]?.[0].messages[0].text;
+    expect(text).toContain("ลูกค้าต้องการให้ทีมงานช่วยดู");
+    expect(text).toContain("ปัญหาการชำระเงิน/สลิป");
+    expect(text).toContain("โอนแล้วแต่สลิปมีปัญหา");
+    expect(text).toContain("conversation-1");
+    expect(text).not.toContain("[LINE AI Handoff]");
+    expect(text).not.toContain("Reason:");
+    expect(text).not.toContain("Priority:");
+    expect(text).not.toContain("LINE user:");
+    expect(text).not.toContain("payment_issue");
   });
 
   it("skips notification when target is missing", async () => {
