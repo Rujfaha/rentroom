@@ -389,6 +389,43 @@ export interface Expense {
   updated_at: string;
 }
 
+export interface LineUser {
+  id: string;
+  hotel_id: string;
+  line_user_id: string;
+  display_name: string | null;
+  customer_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LineConversation {
+  id: string;
+  hotel_id: string;
+  line_user_id: string;
+  status: string;
+  last_intent: string | null;
+  last_message_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LineMessage {
+  id: string;
+  hotel_id: string;
+  line_user_id: string | null;
+  conversation_id: string | null;
+  direction: string;
+  message_type: string;
+  line_message_id: string | null;
+  text: string | null;
+  ai_provider: string | null;
+  ai_model: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 // ========================
 // Supabase Database Type (for typed client)
 // ========================
@@ -423,6 +460,9 @@ export interface Database {
       booking_promotions: { Row: BookingPromotion; Insert: Partial<BookingPromotion> & Pick<BookingPromotion, "booking_id" | "promotion_id" | "promotion_name">; Update: Partial<BookingPromotion> };
       expense_categories: { Row: ExpenseCategory; Insert: Partial<ExpenseCategory> & Pick<ExpenseCategory, "hotel_id" | "name">; Update: Partial<ExpenseCategory> };
       expenses: { Row: Expense; Insert: Partial<Expense> & Pick<Expense, "hotel_id" | "amount">; Update: Partial<Expense> };
+      line_users: { Row: LineUser; Insert: Partial<LineUser> & Pick<LineUser, "hotel_id" | "line_user_id">; Update: Partial<LineUser> };
+      line_conversations: { Row: LineConversation; Insert: Partial<LineConversation> & Pick<LineConversation, "hotel_id" | "line_user_id">; Update: Partial<LineConversation> };
+      line_messages: { Row: LineMessage; Insert: Partial<LineMessage> & Pick<LineMessage, "hotel_id" | "direction" | "message_type">; Update: Partial<LineMessage> };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Rentroom LINE AI MVP"
+  short_description: "Build fast, scalable LINE OA AI concierge MVP for rentroom."
+  default_prompt: "Use this skill to implement the LINE OA AI concierge MVP for the rentroom Next.js/Supabase project."
