@@ -26,6 +26,44 @@ const context: HotelContext = {
 };
 
 describe("composeLineReply", () => {
+  it("introduces Hospiq on a first Thai contact with hotel context and available room options", () => {
+    const reply = composeLineReply({
+      language: "th",
+      intents: ["availability"],
+      context,
+      bookingUrl: "https://example.com/booking?checkIn=2026-05-26&checkOut=2026-05-27&guests=2",
+      memory: {},
+      isFirstInteraction: true,
+    });
+
+    expect(reply).toContain("Hospiq");
+    expect(reply).toContain("Arkkarawin");
+    expect(reply).toContain("Standard");
+    expect(reply).toContain("\n\n");
+    expect(reply).toContain("- Standard");
+    expect(reply).toContain("ค่ะ");
+    expect(reply).not.toContain("ผม");
+    expect(reply).not.toContain("ครับ");
+  });
+
+  it("keeps later Thai availability replies focused without reintroducing Hospiq", () => {
+    const reply = composeLineReply({
+      language: "th",
+      intents: ["availability"],
+      context,
+      bookingUrl: "https://example.com/booking?checkIn=2026-05-26&checkOut=2026-05-27&guests=2",
+      memory: {},
+      isFirstInteraction: false,
+    });
+
+    expect(reply).not.toContain("Hospiq");
+    expect(reply).toContain("Standard");
+    expect(reply).toContain("\n\n");
+    expect(reply).toContain("ค่ะ");
+    expect(reply).not.toContain("ผม");
+    expect(reply).not.toContain("ครับ");
+  });
+
   it("answers multiple Thai intents in one friendly reply", () => {
     const reply = composeLineReply({
       language: "th",
@@ -39,7 +77,7 @@ describe("composeLineReply", () => {
     expect(reply).toContain("800");
     expect(reply).toContain("Stay longer");
     expect(reply).toContain("PromptPay");
-    expect(reply).toContain("😊");
+    expect(reply).toContain("\n\n");
   });
 
   it("answers English customers in English", () => {
@@ -69,6 +107,9 @@ describe("composeLineReply", () => {
 
     expect(reply).toContain("ทีมงาน");
     expect(reply).toContain("ชื่อ/เบอร์");
+    expect(reply).toContain("ค่ะ");
+    expect(reply).not.toContain("ผม");
+    expect(reply).not.toContain("ครับ");
     expect(reply).not.toContain("ยืนยันแล้ว");
   });
 

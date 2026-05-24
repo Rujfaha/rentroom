@@ -2,81 +2,76 @@
 
 ### Current Status
 
-AI LINE handoff flow has been hardened and deployed to production. The bot detects admin/staff handoff requests, stores pending handoff state, and sends staff notifications when `LINE_STAFF_NOTIFY_TARGET_ID` is configured. Production logs confirmed `required:true`, the user confirmed staff group messages are arriving, and the handoff copy has been cleaned up so customer/admin messages no longer expose internal reason codes.
+Work is on branch `hospiq-ai-persona`. The LINE AI now has a centralized Hospiq assistant profile, introduces herself on first customer contact, uses polite female Thai wording, keeps deterministic replies structured for LINE, and passes first-contact instructions to the LLM fallback prompt. The project agent rules were updated with planning/scalability guidance.
 
 ### Completed Work
 
-- [x] Read `AGENTS.md`, `skill.md`, and existing AI flow under `src/lib/ai`.
-- [x] Added regression tests for bad AI replies from `example-ai-not-good-answer.md`.
-- [x] Added `handoffPending` memory to prevent follow-up customer details from being routed as room availability.
-- [x] Added handoff triggers for admin/staff requests and forgotten slip upload.
-- [x] Reduced false-positive availability routing from broad Thai words such as `คน`.
-- [x] Added privacy and availability guardrails.
-- [x] Added route-level webhook test with mocked LINE/Supabase.
-- [x] Added production-safe webhook source and handoff status logs.
-- [x] Committed and pushed `251e045 fix: harden line ai handoff workflow`.
-- [x] Verified Vercel production deployments for `renthotel` and `rentroom` reached `READY`.
-- [x] User configured staff target and confirmed messages now enter the admin group.
-- [x] Removed developer-style reason text from customer replies, such as `(admin request)`.
-- [x] Improved staff notification copy so the admin group receives human-readable Thai text instead of raw labels like `[LINE AI Handoff]`, `Reason`, `Priority`, `Conversation`, and `LINE user`.
-- [x] Re-ran targeted tests, TypeScript, and build after the UX copy change.
-- [x] Committed and pushed `287b22e fix: improve line handoff copy`.
-- [x] Verified Vercel production deployment for `renthotel-one.vercel.app` reached `READY`.
+- [x] Read `AGENTS.md`, `skill.md`, and the current `src/lib/ai` flow.
+- [x] Wrote and reviewed `docs/superpowers/specs/2026-05-24-hospiq-ai-persona-design.md`.
+- [x] Wrote and executed `docs/superpowers/plans/2026-05-24-hospiq-ai-persona.md`.
+- [x] Added `src/lib/ai/assistant-profile.ts` for Hospiq identity, tone, greeting, formatting, and prompt policy.
+- [x] Updated deterministic replies to use Hospiq profile data instead of scattered opener/persona strings.
+- [x] Changed Thai deterministic copy to polite female style and added regression tests against `ผม`/`ครับ`.
+- [x] Added first-interaction detection that supports production webhook history where inbound messages are recorded before AI reply.
+- [x] Added fallback-provider prompt coverage so first general-contact LLM replies are instructed to introduce Hospiq, role, and hotel name.
+- [x] Added `AGENTS.md` Planning and Scalability rules.
+- [x] Ran final verification and final review; final review approved after fixes.
 
 ### Unfinished Work
 
-- [ ] Optional next improvement: implement smarter room comparison/recommendation behavior from `hotel_ai_line_assistant_improvement_prompt_v2.md`.
-- [ ] Optional next improvement: add structured FAQ/policy/context filtering so lightweight LLM calls receive only relevant hotel knowledge.
-- [ ] Optional cleanup: remove temporary production diagnostic logs (`LINE webhook source`, `LINE staff handoff status`) after the LINE group setup is stable.
+- [ ] Push the `hospiq-ai-persona` branch and create/use a Vercel Preview deployment for hand testing.
+- [ ] If testing with a real LINE channel, update the LINE Developers Webhook URL to the preview endpoint `/api/line/webhook`, then restore production URL after testing.
+- [ ] Optional future cleanup: tighten `reply-composer.ts` translation keys so missing non-Thai translations cannot silently fall back to Thai.
 
 ### Files Changed
 
-- `src/lib/ai/line-concierge.ts` - orchestrates guardrails, handoff pending state, and deterministic replies.
-- `src/lib/ai/handoff.ts` - detects risky handoff/admin/payment-slip cases.
-- `src/lib/ai/intent-router.ts` - reduces false positive availability routing.
-- `src/lib/ai/reply-composer.ts` - composes deterministic customer replies and hides internal handoff reason codes.
-- `src/lib/ai/guardrails.ts` - privacy and unsafe answer validation.
-- `src/lib/line/logging.ts` - persists normalized handoff pending memory.
-- `src/lib/line/staff-notifier.ts` - sends human-readable Thai staff handoff notifications.
-- `src/app/api/line/webhook/route.ts` - logs webhook source and staff handoff status for production diagnosis.
-- `src/app/api/line/webhook/__tests__/route.test.ts` - route-level mocked webhook tests.
-- `src/lib/ai/__tests__/*` - regression tests for AI and handoff behavior.
-- `src/types/line-ai.types.ts` - added `admin_request` and `handoffPending`.
-- `vitest.config.ts` - resolves `@` alias in Vitest.
-- `docs/superpowers/plans/2026-05-24-line-ai-workflow-hardening.md` - implementation plan.
+- `AGENTS.md` - added planning/scalability rules and fixed markdown fence rendering in the handoff template.
+- `AGENT_HANDOFF.md` - updated this handoff note for the Hospiq work.
+- `docs/superpowers/specs/2026-05-24-hospiq-ai-persona-design.md` - approved design spec.
+- `docs/superpowers/plans/2026-05-24-hospiq-ai-persona.md` - implementation plan.
+- `src/lib/ai/assistant-profile.ts` - new centralized Hospiq assistant profile and prompt helpers.
+- `src/lib/ai/reply-composer.ts` - profile-based intro/opener, female Thai reply wording, shared paragraph/list policy.
+- `src/lib/ai/line-concierge.ts` - first-interaction detection and profile-driven fallback prompt instructions.
+- `src/lib/ai/__tests__/reply-composer.test.ts` - regression tests for Hospiq greeting, Thai style, paragraph breaks, and handoff copy.
+- `src/lib/ai/__tests__/line-concierge.test.ts` - regression tests for first contact, inbound-only history, memory/outbound suppression, and fallback prompt instructions.
 
 ### Known Issues
 
-- Existing lint warnings remain in unrelated CMS image components about `<img>` usage.
-- Existing Next.js build warning remains: `middleware` convention is deprecated in favor of `proxy`.
-- Temporary webhook diagnostic logs are still intentionally enabled to help confirm LINE group/source and staff target behavior in production.
+- `npm run lint` exits 0 but reports 8 pre-existing warnings about `<img>` usage in unrelated CMS components.
+- `npm run build` passes but reports the existing Next.js warning that the `middleware` convention is deprecated in favor of `proxy`.
+- `example-ai-not-good-answer.md` and `hotel_ai_line_assistant_improvement_prompt_v2.md` were already untracked and were not modified during this Hospiq implementation.
 
 ### Commands Already Run
 
 ```bash
-npm test
-npm test -- src/app/api/line/webhook/__tests__/route.test.ts src/lib/ai/__tests__/line-concierge.test.ts src/lib/ai/__tests__/handoff.test.ts src/lib/ai/__tests__/intent-router.test.ts
+git switch -c hospiq-ai-persona
+npm test -- src/lib/ai/__tests__/reply-composer.test.ts
+npm test -- src/lib/ai/__tests__/line-concierge.test.ts
+npm test -- src/lib/ai
 npx tsc --noEmit
 npm run lint
 npm run build
-git commit -m "fix: harden line ai handoff workflow"
-git push origin master
-git commit -m "fix: improve line handoff copy"
-git push origin master
+git diff -- AGENTS.md
+git diff --stat
+git status --short
 ```
 
 ### Commands To Run Next
 
 ```bash
-npm test -- src/lib/ai/__tests__/reply-composer.test.ts src/lib/line/__tests__/staff-notifier.test.ts src/app/api/line/webhook/__tests__/route.test.ts
-npx tsc --noEmit
-npm run build
+git status --short
+git diff -- src/lib/ai AGENTS.md AGENT_HANDOFF.md docs/superpowers
+git add AGENTS.md AGENT_HANDOFF.md docs/superpowers src/lib/ai
+git commit -m "feat: add hospiq ai persona"
+git push origin hospiq-ai-persona
 ```
 
 ### Important Context
 
-The current production app is receiving LINE webhooks correctly at `/api/line/webhook`. The staff notification destination must be configured in Vercel production as `LINE_STAFF_NOTIFY_TARGET_ID`, preferably a LINE group id starting with `C`. The user confirmed staff push now works after setting this env variable.
+The webhook records inbound LINE messages before fetching recent history. Because of that, first contact is now detected as: no `bookingLead`, no `handoffPending`, and no outbound message in history. This lets inbound-only history still trigger Hospiq's first greeting while preventing repeated introductions once memory or outbound history exists.
+
+For Vercel hand testing, use the preview deployment URL plus `/api/line/webhook` as the LINE Developers Webhook URL. Ensure Preview environment variables include LINE, Supabase, and AI provider settings.
 
 ### Next Recommended Step
 
-If continuing AI quality work, start with the room comparison/recommendation cases in `hotel_ai_line_assistant_improvement_prompt_v2.md`: write failing tests for questions like `ห้องแพงกับห้องถูกต่างกันยังไง`, `ไป 2 คน เอาห้องไหนดี`, and `ห้องถูกสุดกี่บาท`, then add deterministic/context-grounded behavior without inventing missing room features.
+Review the final diff, commit the scoped files, push `hospiq-ai-persona`, then hand test via Vercel Preview before merging or promoting.
