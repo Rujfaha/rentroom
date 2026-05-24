@@ -11,6 +11,7 @@ import {
   recordLineMessage,
   updateLineConversationMemory,
 } from "@/lib/line/logging";
+import { notifyLineStaffHandoff } from "@/lib/line/staff-notifier";
 import { verifyLineSignature } from "@/lib/line/signature";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { LineMessageEvent, LineWebhookEvent, LineWebhookPayload } from "@/types/line-ai.types";
@@ -110,6 +111,14 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
       handoff: result.handoff,
       sourceMessage: event.message.text || "",
       metadata: { intent: result.intent },
+    });
+    await notifyLineStaffHandoff({
+      accessToken,
+      staffTargetId: process.env.LINE_STAFF_NOTIFY_TARGET_ID,
+      handoff: result.handoff,
+      sourceMessage: event.message.text || "",
+      conversationId,
+      lineUserId,
     });
     await updateLineConversationMemory(supabase, conversationId, result.memory, result.intent);
   } catch (error) {

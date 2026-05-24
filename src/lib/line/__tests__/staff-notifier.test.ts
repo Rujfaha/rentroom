@@ -1,0 +1,38 @@
+import { describe, expect, it, vi } from "vitest";
+import { notifyLineStaffHandoff } from "../staff-notifier";
+
+describe("notifyLineStaffHandoff", () => {
+  it("sends handoff details when staff target is configured", async () => {
+    const push = vi.fn().mockResolvedValue(undefined);
+
+    await notifyLineStaffHandoff({
+      accessToken: "token",
+      staffTargetId: "group-id",
+      handoff: { required: true, reason: "payment_issue", priority: "high" },
+      sourceMessage: "โอนแล้วแต่สลิปมีปัญหา",
+      conversationId: "conversation-1",
+      lineUserId: "line-user-1",
+      push,
+    });
+
+    expect(push).toHaveBeenCalledOnce();
+    expect(push.mock.calls[0]?.[0].messages[0].text).toContain("payment_issue");
+    expect(push.mock.calls[0]?.[0].messages[0].text).toContain("conversation-1");
+  });
+
+  it("skips notification when target is missing", async () => {
+    const push = vi.fn();
+
+    await notifyLineStaffHandoff({
+      accessToken: "token",
+      staffTargetId: "",
+      handoff: { required: true, reason: "refund", priority: "high" },
+      sourceMessage: "refund",
+      conversationId: null,
+      lineUserId: null,
+      push,
+    });
+
+    expect(push).not.toHaveBeenCalled();
+  });
+});
