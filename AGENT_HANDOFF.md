@@ -2,7 +2,7 @@
 
 ### Current Status
 
-AI LINE handoff flow has been hardened and deployed to production. The bot now detects admin/staff handoff requests, stores pending handoff state, and sends staff notifications when `LINE_STAFF_NOTIFY_TARGET_ID` is configured. Production logs confirmed `required:true` and the user later confirmed staff group messages are now arriving.
+AI LINE handoff flow has been hardened and deployed to production. The bot detects admin/staff handoff requests, stores pending handoff state, and sends staff notifications when `LINE_STAFF_NOTIFY_TARGET_ID` is configured. Production logs confirmed `required:true`, the user confirmed staff group messages are arriving, and the handoff copy has been cleaned up so customer/admin messages no longer expose internal reason codes.
 
 ### Completed Work
 
@@ -17,23 +17,27 @@ AI LINE handoff flow has been hardened and deployed to production. The bot now d
 - [x] Committed and pushed `251e045 fix: harden line ai handoff workflow`.
 - [x] Verified Vercel production deployments for `renthotel` and `rentroom` reached `READY`.
 - [x] User configured staff target and confirmed messages now enter the admin group.
+- [x] Removed developer-style reason text from customer replies, such as `(admin request)`.
+- [x] Improved staff notification copy so the admin group receives human-readable Thai text instead of raw labels like `[LINE AI Handoff]`, `Reason`, `Priority`, `Conversation`, and `LINE user`.
+- [x] Re-ran targeted tests, TypeScript, and build after the UX copy change.
+- [x] Committed and pushed `287b22e fix: improve line handoff copy`.
+- [x] Verified Vercel production deployment for `renthotel-one.vercel.app` reached `READY`.
 
 ### Unfinished Work
 
-- [ ] Remove developer-style reason text from customer replies, such as `(admin request)`.
-- [ ] Improve staff notification copy so the admin group receives human-readable Thai text instead of raw labels like `[LINE AI Handoff]`, `Reason`, `Priority`, `Conversation`, and `LINE user`.
-- [ ] Re-run targeted tests, TypeScript, and build after the UX copy change.
-- [ ] Redeploy/push if the user wants the copy update live in production immediately.
+- [ ] Optional next improvement: implement smarter room comparison/recommendation behavior from `hotel_ai_line_assistant_improvement_prompt_v2.md`.
+- [ ] Optional next improvement: add structured FAQ/policy/context filtering so lightweight LLM calls receive only relevant hotel knowledge.
+- [ ] Optional cleanup: remove temporary production diagnostic logs (`LINE webhook source`, `LINE staff handoff status`) after the LINE group setup is stable.
 
 ### Files Changed
 
 - `src/lib/ai/line-concierge.ts` - orchestrates guardrails, handoff pending state, and deterministic replies.
 - `src/lib/ai/handoff.ts` - detects risky handoff/admin/payment-slip cases.
 - `src/lib/ai/intent-router.ts` - reduces false positive availability routing.
-- `src/lib/ai/reply-composer.ts` - composes deterministic customer replies.
+- `src/lib/ai/reply-composer.ts` - composes deterministic customer replies and hides internal handoff reason codes.
 - `src/lib/ai/guardrails.ts` - privacy and unsafe answer validation.
 - `src/lib/line/logging.ts` - persists normalized handoff pending memory.
-- `src/lib/line/staff-notifier.ts` - currently still sends raw developer-style staff message and needs UX copy cleanup.
+- `src/lib/line/staff-notifier.ts` - sends human-readable Thai staff handoff notifications.
 - `src/app/api/line/webhook/route.ts` - logs webhook source and staff handoff status for production diagnosis.
 - `src/app/api/line/webhook/__tests__/route.test.ts` - route-level mocked webhook tests.
 - `src/lib/ai/__tests__/*` - regression tests for AI and handoff behavior.
@@ -43,10 +47,9 @@ AI LINE handoff flow has been hardened and deployed to production. The bot now d
 
 ### Known Issues
 
-- Customer reply still exposes internal normalized reason text, for example `(admin request)`.
-- Staff group notification is functional but too technical for admins.
 - Existing lint warnings remain in unrelated CMS image components about `<img>` usage.
 - Existing Next.js build warning remains: `middleware` convention is deprecated in favor of `proxy`.
+- Temporary webhook diagnostic logs are still intentionally enabled to help confirm LINE group/source and staff target behavior in production.
 
 ### Commands Already Run
 
@@ -57,6 +60,8 @@ npx tsc --noEmit
 npm run lint
 npm run build
 git commit -m "fix: harden line ai handoff workflow"
+git push origin master
+git commit -m "fix: improve line handoff copy"
 git push origin master
 ```
 
@@ -74,4 +79,4 @@ The current production app is receiving LINE webhooks correctly at `/api/line/we
 
 ### Next Recommended Step
 
-Write failing tests for customer-facing and staff-facing handoff copy, then update `reply-composer.ts` and `staff-notifier.ts` so both messages are natural Thai and do not expose internal labels.
+If continuing AI quality work, start with the room comparison/recommendation cases in `hotel_ai_line_assistant_improvement_prompt_v2.md`: write failing tests for questions like `ห้องแพงกับห้องถูกต่างกันยังไง`, `ไป 2 คน เอาห้องไหนดี`, and `ห้องถูกสุดกี่บาท`, then add deterministic/context-grounded behavior without inventing missing room features.
