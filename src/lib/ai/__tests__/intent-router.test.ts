@@ -47,6 +47,14 @@ describe("detectLineIntent", () => {
   it("includes handoff intent for risky staff cases", () => {
     expect(detectLineIntents("โอนแล้วแต่สลิปมีปัญหา ช่วยให้แอดมินตรวจให้หน่อย")).toContain("handoff");
   });
+
+  it("does not treat a customer name and phone number as an availability question", () => {
+    expect(detectLineIntents("มีนา คนะยก 0817963289")).toEqual(["general"]);
+  });
+
+  it("detects explicit admin requests as handoff", () => {
+    expect(detectLineIntents("ขอคุยกับแอดมินหน่อย")).toEqual(["handoff"]);
+  });
 });
 
 describe("buildDeterministicReply", () => {

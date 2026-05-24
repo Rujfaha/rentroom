@@ -18,7 +18,7 @@ export function detectLineIntents(message: string): LineIntent[] {
   const text = message.toLowerCase();
   const intents: LineIntent[] = [];
   if (detectLineHandoff(message)) intents.push("handoff");
-  if (/(ว่าง|ห้องว่าง|เข้าพัก|เช็คอิน|เช็กอิน|check.?in|check.?out|available|availability|room|stay|tomorrow|tonight|有没有|空房|部屋|空室|habitación|disponible|غرفة|متاح|คืน|คน|ท่าน|พรุ่งนี้|มะรืน|วันนี้)/i.test(text)) intents.push("availability");
+  if (hasAvailabilityIntent(text)) intents.push("availability");
   if (/(ราคา|เท่าไหร่|กี่บาท|เรท|rate|price|cheap|cheapest|lowest|budget|ถูกสุด|ถูกที่สุด|ประหยัด|价格|料金|precio|سعر)/i.test(text)) intents.push("price");
   if (/(โปร|โปรโมชั่น|ส่วนลด|ลดราคา|promotion|discount|deal|offer|优惠|割引|promoción|descuento|عرض|خصم)/i.test(text)) intents.push("promotion");
   if (/(ชำระ|จ่าย|โอน|พร้อมเพย์|promptpay|สลิป|บัญชี|payment|pay|transfer|slip|付款|支付|支払い|pagar|pago|دفع|تحويل)/i.test(text)) intents.push("payment");
@@ -26,6 +26,16 @@ export function detectLineIntents(message: string): LineIntent[] {
   if (/(จอง|จองห้อง|booking|book|reserve|reservation|เอาห้อง|สนใจ|预订|予約|reservar|reserva|حجز)/i.test(text)) intents.push("booking");
 
   return intents.length ? intents : ["general"];
+}
+
+function hasAvailabilityIntent(text: string): boolean {
+  const availabilityWords =
+    /(ว่าง|ห้องว่าง|เข้าพัก|เช็คอิน|เช็กอิน|check.?in|check.?out|available|availability|room|stay|tomorrow|tonight|有没有|空房|部屋|空室|habitación|disponible|غرفة|متاح|พรุ่งนี้|มะรืน|วันนี้)/i;
+  if (availabilityWords.test(text)) return true;
+
+  const hasGuestCount = /\d{1,2}\s*(คน|ท่าน)\b/.test(text);
+  const hasStayWord = /(ห้อง|พัก|จอง|คืน|เข้าพัก|เช็คอิน|เช็กอิน)/.test(text);
+  return hasGuestCount && hasStayWord;
 }
 
 export function buildDeterministicReply(input: DeterministicReplyInput): string | null {

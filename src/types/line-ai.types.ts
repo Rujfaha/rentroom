@@ -50,6 +50,7 @@ export type LineIntent = "availability" | "availability_payment" | "payment" | "
 export type SupportedLineLanguage = "th" | "zh" | "en" | "ja" | "es" | "ar";
 
 export type LineHandoffReason =
+  | "admin_request"
   | "payment_issue"
   | "refund"
   | "complaint"
@@ -124,6 +125,12 @@ export interface BookingLead {
 
 export interface LineConversationMemory {
   bookingLead?: BookingLead;
+  handoffPending?: {
+    reason: LineHandoffReason;
+    priority: LineHandoffRequest["priority"];
+    requestedAt: string;
+    lastCustomerMessage?: string;
+  };
 }
 
 export interface AiGenerateInput {

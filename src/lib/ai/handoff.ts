@@ -1,7 +1,8 @@
 import type { LineHandoffReason, LineHandoffRequest } from "@/types/line-ai.types";
 
 const HANDOFF_PATTERNS: Array<{ reason: LineHandoffReason; priority: LineHandoffRequest["priority"]; pattern: RegExp }> = [
-  { reason: "payment_issue", priority: "high", pattern: /(โอนแล้ว|โอนเงินแล้ว|สลิปมีปัญหา|จ่ายแล้ว|payment issue|paid already|transfer problem|付款.*问题|支払.*問題|pago.*problema|دفعت|مشكلة.*دفع)/i },
+  { reason: "payment_issue", priority: "high", pattern: /(โอนแล้ว|โอนเงินแล้ว|สลิปมีปัญหา|จ่ายแล้ว|ลืมแนบสลิป|ลืมอัปโหลดสลิป|ลืมอัพโหลดสลิป|แนบสลิปไม่ได้|อัปโหลดสลิปไม่ได้|payment issue|paid already|transfer problem|forgot.*slip|付款.*问题|支払.*問題|pago.*problema|دفعت|مشكلة.*دفع)/i },
+  { reason: "admin_request", priority: "normal", pattern: /(แอดมิน|admin|เจ้าหน้าที่|พนักงาน|คนดูแล|human|staff|operator|ขอคุยกับคน|คุยกับคน|ติดต่อคน|ส่งต่อให้คน)/i },
   { reason: "refund", priority: "high", pattern: /(refund|คืนเงิน|ขอเงินคืน|返金|退款|reembolso|استرداد)/i },
   { reason: "complaint", priority: "high", pattern: /(complaint|ร้องเรียน|ไม่พอใจ|แย่มาก|投诉|苦情|queja|شكوى)/i },
   { reason: "cancellation", priority: "normal", pattern: /(cancel|cancellation|ยกเลิก|取消|キャンセル|cancelar|إلغاء)/i },

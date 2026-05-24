@@ -13,8 +13,13 @@ const EMOJI = "😊";
 
 export function composeLineReply(input: ComposeLineReplyInput): string | null {
   const intents = normalizeIntents(input.intents);
+  const handoffPart = input.handoff?.required ? handoffSection(input.language, input.handoff, input.memory) : null;
+  if (handoffPart && input.handoff?.required && shouldUseHandoffOnly(input.handoff.reason)) {
+    return `${opener(input.language)} ${EMOJI}\n${handoffPart}`;
+  }
+
   const parts = [
-    input.handoff?.required ? handoffSection(input.language, input.handoff) : null,
+    handoffPart,
     intents.includes("availability") ? availabilitySection(input.context, input.bookingUrl, input.language) : null,
     intents.includes("price") && !input.context.availability ? priceSection(input.context, input.bookingUrl, input.language) : null,
     intents.includes("promotion") ? promotionSection(input.context, input.language) : null,
@@ -27,9 +32,14 @@ export function composeLineReply(input: ComposeLineReplyInput): string | null {
   return `${opener(input.language)} ${EMOJI}\n${parts.join("\n\n")}`;
 }
 
-function handoffSection(language: SupportedLineLanguage, handoff: LineHandoffRequest): string {
+function handoffSection(language: SupportedLineLanguage, handoff: LineHandoffRequest, memory: LineConversationMemory): string {
   const reason = handoff.reason.replaceAll("_", " ");
+  if (memory.handoffPending) return text(language, "handoffReceived", { reason });
   return text(language, "handoff", { reason });
+}
+
+function shouldUseHandoffOnly(reason: LineHandoffRequest["reason"]): boolean {
+  return reason !== "booking_ready";
 }
 
 function normalizeIntents(intents: LineIntent[]): LineIntent[] {
@@ -119,6 +129,7 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       bookingSummary: "ข้อมูลจองที่จำไว้: {dateText}",
       bookingStart: "เริ่มจองผ่านหน้าเว็บได้เลยครับ",
       handoff: "เคสนี้ผมส่งต่อให้ทีมงานช่วยตรวจสอบให้นะครับ ({reason}) รบกวนแจ้งชื่อ/เบอร์ที่ใช้จอง และรายละเอียดสั้น ๆ เพิ่มได้เลยครับ",
+      handoffReceived: "รับข้อมูลแล้วครับ ผมจะส่งต่อให้ทีมงานช่วยตรวจสอบเคสนี้ให้นะครับ ({reason})",
     },
     en: {
       availability: "Available options for {dateText}:",
@@ -138,6 +149,7 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       bookingSummary: "Saved booking details: {dateText}",
       bookingStart: "You can start booking on the website.",
       handoff: "I'll pass this to the team to review ({reason}). Please send the booking name/phone number and a short detail.",
+      handoffReceived: "Got it. I'll pass these details to the team for review ({reason}).",
     },
     zh: {
       availability: "{dateText} 可预订的房型：",
@@ -157,6 +169,7 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       bookingSummary: "已记录的预订信息：{dateText}",
       bookingStart: "可以从网站开始预订。",
       handoff: "我会转给工作人员协助处理（{reason}）。请提供预订姓名/电话和简短说明。",
+      handoffReceived: "已收到信息，我会转给工作人员协助处理（{reason}）。",
     },
     ja: {
       availability: "{dateText} の空室候補はこちらです：",
@@ -176,6 +189,7 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       bookingSummary: "記録中の予約情報：{dateText}",
       bookingStart: "ウェブサイトから予約を開始できます。",
       handoff: "スタッフに確認を引き継ぎます（{reason}）。予約名/電話番号と簡単な詳細を送ってください。",
+      handoffReceived: "情報を受け取りました。スタッフに確認を引き継ぎます（{reason}）。",
     },
     es: {
       availability: "Opciones disponibles para {dateText}:",
@@ -195,6 +209,7 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       bookingSummary: "Datos guardados de la reserva: {dateText}",
       bookingStart: "Puedes empezar la reserva en la web.",
       handoff: "Voy a pasar este caso al equipo para revisarlo ({reason}). Envíanos el nombre/teléfono de la reserva y un breve detalle.",
+      handoffReceived: "Recibido. Pasaré estos datos al equipo para revisarlo ({reason}).",
     },
     ar: {
       availability: "الخيارات المتاحة لـ {dateText}:",
@@ -214,6 +229,7 @@ function text(language: SupportedLineLanguage, key: string, values: Record<strin
       bookingSummary: "تفاصيل الحجز المحفوظة: {dateText}",
       bookingStart: "يمكنك بدء الحجز من الموقع.",
       handoff: "سأحوّل هذه الحالة إلى الفريق للمراجعة ({reason}). يرجى إرسال اسم/هاتف الحجز وتفاصيل قصيرة.",
+      handoffReceived: "تم استلام المعلومات. سأحوّلها إلى الفريق للمراجعة ({reason}).",
     },
   };
   return Object.entries(values).reduce((line, [keyName, value]) => line.replaceAll(`{${keyName}}`, value), templates[language][key] ?? templates.th[key] ?? key);

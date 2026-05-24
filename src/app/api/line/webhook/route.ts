@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
 }
 
 async function handleLineEvent(event: LineWebhookEvent): Promise<void> {
+  console.log("LINE webhook source:", JSON.stringify(event.source ?? null));
   if (!hasReplyToken(event)) return;
 
   if (isLineTextMessageEvent(event)) {
@@ -112,6 +113,16 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
       sourceMessage: event.message.text || "",
       metadata: { intent: result.intent },
     });
+    console.log(
+      "LINE staff handoff status:",
+      JSON.stringify({
+        required: Boolean(result.handoff?.required),
+        reason: result.handoff?.reason ?? null,
+        hasAccessToken: Boolean(accessToken),
+        staffTarget: describeLineTarget(process.env.LINE_STAFF_NOTIFY_TARGET_ID),
+        conversationId,
+      })
+    );
     await notifyLineStaffHandoff({
       accessToken,
       staffTargetId: process.env.LINE_STAFF_NOTIFY_TARGET_ID,
@@ -185,4 +196,13 @@ function isLineTextMessageEvent(event: LineWebhookEvent): event is LineMessageEv
     candidate.message?.type === "text" &&
     typeof candidate.message.text === "string"
   );
+}
+
+function describeLineTarget(targetId: string | undefined): { configured: boolean; prefix: string | null; length: number } {
+  const trimmed = targetId?.trim();
+  return {
+    configured: Boolean(trimmed),
+    prefix: trimmed ? trimmed.slice(0, 1) : null,
+    length: trimmed?.length ?? 0,
+  };
 }

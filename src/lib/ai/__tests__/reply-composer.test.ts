@@ -71,4 +71,25 @@ describe("composeLineReply", () => {
     expect(reply).toContain("ชื่อ/เบอร์");
     expect(reply).not.toContain("ยืนยันแล้ว");
   });
+
+  it("acknowledges customer details during a pending handoff instead of asking again", () => {
+    const reply = composeLineReply({
+      language: "th",
+      intents: ["handoff"],
+      context,
+      bookingUrl: "https://example.com/booking",
+      memory: {
+        handoffPending: {
+          reason: "payment_issue",
+          priority: "high",
+          requestedAt: "2026-05-24T08:00:00.000Z",
+        },
+      },
+      handoff: { required: true, reason: "payment_issue", priority: "high" },
+    });
+
+    expect(reply).toContain("รับข้อมูลแล้ว");
+    expect(reply).toContain("ทีมงาน");
+    expect(reply).not.toContain("จองต่อได้ที่");
+  });
 });

@@ -1,4 +1,4 @@
-import type { AiGenerateResult, LineConversationMemory, LineHandoffRequest, LineMessageHistoryItem } from "@/types/line-ai.types";
+import type { AiGenerateResult, LineConversationMemory, LineHandoffReason, LineHandoffRequest, LineMessageHistoryItem } from "@/types/line-ai.types";
 
 type ServiceClient = Awaited<ReturnType<typeof import("../supabase/service").createServiceClient>>;
 
@@ -302,17 +302,38 @@ async function touchLineConversation(supabase: ServiceClient, conversationId: st
 
 function normalizeConversationMemory(value: Record<string, unknown>): LineConversationMemory {
   const bookingLead = value.bookingLead;
-  if (!bookingLead || typeof bookingLead !== "object") return {};
+  const handoffPending = value.handoffPending;
+  if ((!bookingLead || typeof bookingLead !== "object") && (!handoffPending || typeof handoffPending !== "object")) return {};
 
+  const memory: LineConversationMemory = {};
+  if (handoffPending && typeof handoffPending === "object") {
+    const pending = handoffPending as Record<string, unknown>;
+    const reason = pending.reason;
+    const priority = pending.priority;
+    const requestedAt = pending.requestedAt;
+    if (
+      typeof reason === "string" &&
+      typeof requestedAt === "string" &&
+      (priority === "normal" || priority === "high")
+    ) {
+      memory.handoffPending = {
+        reason: reason as LineHandoffReason,
+        priority,
+        requestedAt,
+        ...(typeof pending.lastCustomerMessage === "string" ? { lastCustomerMessage: pending.lastCustomerMessage } : {}),
+      };
+    }
+  }
+
+  if (!bookingLead || typeof bookingLead !== "object") return memory;
   const lead = bookingLead as Record<string, unknown>;
-  return {
-    bookingLead: {
-      ...(typeof lead.checkIn === "string" ? { checkIn: lead.checkIn } : {}),
-      ...(typeof lead.checkOut === "string" ? { checkOut: lead.checkOut } : {}),
-      ...(typeof lead.guests === "number" ? { guests: lead.guests } : {}),
-      ...(typeof lead.roomTypeName === "string" ? { roomTypeName: lead.roomTypeName } : {}),
-      ...(typeof lead.guestName === "string" ? { guestName: lead.guestName } : {}),
-      ...(typeof lead.phone === "string" ? { phone: lead.phone } : {}),
-    },
+  memory.bookingLead = {
+    ...(typeof lead.checkIn === "string" ? { checkIn: lead.checkIn } : {}),
+    ...(typeof lead.checkOut === "string" ? { checkOut: lead.checkOut } : {}),
+    ...(typeof lead.guests === "number" ? { guests: lead.guests } : {}),
+    ...(typeof lead.roomTypeName === "string" ? { roomTypeName: lead.roomTypeName } : {}),
+    ...(typeof lead.guestName === "string" ? { guestName: lead.guestName } : {}),
+    ...(typeof lead.phone === "string" ? { phone: lead.phone } : {}),
   };
+  return memory;
 }

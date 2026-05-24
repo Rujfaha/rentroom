@@ -1,6 +1,7 @@
 import { LINE_AI_FALLBACK_REPLY, LINE_TEXT_LIMIT } from "../../constants/line-ai";
 import type { AiGenerateResult, AvailabilityRequest, LineConversationMemory, LineMessageHistoryItem } from "@/types/line-ai.types";
 import { parseThaiDateRange } from "../../utils/thai-date-parser";
+import { detectPrivacyRestrictedQuestion, validateAiAnswer } from "./guardrails";
 import { buildHotelContext, formatHotelContextPrompt, summarizeAvailability } from "./hotel-context";
 import { detectLineHandoff } from "./handoff";
 import { detectLineIntent, detectLineIntents, mergeBookingLead } from "./intent-router";
@@ -58,16 +59,33 @@ export interface GenerateLineConciergeReplyOptions {
 }
 
 export async function generateLineConciergeReply(message: string, options: GenerateLineConciergeReplyOptions = {}): Promise<LineConciergeReply> {
-  const intent = detectLineIntent(message);
-  const intents = detectLineIntents(message);
   const language = detectLineLanguage(message);
-  const handoff = detectLineHandoff(message);
-  const parsedRequest = extractAvailabilityRequest(message);
-  const memory = parsedRequest ? mergeBookingLead(options.memory ?? {}, parsedRequest) : options.memory ?? {};
+  const existingMemory = options.memory ?? {};
+  const privacy = detectPrivacyRestrictedQuestion(message);
+  if (privacy) {
+    const context = await buildHotelContext(null);
+    return {
+      hotelId: context.hotelId,
+      reply: normalizeLineReply(privacy.safeAnswer),
+      provider: "gemini",
+      model: "guardrail",
+      memory: existingMemory,
+      intent: "privacy_restricted",
+      handoff: null,
+    };
+  }
+
+  const pendingHandoff = resolvePendingHandoff(message, existingMemory);
+  const handoff = detectLineHandoff(message) ?? pendingHandoff;
+  const intents = pendingHandoff ? (["handoff"] as const) : detectLineIntents(message);
+  const intent = pendingHandoff ? "handoff" : detectLineIntent(message);
+  const parsedRequest = pendingHandoff ? null : extractAvailabilityRequest(message);
+  const replyMemory = parsedRequest ? mergeBookingLead(existingMemory, parsedRequest) : existingMemory;
+  const memory = updateHandoffMemory(replyMemory, handoff, message);
   const availabilityRequest = parsedRequest ?? getAvailabilityFromMemory(memory, intent);
   const context = await buildHotelContext(availabilityRequest);
   const bookingUrl = buildBookingUrl(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000", availabilityRequest);
-  const deterministicReply = composeLineReply({ language, intents, context, bookingUrl, memory, handoff });
+  const deterministicReply = composeLineReply({ language, intents: [...intents], context, bookingUrl, memory: replyMemory, handoff });
   if (deterministicReply) {
     return {
       hotelId: context.hotelId,
@@ -102,15 +120,52 @@ export async function generateLineConciergeReply(message: string, options: Gener
       .filter((line): line is string => Boolean(line))
       .join("\n"),
   });
+  const validation = validateAiAnswer({
+    answer: result.text,
+    hasAvailabilityData: Boolean(context.availability),
+    privacyRestricted: false,
+  });
 
   return {
     hotelId: context.hotelId,
-    reply: normalizeLineReply(result.text),
+    reply: normalizeLineReply(validation.allowed ? result.text : validation.safeAnswer ?? LINE_AI_FALLBACK_REPLY),
     provider: result.provider,
     model: result.model,
     memory,
     intent: intents.join(","),
     handoff,
+  };
+}
+
+function resolvePendingHandoff(message: string, memory: LineConversationMemory): ReturnType<typeof detectLineHandoff> {
+  if (!memory.handoffPending || !looksLikeHandoffFollowUp(message)) return null;
+  return {
+    required: true,
+    reason: memory.handoffPending.reason,
+    priority: memory.handoffPending.priority,
+  };
+}
+
+function looksLikeHandoffFollowUp(message: string): boolean {
+  const text = message.trim();
+  if (!text) return false;
+  return /\b0\d{8,9}\b/.test(text) || /(ชื่อ|เบอร์|โทร|สลิป|booking|จอง)/i.test(text);
+}
+
+function updateHandoffMemory(
+  memory: LineConversationMemory,
+  handoff: ReturnType<typeof detectLineHandoff>,
+  sourceMessage: string
+): LineConversationMemory {
+  if (!handoff?.required) return memory;
+  return {
+    ...memory,
+    handoffPending: {
+      reason: handoff.reason,
+      priority: handoff.priority,
+      requestedAt: memory.handoffPending?.requestedAt ?? new Date().toISOString(),
+      lastCustomerMessage: sourceMessage.slice(0, 1000),
+    },
   };
 }
 
