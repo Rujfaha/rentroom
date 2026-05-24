@@ -11,6 +11,14 @@ describe("verifyLineSignature", () => {
     expect(verifyLineSignature(body, signature, secret)).toBe(true);
   });
 
+  it("trims copied channel secrets before verification", () => {
+    const body = JSON.stringify({ events: [] });
+    const secret = "channel-secret";
+    const signature = createHmac("sha256", secret).update(body).digest("base64");
+
+    expect(verifyLineSignature(body, signature, ` ${secret}\n`)).toBe(true);
+  });
+
   it("rejects missing, malformed, or mismatched signatures", () => {
     const body = JSON.stringify({ events: [] });
     const secret = "channel-secret";

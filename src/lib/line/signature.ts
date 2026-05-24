@@ -1,9 +1,10 @@
 import { createHmac, timingSafeEqual } from "crypto";
 
 export function verifyLineSignature(body: string, signature: string | null, channelSecret: string): boolean {
-  if (!signature || !channelSecret) return false;
+  const normalizedSecret = channelSecret.trim();
+  if (!signature || !normalizedSecret) return false;
 
-  const expected = createHmac("sha256", channelSecret).update(body).digest();
+  const expected = createHmac("sha256", normalizedSecret).update(body).digest();
   let actual: Buffer;
 
   try {

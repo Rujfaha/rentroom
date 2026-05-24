@@ -12,7 +12,7 @@ export const runtime = "nodejs";
 
 export async function POST(request: NextRequest) {
   const body = await request.text();
-  const channelSecret = process.env.LINE_CHANNEL_SECRET;
+  const channelSecret = process.env.LINE_CHANNEL_SECRET?.trim();
 
   if (!channelSecret) {
     console.error("LINE_CHANNEL_SECRET is not configured");
@@ -53,7 +53,7 @@ async function handleLineEvent(event: LineWebhookEvent): Promise<void> {
 }
 
 async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
-  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
   const lineUserId = event.source.userId ?? null;
 
   try {
@@ -94,7 +94,7 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
 }
 
 async function safeReply(replyToken: string, text: string): Promise<void> {
-  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN;
+  const accessToken = process.env.LINE_CHANNEL_ACCESS_TOKEN?.trim();
   if (!accessToken) {
     console.error("LINE_CHANNEL_ACCESS_TOKEN is not configured");
     return;

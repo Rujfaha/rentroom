@@ -16,10 +16,11 @@ export async function replyLineMessage({
   messages,
   fetcher = fetch,
 }: ReplyLineMessageInput): Promise<void> {
+  const token = accessToken.trim();
   const response = await fetcher(LINE_REPLY_ENDPOINT, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${accessToken}`,
+      Authorization: `Bearer ${token}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ replyToken, messages }),
