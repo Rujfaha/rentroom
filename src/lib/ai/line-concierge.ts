@@ -78,11 +78,14 @@ export async function generateLineConciergeReply(message: string, options: Gener
     };
   }
 
-  const pendingHandoff = resolvePendingHandoff(message, existingMemory);
-  const handoff = detectLineHandoff(message) ?? pendingHandoff;
+  const resetPattern = /(เริ่มจองใหม่|จองใหม่|เริ่มต้นใหม่|ล้างข้อมูล|clear memory|start over|new booking)/i;
+  const isReset = resetPattern.test(message);
+
+  const pendingHandoff = isReset ? null : resolvePendingHandoff(message, existingMemory);
+  const handoff = isReset ? null : (detectLineHandoff(message) ?? pendingHandoff);
   const intents = pendingHandoff ? (["handoff"] as const) : detectLineIntents(message);
   const intent = pendingHandoff ? "handoff" : detectLineIntent(message);
-  const parsedRequest = pendingHandoff ? null : extractAvailabilityRequest(message);
+  const parsedRequest = pendingHandoff || isReset ? null : extractAvailabilityRequest(message);
   
   const extractedLeadInfo = pendingHandoff ? {} : extractLeadInfo(message);
   const replyMemory = mergeLeadMemory(existingMemory, parsedRequest, extractedLeadInfo, message);
@@ -91,7 +94,7 @@ export async function generateLineConciergeReply(message: string, options: Gener
   const context = await buildHotelContext(availabilityRequest);
   const bookingUrl = buildBookingUrl(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000", availabilityRequest);
   
-  const deterministicReply = composeLineReply({ language, intents: [...intents], context, bookingUrl, memory: replyMemory, handoff, isFirstInteraction });
+  const deterministicReply = composeLineReply({ language, intents: [...intents], context, bookingUrl, memory: replyMemory, handoff, isFirstInteraction, message });
   if (deterministicReply) {
     return {
       hotelId: context.hotelId,
@@ -213,7 +216,12 @@ export function extractLeadInfo(message: string): Partial<BookingLead> {
   } else {
     const guestsMatch = text.match(/(\d{1,2})\s*(คน|ท่าน)/);
     if (guestsMatch?.[1]) {
-      lead.guests = Number(guestsMatch[1]);
+      const parsedGuests = Number(guestsMatch[1]);
+      lead.guests = parsedGuests;
+      if (parsedGuests < 10) {
+        lead.isGroupBooking = false;
+        lead.leadScore = "medium";
+      }
     }
   }
 
@@ -226,6 +234,19 @@ export function mergeLeadMemory(
   extracted: Partial<BookingLead>,
   message: string
 ): LineConversationMemory {
+  // If the user explicitly requests starting over or starting a new booking,
+  // we clear the accumulated booking lead memory and handoff state.
+  const resetPattern = /(เริ่มจองใหม่|จองใหม่|เริ่มต้นใหม่|ล้างข้อมูล|clear memory|start over|new booking)/i;
+  if (resetPattern.test(message)) {
+    return {
+      ...existing,
+      bookingLead: {
+        source: {}
+      },
+      handoffPending: undefined
+    };
+  }
+
   const prevLead = existing.bookingLead ?? {};
   const prevSource = prevLead.source ?? {};
   

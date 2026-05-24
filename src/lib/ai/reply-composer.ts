@@ -9,6 +9,7 @@ interface ComposeLineReplyInput {
   memory: LineConversationMemory;
   handoff?: LineHandoffRequest | null;
   isFirstInteraction?: boolean;
+  message?: string;
 }
 
 export function composeLineReply(input: ComposeLineReplyInput): string | null {
@@ -28,6 +29,24 @@ export function composeLineReply(input: ComposeLineReplyInput): string | null {
   const intro = input.isFirstInteraction
     ? buildAssistantGreeting(HOSPIQ_ASSISTANT_PROFILE, input.language, input.context)
     : HOSPIQ_ASSISTANT_PROFILE.openerByLanguage[input.language];
+
+  // Intercept and return unconfident/inferred checkout date warning globally
+  const lead = input.memory.bookingLead;
+  const isUnconfident = lead?.source?.checkIn === "inferred" || lead?.source?.checkOut === "inferred";
+  if (isUnconfident) {
+    const requestedRoomName = lead?.roomTypeName;
+    const room = input.context.roomTypes.find(r => r.name.toLowerCase() === requestedRoomName?.toLowerCase());
+    const roomPart = room ? `สนใจ ${room.name} โดย` : "";
+    
+    const checkInDesc = getCheckInWarningDescription(input.message || "");
+    const checkoutDesc = getCheckoutWarningDescription(input.message || "");
+    
+    const warningText = input.language === "th"
+      ? `รับทราบค่ะ คุณลูกค้า${roomPart}ต้องการเข้าพัก${checkInDesc} และเช็กเอาต์${checkoutDesc}ใช่ไหมคะ\n\nเพื่อความถูกต้อง รบกวนยืนยันวันที่เข้าพักเป็นรูปแบบวัน/เดือนให้อีกครั้งได้ไหมคะ และเข้าพักกี่ท่านคะ`
+      : `Received your inquiry. You want to stay starting ${checkInDesc} and check out ${checkoutDesc}, correct? Please confirm your stay dates and guest count for accuracy.`;
+    
+    return joinParagraphs([intro, warningText]);
+  }
 
   if (handoffPart && input.handoff?.required && shouldUseHandoffOnly(input.handoff.reason)) {
     return joinParagraphs([intro, handoffPart]);
@@ -121,25 +140,21 @@ export function composeLineReply(input: ComposeLineReplyInput): string | null {
     
     if (room) {
       const lead = input.memory.bookingLead;
-      const isUnconfident = lead?.source?.checkIn === "inferred" || lead?.source?.checkOut === "inferred";
+      const hasDates = lead?.checkIn && lead?.checkOut;
+      const hasGuests = lead?.guests;
       
-      if (isUnconfident) {
+      if (hasDates && hasGuests) {
         parts.push(input.language === "th"
-          ? `รับทราบค่ะ คุณลูกค้าสนใจ ${room.name} โดยต้องการเข้าพักพรุ่งนี้ และเช็กเอาต์วันที่ 30 เดือนหน้าใช่ไหมคะ\n\nเพื่อความถูกต้อง รบกวนยืนยันวันที่เข้าพักเป็นรูปแบบวัน/เดือนให้อีกครั้งได้ไหมคะ และเข้าพักกี่ท่านคะ`
-          : `Got it, you are interested in ${room.name} checking in tomorrow and checking out on the 30th of next month, right? Please confirm the dates and guest count.`);
+          ? `สนใจ ${room.name} ในวันที่ ${lead.checkIn} ถึง ${lead.checkOut} สำหรับ ${hasGuests} ท่านนะคะ สามารถกดจองผ่านลิงก์ด้านล่างได้เลยค่ะ`
+          : `Sure, you're interested in ${room.name} from ${lead.checkIn} to ${lead.checkOut} for ${hasGuests} guests. You can book using the link below.`);
       } else {
-        const hasDates = lead?.checkIn && lead?.checkOut;
-        const hasGuests = lead?.guests;
-        
-        if (hasDates && hasGuests) {
-          parts.push(input.language === "th"
-            ? `ได้เลยค่ะ สนใจ ${room.name} ในวันที่ ${lead.checkIn} ถึง ${lead.checkOut} สำหรับ ${hasGuests} ท่านนะคะ สามารถกดจองผ่านลิงก์ด้านล่างได้เลยค่ะ`
-            : `Sure, you're interested in ${room.name} from ${lead.checkIn} to ${lead.checkOut} for ${hasGuests} guests. You can book using the link below.`);
-        } else {
-          parts.push(input.language === "th"
-            ? `ได้เลยค่ะ ${room.name} เป็นห้องพักที่คุ้มค่าและน่าพักผ่อนมากค่ะ\n\nรบกวนแจ้งวันที่เข้าพัก วันที่เช็กเอาต์ และจำนวนผู้เข้าพักได้ไหมคะ เดี๋ยวช่วยดูข้อมูลให้ต่อค่ะ`
-            : `Sure! ${room.name} is a great choice. Could you please let us know your check-in date, check-out date, and number of guests?`);
-        }
+        const desc = room.description ? `${room.description} ค่ะ` : "เป็นห้องพักที่น่าพักผ่อนและคุ้มค่ามากค่ะ";
+        const amenitiesText = room.amenities && room.amenities.length > 0
+          ? `\nมีสิ่งอำนวยความสะดวกครบครัน เช่น ${room.amenities.slice(0, 4).join(", ")}`
+          : "";
+        parts.push(input.language === "th"
+          ? `${room.name} ${desc}${amenitiesText}\n\nรบกวนแจ้งวันที่เข้าพัก วันที่เช็กเอาต์ และจำนวนผู้เข้าพักได้ไหมคะ เดี๋ยวช่วยดูข้อมูลให้ต่อค่ะ`
+          : `Sure! ${room.name} is a great choice. Could you please let us know your check-in date, check-out date, and number of guests?`);
       }
     }
   } else {
@@ -392,4 +407,26 @@ function formatCurrency(value: number): string {
 function hasBookingOrAvailabilityIntent(intents: LineIntent[]): boolean {
   const targetIntents: LineIntent[] = ["availability", "booking", "price", "availability_check", "booking_intent", "group_booking"];
   return intents.some(intent => targetIntents.includes(intent));
+}
+
+function getCheckInWarningDescription(message: string): string {
+  const text = message.toLowerCase();
+  if (text.includes("พรุ่งนี้") || text.includes("tomorrow")) {
+    return "พรุ่งนี้";
+  }
+  if (text.includes("วันนี้") || text.includes("today")) {
+    return "วันนี้";
+  }
+  return "วันที่แจ้ง";
+}
+
+function getCheckoutWarningDescription(message: string): string {
+  const text = message.toLowerCase();
+  if (text.includes("เดือนนี้") || text.includes("this month")) {
+    return "วันที่ 30 เดือนนี้";
+  }
+  if (text.includes("30")) {
+    return "วันที่ 30 เดือนหน้า";
+  }
+  return "วันที่แจ้ง";
 }
