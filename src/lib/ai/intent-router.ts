@@ -93,6 +93,9 @@ function hasAvailabilityIntent(text: string): boolean {
     /(ว่าง|ห้องว่าง|เข้าพัก|เช็คอิน|เช็กอิน|check.?in|check.?out|available|availability|room|stay|tomorrow|tonight|有没有|空房|部屋|空室|habitación|disponible|غرفة|متاح|พรุ่งนี้|มะรืน|วันนี้)/i;
   if (availabilityWords.test(text)) return true;
 
+  const datePatterns = /(วัน(?:ที่)?\s*\d{1,2}|\b\d{1,2}[\s\-/]+(?:ถึง)?\s*\d{1,2}\b|มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.|เดือนนี้|เดือนหน้า|ปีนี้|ปีหน้า)/i;
+  if (datePatterns.test(text)) return true;
+
   const hasGuestCount = /\d{1,2}\s*(คน|ท่าน)\b/.test(text);
   const hasStayWord = /(ห้อง|พัก|จอง|คืน|เข้าพัก|เช็คอิน|เช็กอิน)/.test(text);
   return hasGuestCount && hasStayWord;

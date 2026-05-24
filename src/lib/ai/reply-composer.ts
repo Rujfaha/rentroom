@@ -14,7 +14,17 @@ interface ComposeLineReplyInput {
 export function composeLineReply(input: ComposeLineReplyInput): string | null {
   const rawIntents = input.intents;
   const intents = normalizeIntents(input.intents);
-  const handoffPart = input.handoff?.required ? handoffSection(input.language, input.handoff, input.memory) : null;
+  
+  // A group booking handoff initially shouldn't show the generic handoff request
+  // because we want to show the custom group recommendation/instructions first.
+  const isInitialGroupBookingHandoff = input.handoff?.required && 
+                                       input.handoff.reason === "group_booking" && 
+                                       !input.memory.handoffPending;
+
+  const handoffPart = (input.handoff?.required && !isInitialGroupBookingHandoff)
+    ? handoffSection(input.language, input.handoff, input.memory)
+    : null;
+
   const intro = input.isFirstInteraction
     ? buildAssistantGreeting(HOSPIQ_ASSISTANT_PROFILE, input.language, input.context)
     : HOSPIQ_ASSISTANT_PROFILE.openerByLanguage[input.language];
@@ -25,7 +35,12 @@ export function composeLineReply(input: ComposeLineReplyInput): string | null {
 
   const parts: Array<string | null> = [handoffPart];
 
-  if (rawIntents.includes("group_booking") || input.memory.bookingLead?.isGroupBooking) {
+  // We check memory for isGroupBooking only if the current intents contain booking or availability inquiry.
+  // This prevents triggering the group booking recommendation on greeting ("สวัสดีครับ") or unrelated questions.
+  const hasGroupIntent = rawIntents.includes("group_booking") || 
+                         (input.memory.bookingLead?.isGroupBooking && hasBookingOrAvailabilityIntent(rawIntents));
+
+  if (hasGroupIntent) {
     const guests = input.memory.bookingLead?.guests || 10;
     const groupText = input.language === "th"
       ? `สำหรับ ${guests} ท่าน แนะนำเป็นการจองหลายห้องค่ะ โดยอาจจัดเป็นหลายห้องตามจำนวนผู้เข้าพักและรูปแบบการนอนที่ต้องการ\n\nรบกวนแจ้งวันที่เข้าพัก จำนวนผู้ใหญ่/เด็ก และสะดวกแยกหลายห้องไหมคะ เดี๋ยวช่วยประสานทีมงานเช็กห้องว่างและข้อเสนอสำหรับกรุ๊ปให้ค่ะ`
@@ -350,4 +365,9 @@ function capacityWord(language: SupportedLineLanguage): string {
 
 function formatCurrency(value: number): string {
   return value.toLocaleString("th-TH", { maximumFractionDigits: 0 });
+}
+
+function hasBookingOrAvailabilityIntent(intents: LineIntent[]): boolean {
+  const targetIntents: LineIntent[] = ["availability", "booking", "price", "availability_check", "booking_intent", "group_booking"];
+  return intents.some(intent => targetIntents.includes(intent));
 }

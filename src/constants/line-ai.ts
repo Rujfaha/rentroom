@@ -2,7 +2,7 @@ export const LINE_REPLY_ENDPOINT = "https://api.line.me/v2/bot/message/reply";
 export const LINE_PUSH_ENDPOINT = "https://api.line.me/v2/bot/message/push";
 
 export const DEFAULT_AI_PROVIDER = "gemini";
-export const DEFAULT_GEMINI_MODEL = "gemini-2.5-flash";
+export const DEFAULT_GEMINI_MODEL = "gemini-3.1-flash-lite";
 export const LINE_TEXT_LIMIT = 1900;
 
 export const LINE_AI_FALLBACK_REPLY =
