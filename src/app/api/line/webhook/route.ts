@@ -3,7 +3,13 @@ import { LINE_AI_FALLBACK_REPLY, LINE_UNSUPPORTED_MESSAGE_REPLY } from "@/consta
 import { generateLineConciergeReply } from "@/lib/ai/line-concierge";
 import { resolveActiveHotelId } from "@/lib/ai/hotel-context";
 import { replyLineMessage } from "@/lib/line/client";
-import { ensureLineConversation, recordLineMessage } from "@/lib/line/logging";
+import {
+  ensureLineConversation,
+  getLineConversationMemory,
+  getRecentLineMessages,
+  recordLineMessage,
+  updateLineConversationMemory,
+} from "@/lib/line/logging";
 import { verifyLineSignature } from "@/lib/line/signature";
 import { createServiceClient } from "@/lib/supabase/service";
 import type { LineMessageEvent, LineWebhookEvent, LineWebhookPayload } from "@/types/line-ai.types";
@@ -57,12 +63,14 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
   const lineUserId = event.source.userId ?? null;
 
   try {
-    const result = await generateLineConciergeReply(event.message.text || "");
+    const hotelId = await resolveActiveHotelId();
+    if (!hotelId) throw new Error("Active hotel not found");
+
     const supabase = await createServiceClient();
-    const conversationId = await ensureLineConversation(supabase, result.hotelId, lineUserId);
+    const conversationId = await ensureLineConversation(supabase, hotelId, lineUserId);
 
     await recordLineMessage(supabase, {
-      hotelId: result.hotelId,
+      hotelId,
       lineUserId,
       conversationId,
       direction: "inbound",
@@ -70,6 +78,12 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
       lineMessageId: event.message.id,
       text: event.message.text || "",
     });
+
+    const [memory, history] = await Promise.all([
+      getLineConversationMemory(supabase, conversationId),
+      getRecentLineMessages(supabase, conversationId),
+    ]);
+    const result = await generateLineConciergeReply(event.message.text || "", { memory, history });
 
     if (!accessToken) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured");
     await replyLineMessage({
@@ -86,7 +100,9 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
       messageType: "text",
       text: result.reply,
       ai: { provider: result.provider, model: result.model },
+      metadata: { intent: result.intent },
     });
+    await updateLineConversationMemory(supabase, conversationId, result.memory, result.intent);
   } catch (error) {
     console.error("LINE text event handling error:", error);
     await safeReply(event.replyToken, LINE_AI_FALLBACK_REPLY);

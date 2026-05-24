@@ -46,6 +46,8 @@ export interface AvailabilityRequest {
   guests?: number;
 }
 
+export type LineIntent = "availability" | "payment" | "price" | "promotion" | "contact" | "booking" | "general";
+
 export interface AvailableRoomTypeSummary {
   id: string;
   name: string;
@@ -67,6 +69,11 @@ export interface HotelPromotionSummary {
   validUntil: string | null;
 }
 
+export interface HotelPaymentSummary {
+  promptPayConfigured: boolean;
+  accountName: string | null;
+}
+
 export interface HotelContext {
   hotelId: string;
   hotelName: string;
@@ -75,12 +82,32 @@ export interface HotelContext {
   phone: string | null;
   email: string | null;
   contacts: HotelContactSummary[];
+  payment: HotelPaymentSummary;
   roomTypes: AvailableRoomTypeSummary[];
   promotions: HotelPromotionSummary[];
   availability?: {
     request: AvailabilityRequest;
     roomTypes: AvailableRoomTypeSummary[];
   };
+}
+
+export interface LineMessageHistoryItem {
+  direction: "inbound" | "outbound";
+  text: string;
+  createdAt: string;
+}
+
+export interface BookingLead {
+  checkIn?: string;
+  checkOut?: string;
+  guests?: number;
+  roomTypeName?: string;
+  guestName?: string;
+  phone?: string;
+}
+
+export interface LineConversationMemory {
+  bookingLead?: BookingLead;
 }
 
 export interface AiGenerateInput {

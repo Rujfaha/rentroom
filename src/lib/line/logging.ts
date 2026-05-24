@@ -1,9 +1,19 @@
-import type { AiGenerateResult } from "@/types/line-ai.types";
+import type { AiGenerateResult, LineConversationMemory, LineMessageHistoryItem } from "@/types/line-ai.types";
 
 type ServiceClient = Awaited<ReturnType<typeof import("../supabase/service").createServiceClient>>;
 
 interface ConversationIdRow {
   id: string;
+}
+
+interface ConversationMemoryRow {
+  metadata: Record<string, unknown> | null;
+}
+
+interface RecentLineMessageRow {
+  direction: string;
+  text: string | null;
+  created_at: string;
 }
 
 interface DbResult {
@@ -48,6 +58,24 @@ interface UpdateByIdTable<TUpdate> {
   };
 }
 
+interface SelectConversationMemoryTable<TResult> {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      maybeSingle(): Promise<{ data: TResult | null; error: { message?: string } | null }>;
+    };
+  };
+}
+
+interface SelectRecentMessagesTable<TResult> {
+  select(columns: string): {
+    eq(column: string, value: string): {
+      order(column: string, options: { ascending: boolean }): {
+        limit(count: number): Promise<{ data: TResult[] | null; error: { message?: string } | null }>;
+      };
+    };
+  };
+}
+
 interface LineUserUpsert {
   hotel_id: string;
   line_user_id: string;
@@ -62,6 +90,8 @@ interface LineConversationInsert {
 
 interface LineConversationUpdate {
   last_message_at: string;
+  last_intent?: string | null;
+  metadata?: Record<string, unknown>;
 }
 
 interface LineMessageInsert {
@@ -160,6 +190,68 @@ export async function recordLineMessage(supabase: ServiceClient, input: LineMess
   if (error) console.error("LINE message log error:", error);
 }
 
+export async function getLineConversationMemory(supabase: ServiceClient, conversationId: string | null): Promise<LineConversationMemory> {
+  if (!conversationId) return {};
+
+  const conversationsTable = supabase.from("line_conversations") as unknown as SelectConversationMemoryTable<ConversationMemoryRow>;
+  const { data, error } = await conversationsTable.select("metadata").eq("id", conversationId).maybeSingle();
+  if (error || !data?.metadata) {
+    if (error) console.error("LINE conversation memory fetch error:", error);
+    return {};
+  }
+
+  return normalizeConversationMemory(data.metadata);
+}
+
+export async function updateLineConversationMemory(
+  supabase: ServiceClient,
+  conversationId: string | null,
+  memory: LineConversationMemory,
+  intent?: string
+): Promise<void> {
+  if (!conversationId) return;
+
+  const lineConversationsUpdateTable = supabase.from("line_conversations") as unknown as UpdateByIdTable<LineConversationUpdate>;
+  const { error } = await lineConversationsUpdateTable
+    .update({
+      metadata: memory as Record<string, unknown>,
+      last_intent: intent ?? null,
+      last_message_at: new Date().toISOString(),
+    })
+    .eq("id", conversationId);
+
+  if (error) console.error("LINE conversation memory update error:", error);
+}
+
+export async function getRecentLineMessages(
+  supabase: ServiceClient,
+  conversationId: string | null,
+  limit = 8
+): Promise<LineMessageHistoryItem[]> {
+  if (!conversationId) return [];
+
+  const messagesTable = supabase.from("line_messages") as unknown as SelectRecentMessagesTable<RecentLineMessageRow>;
+  const { data, error } = await messagesTable
+    .select("direction, text, created_at")
+    .eq("conversation_id", conversationId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) {
+    console.error("LINE recent messages fetch error:", error);
+    return [];
+  }
+
+  return (data ?? [])
+    .filter((item) => item.text?.trim())
+    .reverse()
+    .map((item) => ({
+      direction: item.direction === "outbound" ? "outbound" : "inbound",
+      text: item.text?.trim() ?? "",
+      createdAt: item.created_at,
+    }));
+}
+
 async function touchLineConversation(supabase: ServiceClient, conversationId: string): Promise<void> {
   const lineConversationsUpdateTable = supabase.from("line_conversations") as unknown as UpdateByIdTable<LineConversationUpdate>;
   const { error } = await lineConversationsUpdateTable
@@ -167,4 +259,21 @@ async function touchLineConversation(supabase: ServiceClient, conversationId: st
     .eq("id", conversationId);
 
   if (error) console.error("LINE conversation touch error:", error);
+}
+
+function normalizeConversationMemory(value: Record<string, unknown>): LineConversationMemory {
+  const bookingLead = value.bookingLead;
+  if (!bookingLead || typeof bookingLead !== "object") return {};
+
+  const lead = bookingLead as Record<string, unknown>;
+  return {
+    bookingLead: {
+      ...(typeof lead.checkIn === "string" ? { checkIn: lead.checkIn } : {}),
+      ...(typeof lead.checkOut === "string" ? { checkOut: lead.checkOut } : {}),
+      ...(typeof lead.guests === "number" ? { guests: lead.guests } : {}),
+      ...(typeof lead.roomTypeName === "string" ? { roomTypeName: lead.roomTypeName } : {}),
+      ...(typeof lead.guestName === "string" ? { guestName: lead.guestName } : {}),
+      ...(typeof lead.phone === "string" ? { phone: lead.phone } : {}),
+    },
+  };
 }

@@ -10,6 +10,7 @@ const context: HotelContext = {
   phone: "0812345678",
   email: "stay@example.com",
   contacts: [{ type: "line", label: "LINE", value: "@arkkarawin" }],
+  payment: { promptPayConfigured: true, accountName: "Arkkarawin Resort" },
   roomTypes: [
     { id: "rt-1", name: "Deluxe", basePrice: 1200, maxGuests: 2, availableRooms: 3 },
     { id: "rt-2", name: "Family", basePrice: 2200, maxGuests: 4, availableRooms: 1 },

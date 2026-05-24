@@ -14,6 +14,7 @@ interface HotelRow {
   address: string | null;
   phone: string | null;
   email: string | null;
+  settings: Record<string, unknown> | null;
 }
 
 interface ContactRow {
@@ -63,6 +64,9 @@ export function formatHotelContextPrompt(context: HotelContext): string {
     context.address ? `ที่อยู่: ${context.address}` : null,
     context.phone ? `โทร: ${context.phone}` : null,
     context.email ? `อีเมล: ${context.email}` : null,
+    context.payment.promptPayConfigured
+      ? `การชำระเงิน: รองรับ PromptPay${context.payment.accountName ? ` ชื่อบัญชี ${context.payment.accountName}` : ""}`
+      : "การชำระเงิน: ชำระตามขั้นตอนในหน้าจองและอัปโหลดสลิป",
     roomLines.length ? `ห้องพัก:\n${roomLines.join("\n")}` : "ห้องพัก: ยังไม่มีข้อมูลห้องพัก",
     contactLines.length ? `ช่องทางติดต่อ:\n${contactLines.join("\n")}` : null,
     promotionLines.length ? `โปรโมชั่น:\n${promotionLines.join("\n")}` : null,
@@ -112,6 +116,7 @@ export async function buildHotelContext(request?: AvailabilityRequest | null): P
     phone: hotel.phone,
     email: hotel.email,
     contacts,
+    payment: getPaymentSummary(hotel.settings),
     roomTypes,
     promotions,
     ...(availability ? { availability } : {}),
@@ -133,7 +138,7 @@ export async function resolveActiveHotelId(): Promise<string | null> {
 async function fetchActiveHotel(supabase: ServiceClient): Promise<HotelRow> {
   const { data, error } = await supabase
     .from("hotels")
-    .select("id, name, description, address, phone, email")
+    .select("id, name, description, address, phone, email, settings")
     .eq("is_active", true)
     .limit(1)
     .single()
@@ -277,4 +282,18 @@ function countRoomsByType(rooms: RoomInventoryRow[]): Map<string, number> {
 
 function formatCurrency(value: number): string {
   return value.toLocaleString("th-TH", { maximumFractionDigits: 0 });
+}
+
+function getPaymentSummary(settings: Record<string, unknown> | null) {
+  const promptpay = settings?.promptpay;
+  if (!promptpay || typeof promptpay !== "object") {
+    return { promptPayConfigured: false, accountName: null };
+  }
+
+  const accountName = (promptpay as { accountName?: unknown }).accountName;
+  const accountId = (promptpay as { accountId?: unknown }).accountId;
+  return {
+    promptPayConfigured: typeof accountId === "string" && accountId.trim().length > 0,
+    accountName: typeof accountName === "string" && accountName.trim() ? accountName.trim() : null,
+  };
 }

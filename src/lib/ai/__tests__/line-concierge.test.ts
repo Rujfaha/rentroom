@@ -10,8 +10,11 @@ describe("extractAvailabilityRequest", () => {
     });
   });
 
-  it("returns null when the message does not include enough date information", () => {
-    expect(extractAvailabilityRequest("มีห้องว่างพรุ่งนี้ไหม")).toBeNull();
+  it("understands natural Thai relative dates", () => {
+    const result = extractAvailabilityRequest("มีห้องว่างพรุ่งนี้ไหม");
+
+    expect(result?.checkIn).toMatch(/^20\d{2}-\d{2}-\d{2}$/);
+    expect(result?.checkOut).toMatch(/^20\d{2}-\d{2}-\d{2}$/);
   });
 });
 
