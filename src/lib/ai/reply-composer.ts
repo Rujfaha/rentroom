@@ -1,4 +1,5 @@
 import type { HotelContext, LineConversationMemory, LineHandoffRequest, LineIntent, SupportedLineLanguage } from "@/types/line-ai.types";
+import { HOSPIQ_ASSISTANT_PROFILE, buildAssistantGreeting } from "./assistant-profile";
 
 interface ComposeLineReplyInput {
   language: SupportedLineLanguage;
@@ -7,15 +8,18 @@ interface ComposeLineReplyInput {
   bookingUrl: string;
   memory: LineConversationMemory;
   handoff?: LineHandoffRequest | null;
+  isFirstInteraction?: boolean;
 }
-
-const EMOJI = "😊";
 
 export function composeLineReply(input: ComposeLineReplyInput): string | null {
   const intents = normalizeIntents(input.intents);
   const handoffPart = input.handoff?.required ? handoffSection(input.language, input.handoff, input.memory) : null;
+  const intro = input.isFirstInteraction
+    ? buildAssistantGreeting(HOSPIQ_ASSISTANT_PROFILE, input.language, input.context)
+    : HOSPIQ_ASSISTANT_PROFILE.openerByLanguage[input.language];
+
   if (handoffPart && input.handoff?.required && shouldUseHandoffOnly(input.handoff.reason)) {
-    return `${opener(input.language)} ${EMOJI}\n${handoffPart}`;
+    return joinParagraphs([intro, handoffPart]);
   }
 
   const parts = [
@@ -29,7 +33,11 @@ export function composeLineReply(input: ComposeLineReplyInput): string | null {
   ].filter((part): part is string => Boolean(part));
 
   if (!parts.length) return null;
-  return `${opener(input.language)} ${EMOJI}\n${parts.join("\n\n")}`;
+  return joinParagraphs([intro, ...parts]);
+}
+
+function joinParagraphs(parts: Array<string | null | undefined>): string {
+  return parts.filter((part): part is string => Boolean(part)).join(HOSPIQ_ASSISTANT_PROFILE.messagePolicy.paragraphBreak);
 }
 
 function handoffSection(language: SupportedLineLanguage, handoff: LineHandoffRequest, memory: LineConversationMemory): string {
@@ -53,7 +61,7 @@ function availabilitySection(context: HotelContext, bookingUrl: string, language
   if (!roomTypes.length) return text(language, "noAvailability", { dateText });
 
   const roomLines = roomTypes
-    .slice(0, 5)
+    .slice(0, HOSPIQ_ASSISTANT_PROFILE.messagePolicy.maxListedItems)
     .map((room) => `- ${room.name}: ${availableWord(language)} ${room.availableRooms}, ${fromWord(language)} ${formatCurrency(room.basePrice)}`);
 
   return [text(language, "availability", { dateText }), ...roomLines, text(language, "bookingUrl", { bookingUrl })].join("\n");
@@ -62,7 +70,7 @@ function availabilitySection(context: HotelContext, bookingUrl: string, language
 function priceSection(context: HotelContext, bookingUrl: string, language: SupportedLineLanguage): string {
   if (!context.roomTypes.length) return text(language, "noPrice", { bookingUrl });
   const roomLines = context.roomTypes
-    .slice(0, 5)
+    .slice(0, HOSPIQ_ASSISTANT_PROFILE.messagePolicy.maxListedItems)
     .map((room) => `- ${room.name}: ${fromWord(language)} ${formatCurrency(room.basePrice)}, ${capacityWord(language)} ${room.maxGuests}`);
   return [text(language, "price"), ...roomLines, text(language, "bookingUrl", { bookingUrl })].join("\n");
 }
@@ -97,38 +105,27 @@ function bookingSection(bookingUrl: string, memory: LineConversationMemory, lang
   return [summary ? text(language, "bookingSummary", { dateText: summary }) : text(language, "bookingStart"), text(language, "bookingUrl", { bookingUrl })].join("\n");
 }
 
-function opener(language: SupportedLineLanguage): string {
-  return {
-    th: "ได้เลยครับ",
-    en: "Sure",
-    zh: "可以的",
-    ja: "承知しました",
-    es: "Claro",
-    ar: "بالتأكيد",
-  }[language];
-}
-
 function text(language: SupportedLineLanguage, key: string, values: Record<string, string> = {}): string {
   const templates: Record<SupportedLineLanguage, Record<string, string>> = {
     th: {
-      availability: "ช่วง {dateText} มีตัวเลือกว่างดังนี้ครับ",
-      noAvailability: "ช่วง {dateText} ตอนนี้ยังไม่พบห้องว่างจากระบบครับ",
-      price: "ราคาเริ่มต้นของห้องมีดังนี้ครับ",
-      noPrice: "ตอนนี้ยังไม่มีข้อมูลราคาในระบบครับ ดูต่อได้ที่ {bookingUrl}",
-      promo: "โปรโมชันที่มีตอนนี้ครับ",
-      noPromo: "ตอนนี้ยังไม่พบโปรโมชันที่เปิดใช้งานครับ",
-      paymentPromptPay: "ชำระผ่าน PromptPay/โอนเงินได้ครับ ชื่อบัญชี{accountName}",
-      paymentGeneric: "ชำระผ่านการโอนเงินตามขั้นตอนในหน้าจองได้ครับ",
-      slip: "หลังชำระเงินแล้วให้อัปโหลดสลิปในหน้าจองเพื่อให้ทีมงานตรวจสอบและยืนยันการจองครับ",
+      availability: "ช่วง {dateText} มีตัวเลือกว่างดังนี้ค่ะ",
+      noAvailability: "ช่วง {dateText} ตอนนี้ยังไม่พบห้องว่างจากระบบค่ะ",
+      price: "ราคาเริ่มต้นของห้องมีดังนี้ค่ะ",
+      noPrice: "ตอนนี้ยังไม่มีข้อมูลราคาในระบบค่ะ ดูต่อได้ที่ {bookingUrl}",
+      promo: "โปรโมชันที่มีตอนนี้ค่ะ",
+      noPromo: "ตอนนี้ยังไม่พบโปรโมชันที่เปิดใช้งานค่ะ",
+      paymentPromptPay: "ชำระผ่าน PromptPay/โอนเงินได้ค่ะ ชื่อบัญชี{accountName}",
+      paymentGeneric: "ชำระผ่านการโอนเงินตามขั้นตอนในหน้าจองได้ค่ะ",
+      slip: "หลังชำระเงินแล้วให้อัปโหลดสลิปในหน้าจองเพื่อให้ทีมงานตรวจสอบและยืนยันการจองค่ะ",
       bookingUrl: "จองต่อได้ที่ {bookingUrl}",
       phone: "โทร",
       email: "อีเมล",
       address: "ที่อยู่",
-      noContact: "ตอนนี้ยังไม่มีข้อมูลติดต่อในระบบครับ",
+      noContact: "ตอนนี้ยังไม่มีข้อมูลติดต่อในระบบค่ะ",
       bookingSummary: "ข้อมูลจองที่จำไว้: {dateText}",
-      bookingStart: "เริ่มจองผ่านหน้าเว็บได้เลยครับ",
-      handoff: "เคสนี้ผมส่งต่อให้ทีมงานช่วยตรวจสอบให้นะครับ รบกวนแจ้งชื่อ/เบอร์ที่ใช้จอง และรายละเอียดสั้น ๆ เพิ่มได้เลยครับ",
-      handoffReceived: "รับข้อมูลแล้วครับ ผมจะส่งต่อให้ทีมงานช่วยตรวจสอบเคสนี้ให้นะครับ",
+      bookingStart: "เริ่มจองผ่านหน้าเว็บได้เลยค่ะ",
+      handoff: "เคสนี้จะส่งต่อให้ทีมงานช่วยตรวจสอบให้นะคะ รบกวนแจ้งชื่อ/เบอร์ที่ใช้จอง และรายละเอียดสั้น ๆ เพิ่มได้เลยค่ะ",
+      handoffReceived: "รับข้อมูลแล้วค่ะ จะส่งต่อให้ทีมงานช่วยตรวจสอบเคสนี้ให้นะคะ",
     },
     en: {
       availability: "Available options for {dateText}:",

@@ -1,5 +1,9 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { HotelContext } from "@/types/line-ai.types";
+
+const providerState = vi.hoisted(() => ({
+  generate: vi.fn(),
+}));
 
 const hotelContext: HotelContext = {
   hotelId: "hotel-1",
@@ -26,7 +30,22 @@ vi.mock("../hotel-context", () => ({
   summarizeAvailability: vi.fn(() => "availability summary"),
 }));
 
+vi.mock("../provider", () => ({
+  getAiProvider: vi.fn(() => ({
+    generate: providerState.generate,
+  })),
+}));
+
 import { buildBookingUrl, extractAvailabilityRequest, generateLineConciergeReply, normalizeLineReply } from "../line-concierge";
+
+beforeEach(() => {
+  providerState.generate.mockReset();
+  providerState.generate.mockResolvedValue({
+    provider: "gemini",
+    model: "test-model",
+    text: "Hello from Hospiq",
+  });
+});
 
 describe("extractAvailabilityRequest", () => {
   it("extracts ISO date ranges and guest count from Thai availability questions", () => {
@@ -71,6 +90,67 @@ describe("buildBookingUrl", () => {
 });
 
 describe("generateLineConciergeReply handoff flow", () => {
+  it("introduces Hospiq on the first deterministic reply when history is empty", async () => {
+    const result = await generateLineConciergeReply("What are the room prices?", { history: [] });
+
+    expect(result.model).toBe("deterministic");
+    expect(result.reply).toContain("Hospiq");
+    expect(result.reply).toContain("Arkkarawin");
+    expect(result.reply).toContain("Warmly House");
+    expect(result.reply).toContain("\n\n");
+  });
+
+  it("introduces Hospiq when history only contains inbound customer messages", async () => {
+    const result = await generateLineConciergeReply("What are the room prices?", {
+      history: [{ direction: "inbound", text: "What are the room prices?", createdAt: "2026-05-24T08:00:00.000Z" }],
+    });
+
+    expect(result.model).toBe("deterministic");
+    expect(result.reply).toContain("Hospiq");
+    expect(result.reply).toContain("Arkkarawin");
+    expect(result.reply).toContain("Warmly House");
+    expect(result.reply).toContain("\n\n");
+  });
+
+  it("does not introduce Hospiq when memory has a pending handoff", async () => {
+    const result = await generateLineConciergeReply("0817963289", {
+      memory: {
+        handoffPending: {
+          reason: "payment_issue",
+          priority: "high",
+          requestedAt: "2026-05-24T08:00:00.000Z",
+        },
+      },
+    });
+
+    expect(result.model).toBe("deterministic");
+    expect(result.reply).not.toContain("Hospiq");
+  });
+
+  it("does not introduce Hospiq when history contains an outbound assistant message", async () => {
+    const result = await generateLineConciergeReply("What are the room prices?", {
+      history: [
+        { direction: "inbound", text: "Hello", createdAt: "2026-05-24T08:00:00.000Z" },
+        { direction: "outbound", text: "Sure", createdAt: "2026-05-24T08:00:01.000Z" },
+        { direction: "inbound", text: "What are the room prices?", createdAt: "2026-05-24T08:01:00.000Z" },
+      ],
+    });
+
+    expect(result.model).toBe("deterministic");
+    expect(result.reply).not.toContain("Hospiq");
+    expect(result.reply).toContain("Warmly House");
+  });
+
+  it("instructs the fallback provider to introduce Hospiq on first general contact", async () => {
+    const result = await generateLineConciergeReply("Hello there", { history: [] });
+    const providerInput = providerState.generate.mock.calls[0]?.[0];
+
+    expect(result.model).toBe("test-model");
+    expect(providerInput?.prompt).toContain("First customer interaction");
+    expect(providerInput?.prompt).toContain("Hospiq");
+    expect(providerInput?.prompt).toContain("Arkkarawin");
+  });
+
   it("keeps explicit admin requests focused on human handoff", async () => {
     const result = await generateLineConciergeReply("ติดต่อแอดมินให้หน่อย จองแล้วลืมแนบสลิป");
 

@@ -8,6 +8,7 @@ import { detectLineIntent, detectLineIntents, mergeBookingLead } from "./intent-
 import { detectLineLanguage } from "./language";
 import { getAiProvider } from "./provider";
 import { composeLineReply } from "./reply-composer";
+import { HOSPIQ_ASSISTANT_PROFILE, buildAssistantFirstContactInstruction, buildAssistantSystemPrompt } from "./assistant-profile";
 
 const ISO_DATE_PATTERN = /\b(20\d{2}-\d{2}-\d{2})\b/g;
 
@@ -60,7 +61,9 @@ export interface GenerateLineConciergeReplyOptions {
 
 export async function generateLineConciergeReply(message: string, options: GenerateLineConciergeReplyOptions = {}): Promise<LineConciergeReply> {
   const language = detectLineLanguage(message);
+  const history = options.history ?? [];
   const existingMemory = options.memory ?? {};
+  const isFirstInteraction = isFirstLineInteraction(existingMemory, history);
   const privacy = detectPrivacyRestrictedQuestion(message);
   if (privacy) {
     const context = await buildHotelContext(null);
@@ -85,7 +88,7 @@ export async function generateLineConciergeReply(message: string, options: Gener
   const availabilityRequest = parsedRequest ?? getAvailabilityFromMemory(memory, intent);
   const context = await buildHotelContext(availabilityRequest);
   const bookingUrl = buildBookingUrl(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000", availabilityRequest);
-  const deterministicReply = composeLineReply({ language, intents: [...intents], context, bookingUrl, memory: replyMemory, handoff });
+  const deterministicReply = composeLineReply({ language, intents: [...intents], context, bookingUrl, memory: replyMemory, handoff, isFirstInteraction });
   if (deterministicReply) {
     return {
       hotelId: context.hotelId,
@@ -107,15 +110,15 @@ export async function generateLineConciergeReply(message: string, options: Gener
       "ข้อมูลจริงจากระบบ:",
       formatHotelContextPrompt(context),
       "",
-      formatHistoryPrompt(options.history ?? []),
+      formatHistoryPrompt(history),
       formatMemoryPrompt(memory),
       availabilityRequest ? `สรุปห้องว่างจากระบบ: ${summarizeAvailability(context)}` : null,
       `ลิงก์จองที่ต้องใช้เมื่อมี intent จอง: ${bookingUrl}`,
       `ภาษาที่ลูกค้าใช้: ${language}`,
-      "ตอบกลับเป็นภาษาเดียวกับลูกค้าเท่านั้น รองรับ th/zh/en/ja/es/ar",
-      "ตอบแบบสบายเหมือนคนจริง สุภาพ กระชับ ใส่ emoji ได้เล็กน้อย 0-2 ตัว",
-      "ถ้าลูกค้าถามหลายเรื่องในข้อความเดียว ให้ตอบให้ครบทุกเรื่องเป็นหัวข้อสั้น ๆ",
-      "ห้ามแต่งข้อมูลที่ไม่มีในข้อมูลจริงจากระบบ",
+      isFirstInteraction ? buildAssistantFirstContactInstruction(HOSPIQ_ASSISTANT_PROFILE, language, context) : null,
+      `Follow the ${HOSPIQ_ASSISTANT_PROFILE.name} profile for tone, format, and language policy.`,
+      "Answer every customer intent in the message using short sections when useful.",
+      "Use only grounded facts from the supplied system context and keep all guardrails.",
     ]
       .filter((line): line is string => Boolean(line))
       .join("\n"),
@@ -170,15 +173,13 @@ function updateHandoffMemory(
 }
 
 function buildSystemPrompt(): string {
-  return [
-    "คุณคือผู้ช่วยตอบ LINE OA ของโรงแรม/ที่พัก",
-    "ตอบภาษาไทย สุภาพ กระชับ และเน้นช่วยให้ลูกค้าจองผ่านเว็บ",
-    "ใช้เฉพาะข้อมูลจริงจากระบบที่ให้มาเท่านั้น",
-    "ถ้าข้อมูลไม่ครบ ให้ถามต่อครั้งละหนึ่งคำถาม",
-    "ถ้าลูกค้าต้องการจอง ให้ส่งลิงก์จองจากระบบ",
-    "ห้ามยืนยันการจอง ห้ามรับรองการชำระเงิน ห้ามแต่งโปรโมชัน นโยบาย เลขบัญชี หรือห้องว่างเอง",
-    "เรื่อง refund, complaint, cancellation, special approval, group deal หรือ payment issue ให้แจ้งว่าจะให้ทีมงานช่วยดูต่อ",
-  ].join("\n");
+  return buildAssistantSystemPrompt(HOSPIQ_ASSISTANT_PROFILE);
+}
+
+function isFirstLineInteraction(memory: LineConversationMemory, history: LineMessageHistoryItem[]): boolean {
+  const hasMeaningfulMemory = Boolean(memory.bookingLead || memory.handoffPending);
+  const hasOutboundHistory = history.some((item) => item.direction === "outbound");
+  return !hasMeaningfulMemory && !hasOutboundHistory;
 }
 
 function getAvailabilityFromMemory(memory: LineConversationMemory, intent: string): AvailabilityRequest | null {
