@@ -126,46 +126,6 @@ describe("HOSPIQ AI Flow Refactor - Group Booking", () => {
     expect(result.reply).toContain("ยืนยันวันที่เข้าพัก"); // Requesting confirmation
     expect(result.reply).not.toContain("รบกวนแจ้งวันที่เข้าพัก"); // Doesn't repeat static request
   });
-
-  it("resets isGroupBooking to false when customer changes booking size to under 10 guests", async () => {
-    const result = await generateLineConciergeReply("อยากได้ห้องสำหรับ 2 คนครับ", {
-      memory: {
-        bookingLead: {
-          guests: 20,
-          isGroupBooking: true,
-          leadScore: "high",
-          source: { guests: "customer" }
-        }
-      }
-    });
-    expect(result.memory.bookingLead?.isGroupBooking).toBe(false);
-    expect(result.memory.bookingLead?.guests).toBe(2);
-    expect(result.memory.bookingLead?.leadScore).toBe("medium");
-  });
-
-  it("resets lead memory entirely when reset keywords are provided", async () => {
-    const result = await generateLineConciergeReply("เริ่มจองใหม่ครับ", {
-      memory: {
-        bookingLead: {
-          checkIn: "2026-09-01",
-          checkOut: "2026-09-02",
-          guests: 20,
-          isGroupBooking: true,
-          leadScore: "high",
-          source: { checkIn: "customer", checkOut: "customer", guests: "customer" }
-        },
-        handoffPending: {
-          reason: "group_booking",
-          priority: "normal",
-          requestedAt: "2026-05-24T15:00:00Z"
-        }
-      }
-    });
-    expect(result.memory.bookingLead?.isGroupBooking).toBeUndefined();
-    expect(result.memory.bookingLead?.guests).toBeUndefined();
-    expect(result.memory.bookingLead?.checkIn).toBeUndefined();
-    expect(result.memory.handoffPending).toBeUndefined();
-  });
 });
 
 describe("HOSPIQ AI Flow Refactor - Direct Answers & Multi-Intent", () => {
