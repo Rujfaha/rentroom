@@ -21,3 +21,17 @@ export function selectKeywordFaqs(
     .filter((faq) => faq.keywords.some((keyword) => normalized.includes(keyword.toLowerCase())))
     .slice(0, limit);
 }
+
+export function retrieveRelevantFaqs(
+  faqs: HospiqAiContext["faqs"],
+  message: string,
+  language: string,
+  limit = 5,
+): HospiqAiContext["faqs"] {
+  const languageMatched = faqs.filter((faq) => faq.language === language);
+  const source = languageMatched.length ? languageMatched : faqs;
+  const keywordMatches = selectKeywordFaqs(source, message, limit);
+
+  if (keywordMatches.length) return keywordMatches;
+  return source.slice(0, limit);
+}

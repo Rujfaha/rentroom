@@ -26,6 +26,9 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - [x] Added DB-backed AI hotel context loader adapted from the parent AI reference for Starter Pack tables
 - [x] Added AI provider abstraction, Gemini provider, grounded reply prompt, and model-backed reply composer
 - [x] Added provider/model metadata to AI generation results for future chat history persistence
+- [x] Added intent/entity extraction adapted from the parent AI reference
+- [x] Added memory merge from extracted booking entities and handoff signal
+- [x] Added keyword/language FAQ retrieval as the first RAG layer
 
 ### Unfinished Work
 
@@ -34,7 +37,7 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - [ ] Run `npx supabase db reset --local` after Docker is available, or verify migrations against the linked project after Supabase setup
 - [ ] Generate real Supabase database types from the new project
 - [ ] Run Supabase DB advisors after the migrations are verified
-- [ ] Expand intent router, semantic RAG retrieval, memory update, and `ai_testcases` evaluation runner
+- [ ] Expand semantic RAG retrieval with embeddings and add `ai_testcases` evaluation runner
 - [ ] Implement LINE config lookup, signature verification with per-hotel secret, session persistence, chat history, admin verify code, and reply calls
 - [ ] Implement full dashboard/onboarding UI after backend contract is stable
 
@@ -57,7 +60,7 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - The user has not set up the real/new Supabase project yet. Current Supabase work is only local CLI config plus migration files.
 - Docker is not installed or not available in PATH, so local migration execution with `npx supabase db reset --local` is blocked until Docker is available.
 - `npm install` reports 2 moderate vulnerabilities from the current dependency tree; no `npm audit fix --force` was run because it may introduce breaking changes.
-- AI orchestrator now loads hotel context from Starter Pack Supabase tables and calls the configured AI provider at runtime. It still needs stronger intent/entity extraction, semantic RAG, and chat-history persistence.
+- AI orchestrator now loads hotel context from Starter Pack Supabase tables, extracts intent/entities, merges memory, retrieves keyword/language FAQs, and calls the configured AI provider at runtime. It still needs semantic RAG and chat-history persistence.
 - LINE webhook service currently parses payload and preserves the `[hotelId]` contract but does not yet verify against a stored per-hotel secret.
 - RLS policies are drafted in migration `202605250003`, but they still need to be verified against real Supabase users.
 
@@ -109,4 +112,4 @@ npm run dev
 
 ### Next Recommended Step
 
-Continue Task 14 with intent/entity extraction, semantic RAG retrieval, memory update, and `ai_testcases` evaluation. Keep the current module boundaries and duplicate/modify good parent logic into Starter Pack rather than importing from the parent `rentroom` app.
+Continue Task 14 with semantic RAG retrieval and `ai_testcases` evaluation. After that, move to LINE session/chat history persistence. Keep the current module boundaries and duplicate/modify good parent logic into Starter Pack rather than importing from the parent `rentroom` app.

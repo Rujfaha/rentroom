@@ -1,10 +1,24 @@
 export type StarterAiIntent =
   | "empty"
   | "room_inquiry"
+  | "room_overview"
+  | "room_detail"
+  | "room_recommendation"
   | "availability"
+  | "availability_check"
+  | "price_inquiry"
+  | "cheapest_room"
   | "booking_intent"
+  | "booking_ready"
+  | "group_booking"
   | "policy_question"
+  | "payment"
+  | "promotion"
+  | "contact"
+  | "amenities_question"
+  | "greeting"
   | "handoff_request"
+  | "handoff_required"
   | "general";
 
 export interface LineConversationMemory {
@@ -13,7 +27,12 @@ export interface LineConversationMemory {
     checkOut?: string;
     guests?: number;
     roomTypeName?: string;
+    guestName?: string;
+    phone?: string;
+    roomPreference?: string[];
+    dislikedFeatures?: string[];
     isGroupBooking?: boolean;
+    leadScore?: "low" | "medium" | "high";
   };
   handoffPending?: boolean;
   language?: string;
@@ -98,6 +117,8 @@ export interface GenerateHospiqReplyResult {
   prompt: StarterPromptPayload;
   handoffRequired: boolean;
   memoryUpdate: Partial<LineConversationMemory>;
+  language: string;
+  entities: StarterIntentEntities;
 }
 
 export interface AiGenerateInput {
@@ -110,4 +131,41 @@ export interface AiGenerateResult {
   provider: string;
   model: string;
   text: string;
+}
+
+export interface StarterIntentEntities {
+  roomTypeName?: string;
+  checkIn?: string;
+  checkOut?: string;
+  guests?: number;
+  guestName?: string;
+  phone?: string;
+  roomPreference?: string[];
+  dislikedFeatures?: string[];
+  isGroupBooking?: boolean;
+  leadScore?: "low" | "medium" | "high";
+}
+
+export interface StarterHandoffRequest {
+  required: boolean;
+  reason:
+    | "admin_request"
+    | "payment_issue"
+    | "refund"
+    | "complaint"
+    | "cancellation"
+    | "special_approval"
+    | "group_booking"
+    | "booking_ready";
+  priority: "normal" | "high";
+}
+
+export interface StarterIntentEntityExtraction {
+  language: string;
+  primaryIntent: StarterAiIntent;
+  intents: StarterAiIntent[];
+  entities: StarterIntentEntities;
+  handoff: StarterHandoffRequest | null;
+  provider?: string;
+  model?: string;
 }
