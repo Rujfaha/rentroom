@@ -134,12 +134,15 @@ describe("LINE webhook AI route", () => {
     const second = await POST(buildLineRequest("มีนา คนะยก 0817963289", "reply-2"));
 
     expect(second.status).toBe(200);
-    const secondReply = state.replyLineMessage.mock.calls[1]?.[0].messages[0].text as string;
-    expect(secondReply).toContain("รับข้อมูลแล้ว");
-    expect(secondReply).toContain("ทีมงาน");
-    expect(secondReply).not.toContain("Warmly House");
-    expect(secondReply).not.toContain("จองต่อได้ที่");
-    expect(state.notifyLineStaffHandoff).toHaveBeenCalledTimes(2);
+    // Silent mode: bot should not reply or call LLM again
+    expect(state.replyLineMessage).toHaveBeenCalledTimes(1);
+    expect(state.generate).toHaveBeenCalledTimes(2); // Only called for the first request (extractor + response)
+
+    const third = await POST(buildLineRequest("hospiq", "reply-3"));
+    expect(third.status).toBe(200);
+    expect(state.memory.handoffPending).toBeNull(); // Status should be cleared
+    expect(state.replyLineMessage).toHaveBeenCalledTimes(2); // Bot wakes up and replies
+    expect(state.generate).toHaveBeenCalledTimes(4); // Called again for wake-up (extractor + response)
   });
 
   it("logs LINE source details so groupId can be copied from production logs", async () => {

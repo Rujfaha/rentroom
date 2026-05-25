@@ -87,6 +87,17 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
       getLineConversationMemory(supabase, conversationId),
       getRecentLineMessages(supabase, conversationId),
     ]);
+
+    if (memory?.handoffPending) {
+      const incomingText = (event.message.text || "").trim().toLowerCase();
+      if (incomingText === "hospiq" || incomingText === "คุยกับ hospiq") {
+        await updateLineConversationMemory(supabase, conversationId, { handoffPending: undefined }, "handoff_cleared");
+        memory.handoffPending = undefined;
+      } else {
+        return; // Silent mode: allow staff to handle the conversation
+      }
+    }
+
     const result = await generateLineConciergeReply(event.message.text || "", { memory, history });
 
     if (!accessToken) throw new Error("LINE_CHANNEL_ACCESS_TOKEN is not configured");
