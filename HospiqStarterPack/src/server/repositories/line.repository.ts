@@ -45,6 +45,19 @@ export interface CreateLineHandoffEventInput {
 }
 
 export const lineRepository = {
+  async getAdminVerifyCode(hotelId: string): Promise<string | null> {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("hotels")
+      .select("admin_verify_code")
+      .eq("id", hotelId)
+      .maybeSingle()
+      .returns<{ admin_verify_code: string | null } | null>();
+
+    if (error) throw new Error(error.message);
+    return data?.admin_verify_code ?? null;
+  },
+
   async getLineConfig(hotelId: string): Promise<LineConfigRecord | null> {
     const supabase = createSupabaseAdminClient();
     const { data, error } = await supabase
@@ -104,6 +117,21 @@ export const lineRepository = {
       })
       .eq("hotel_id", input.hotelId)
       .eq("id", input.lineSessionId);
+
+    if (error) throw new Error(error.message);
+  },
+
+  async markSessionAdminVerified(hotelId: string, lineSessionId: string) {
+    const supabase = createSupabaseAdminClient();
+    const { error } = await supabase
+      .from("line_sessions")
+      .update({
+        role_in_line: "hotel_admin",
+        admin_verified_at: new Date().toISOString(),
+        last_seen_at: new Date().toISOString(),
+      })
+      .eq("hotel_id", hotelId)
+      .eq("id", lineSessionId);
 
     if (error) throw new Error(error.message);
   },

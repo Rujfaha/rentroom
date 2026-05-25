@@ -149,6 +149,8 @@ export interface GenerateHospiqReplyResult {
   aiModel: string | null;
   prompt: StarterPromptPayload;
   handoffRequired: boolean;
+  handoffReason: StarterHandoffRequest["reason"] | null;
+  handoffPriority: StarterHandoffRequest["priority"] | null;
   memoryUpdate: Partial<LineConversationMemory>;
   language: string;
   entities: StarterIntentEntities;

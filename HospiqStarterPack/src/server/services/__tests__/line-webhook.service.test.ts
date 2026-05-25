@@ -37,6 +37,8 @@ function createAiResult(overrides: Partial<GenerateHospiqReplyResult> = {}): Gen
       intent: "booking_intent",
     },
     handoffRequired: false,
+    handoffReason: null,
+    handoffPriority: null,
     memoryUpdate: {
       bookingLead: { guests: 2 },
     },
@@ -62,6 +64,9 @@ describe("lineWebhookService", () => {
         calls.push("verify");
         return true;
       },
+      async getAdminVerifyCode() {
+        return null;
+      },
       async upsertLineSession() {
         calls.push("session");
         return { id: "session-1", memory: { bookingLead: {} } };
@@ -81,6 +86,12 @@ describe("lineWebhookService", () => {
       },
       async createHandoffEvent() {
         calls.push("handoff");
+      },
+      async markSessionAdminVerified() {
+        calls.push("admin");
+      },
+      async upsertBookingLead(input) {
+        calls.push(`lead:${input.result.entities.guests}`);
       },
       async replyLine(input) {
         calls.push(`reply:${input.text}`);
@@ -109,6 +120,7 @@ describe("lineWebhookService", () => {
     });
     expect(calls).toContain("incoming");
     expect(calls).toContain("session:open:booking_intent");
+    expect(calls).toContain("lead:2");
     expect(calls).toContain("outgoing:test:fake");
     expect(calls).toContain("reply:Model reply");
   });
@@ -124,6 +136,9 @@ describe("lineWebhookService", () => {
         };
       },
       verifySignature: () => true,
+      async getAdminVerifyCode() {
+        return null;
+      },
       async upsertLineSession() {
         return { id: "session-1", memory: { bookingLead: {} } };
       },
@@ -139,6 +154,12 @@ describe("lineWebhookService", () => {
       },
       async createHandoffEvent() {
         calls.push("handoff");
+      },
+      async markSessionAdminVerified() {
+        calls.push("admin");
+      },
+      async upsertBookingLead() {
+        calls.push("lead");
       },
       async replyLine() {
         calls.push("reply");
@@ -161,7 +182,60 @@ describe("lineWebhookService", () => {
     });
 
     expect(result.data.handoffCreated).toBe(1);
-    expect(calls).toEqual(["session:handoff", "handoff", "outgoing"]);
+    expect(calls).toEqual(["session:handoff", "handoff", "lead", "outgoing"]);
+  });
+
+  it("marks admin sessions verified when message matches the hotel verify code", async () => {
+    const calls: string[] = [];
+    const service = createLineWebhookService({
+      async getLineConfig() {
+        return {
+          channelSecret: "secret",
+          channelAccessToken: "token",
+          isConfigured: true,
+        };
+      },
+      verifySignature: () => true,
+      async getAdminVerifyCode() {
+        return "VERIFY-1";
+      },
+      async upsertLineSession() {
+        return { id: "session-1", memory: { bookingLead: {} } };
+      },
+      async insertIncoming() {
+        calls.push("incoming");
+      },
+      async markSessionAdminVerified() {
+        calls.push("admin");
+      },
+      async generateReply() {
+        calls.push("ai");
+        return createAiResult();
+      },
+      async updateLineSession() {},
+      async insertOutgoing() {},
+      async createHandoffEvent() {},
+      async upsertBookingLead() {},
+      async replyLine() {},
+    });
+
+    const result = await service.handleWebhook({
+      hotelId: "hotel-1",
+      signature: "signature",
+      rawBody: JSON.stringify({
+        events: [
+          {
+            type: "message",
+            replyToken: "reply-token",
+            source: { userId: "line-user-1" },
+            message: { type: "text", text: "VERIFY-1" },
+          },
+        ],
+      }),
+    });
+
+    expect(result.data.handled).toBe(1);
+    expect(calls).toEqual(["incoming", "admin"]);
   });
 
   it("rejects invalid signatures", async () => {
@@ -174,6 +248,9 @@ describe("lineWebhookService", () => {
         };
       },
       verifySignature: () => false,
+      async getAdminVerifyCode() {
+        return null;
+      },
       async upsertLineSession() {
         throw new Error("should not run");
       },
@@ -184,6 +261,8 @@ describe("lineWebhookService", () => {
       async updateLineSession() {},
       async insertOutgoing() {},
       async createHandoffEvent() {},
+      async markSessionAdminVerified() {},
+      async upsertBookingLead() {},
       async replyLine() {},
     });
 

@@ -1,4 +1,5 @@
 import { bookingRepository } from "../repositories/booking.repository";
+import type { UpsertLineAiBookingLeadInput } from "../repositories/booking.repository";
 import type { CreateBookingLeadInput, UpdateBookingLeadInput } from "../validators/booking.schema";
 
 export const bookingService = {
@@ -12,5 +13,9 @@ export const bookingService = {
 
   updateBookingLead(hotelId: string, id: string, input: UpdateBookingLeadInput) {
     return bookingRepository.updateLead(hotelId, id, input);
+  },
+
+  upsertLineAiBookingLead(hotelId: string, input: UpsertLineAiBookingLeadInput) {
+    return bookingRepository.upsertLineAiLead(hotelId, input);
   },
 };

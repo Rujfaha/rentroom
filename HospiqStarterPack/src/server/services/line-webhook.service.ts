@@ -2,6 +2,7 @@ import { generateHospiqReply } from "../../lib/ai/orchestrator";
 import type { GenerateHospiqReplyResult, LineConversationMemory } from "../../lib/ai/types";
 import { replyLineMessage } from "../../lib/line/client";
 import { verifyLineSignature } from "../../lib/line/signature";
+import { bookingService } from "./booking.service";
 import { AppError } from "../http/api-error";
 import { apiOk } from "../http/api-response";
 import { lineRepository, type LineConfigRecord, type LineSessionRecord } from "../repositories/line.repository";
@@ -30,8 +31,10 @@ interface LineMessageEvent {
 
 interface LineWebhookDependencies {
   getLineConfig(hotelId: string): Promise<LineConfigRecord | null>;
+  getAdminVerifyCode(hotelId: string): Promise<string | null>;
   verifySignature(body: string, signature: string | null, channelSecret: string): boolean;
   upsertLineSession(hotelId: string, lineUserId: string): Promise<LineSessionRecord>;
+  markSessionAdminVerified(hotelId: string, lineSessionId: string): Promise<void>;
   insertIncoming(input: {
     hotelId: string;
     lineSessionId: string;
@@ -60,6 +63,12 @@ interface LineWebhookDependencies {
     lineSessionId: string;
     lineUserId: string;
     sourceMessage: string;
+    result: GenerateHospiqReplyResult;
+  }): Promise<void>;
+  upsertBookingLead(input: {
+    hotelId: string;
+    lineSessionId: string;
+    lineUserId: string;
     result: GenerateHospiqReplyResult;
   }): Promise<void>;
   replyLine(input: { accessToken: string; replyToken: string; text: string }): Promise<void>;
@@ -101,6 +110,12 @@ export function createLineWebhookService(deps: LineWebhookDependencies) {
           rawPayload: event as unknown as Record<string, unknown>,
         });
 
+        const adminVerifyCode = await deps.getAdminVerifyCode(input.hotelId);
+        if (adminVerifyCode && event.message.text.trim() === adminVerifyCode) {
+          await deps.markSessionAdminVerified(input.hotelId, session.id);
+          continue;
+        }
+
         const result = await deps.generateReply({
           hotelId: input.hotelId,
           lineUserId,
@@ -126,6 +141,13 @@ export function createLineWebhookService(deps: LineWebhookDependencies) {
             result,
           });
         }
+
+        await deps.upsertBookingLead({
+          hotelId: input.hotelId,
+          lineSessionId: session.id,
+          lineUserId,
+          result,
+        });
 
         await deps.insertOutgoing({
           hotelId: input.hotelId,
@@ -158,8 +180,10 @@ export function createLineWebhookService(deps: LineWebhookDependencies) {
 
 export const lineWebhookService = createLineWebhookService({
   getLineConfig: lineRepository.getLineConfig,
+  getAdminVerifyCode: lineRepository.getAdminVerifyCode,
   verifySignature: verifyLineSignature,
   upsertLineSession: lineRepository.upsertLineSession,
+  markSessionAdminVerified: lineRepository.markSessionAdminVerified,
   insertIncoming(input) {
     return lineRepository.insertChatHistory({
       hotelId: input.hotelId,
@@ -197,8 +221,8 @@ export const lineWebhookService = createLineWebhookService({
       hotelId: input.hotelId,
       lineSessionId: input.lineSessionId,
       lineUserId: input.lineUserId,
-      reason: input.result.intent,
-      priority: input.result.handoffRequired ? "normal" : "normal",
+      reason: input.result.handoffReason ?? input.result.intent,
+      priority: input.result.handoffPriority ?? "normal",
       sourceMessage: input.sourceMessage,
       metadata: {
         intent: input.result.intent,
@@ -207,6 +231,36 @@ export const lineWebhookService = createLineWebhookService({
         aiProvider: input.result.aiProvider,
         aiModel: input.result.aiModel,
       },
+    });
+  },
+  async upsertBookingLead(input) {
+    const entities = input.result.entities;
+    const hasLeadData = Boolean(
+      entities.checkIn ||
+        entities.checkOut ||
+        entities.guests ||
+        entities.guestName ||
+        entities.phone ||
+        entities.roomTypeName,
+    );
+
+    if (!hasLeadData) return;
+
+    await bookingService.upsertLineAiBookingLead(input.hotelId, {
+      lineSessionId: input.lineSessionId,
+      lineUserId: input.lineUserId,
+      guestName: entities.guestName,
+      guestPhone: entities.phone,
+      checkinDate: entities.checkIn,
+      checkoutDate: entities.checkOut,
+      guestCount: entities.guests,
+      conversationSummary: input.result.reply || undefined,
+      aiSummary: JSON.stringify({
+        intent: input.result.intent,
+        language: input.result.language,
+        roomTypeName: entities.roomTypeName,
+        leadScore: entities.leadScore,
+      }),
     });
   },
   replyLine(input) {

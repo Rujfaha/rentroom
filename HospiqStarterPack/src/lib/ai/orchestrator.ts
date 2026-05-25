@@ -37,6 +37,8 @@ export async function generateHospiqReply(input: GenerateHospiqReplyInput): Prom
     aiModel: draft.model,
     prompt,
     handoffRequired,
+    handoffReason: extraction.handoff?.reason ?? null,
+    handoffPriority: extraction.handoff?.priority ?? null,
     memoryUpdate: draft.memoryUpdate,
     language: extraction.language,
     entities: extraction.entities,

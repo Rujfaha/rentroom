@@ -1748,5 +1748,5 @@ Reference source: `C:\Users\msi0007\rentroom\src\lib\ai\hotel-ai-rag-architectur
 - [x] Persist incoming/outgoing `line_chat_history` with provider/model metadata and AI response metadata.
 - [x] Create handoff events when AI policy or model extraction decides to escalate.
 - [x] Reply through LINE Messaging API when a reply token and channel access token are available.
-- [ ] Implement admin verify code flow for hotel admins in LINE.
-- [ ] Connect booking lead creation/update from extracted AI entities.
+- [x] Implement admin verify code flow for hotel admins in LINE.
+- [x] Connect booking lead creation/update from extracted AI entities.
