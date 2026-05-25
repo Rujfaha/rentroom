@@ -32,6 +32,7 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - [x] Added semantic RAG extension point with embedding provider and semantic FAQ client interfaces
 - [x] Added Gemini embedding support for `text-embedding-004`
 - [x] Added AI result evaluator for golden testcase checks
+- [x] Added LINE webhook persistence for config lookup, signature verification, sessions, chat history, handoff events, and LINE replies
 
 ### Unfinished Work
 
@@ -42,7 +43,8 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - [ ] Run Supabase DB advisors after the migrations are verified
 - [ ] Wire semantic FAQ retrieval to a database RPC after the SQL function is added
 - [ ] Add persisted `ai_testcases` evaluation runner
-- [ ] Implement LINE config lookup, signature verification with per-hotel secret, session persistence, chat history, admin verify code, and reply calls
+- [ ] Implement LINE admin verify code flow
+- [ ] Connect booking lead creation/update from extracted AI entities
 - [ ] Implement full dashboard/onboarding UI after backend contract is stable
 
 ### Files Changed
@@ -65,7 +67,7 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - Docker is not installed or not available in PATH, so local migration execution with `npx supabase db reset --local` is blocked until Docker is available.
 - `npm install` reports 2 moderate vulnerabilities from the current dependency tree; no `npm audit fix --force` was run because it may introduce breaking changes.
 - AI orchestrator now loads hotel context from Starter Pack Supabase tables, extracts intent/entities, merges memory, retrieves keyword/language FAQs, and calls the configured AI provider at runtime. Semantic RAG interfaces and embedding provider exist, but the database RPC is not wired yet.
-- LINE webhook service currently parses payload and preserves the `[hotelId]` contract but does not yet verify against a stored per-hotel secret.
+- LINE webhook service verifies the stored per-hotel secret, persists sessions/chat history/handoff events, and replies through LINE when a reply is available. Admin verify code is not implemented yet.
 - RLS policies are drafted in migration `202605250003`, but they still need to be verified against real Supabase users.
 
 ### Commands Already Run
@@ -116,4 +118,4 @@ npm run dev
 
 ### Next Recommended Step
 
-Continue with database RPC wiring for semantic FAQ retrieval and persisted `ai_testcases` evaluation, or move to LINE session/chat history persistence if the AI core is sufficient for the next integration pass.
+Continue with LINE admin verify code and booking lead persistence from extracted AI entities, or wire database RPC retrieval for semantic FAQ search.

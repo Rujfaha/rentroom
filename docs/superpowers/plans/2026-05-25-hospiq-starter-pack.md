@@ -1743,9 +1743,10 @@ Reference source: `C:\Users\msi0007\rentroom\src\lib\ai\hotel-ai-rag-architectur
 
 ### Task 15: LINE Session / Chat History / Admin Verify
 
-- [ ] Load per-hotel LINE config by `hotelId` and verify signatures with stored channel secret.
-- [ ] Persist `line_sessions` with `open`, `handoff`, and `closed` status.
-- [ ] Persist `line_chat_history` with provider/model metadata and `(hotel_id, line_user_id, created_at desc)` query path.
-- [ ] Create handoff events when AI policy decides to escalate.
+- [x] Load per-hotel LINE config by `hotelId` and verify signatures with stored channel secret.
+- [x] Persist `line_sessions` with `open` and `handoff` status during webhook handling.
+- [x] Persist incoming/outgoing `line_chat_history` with provider/model metadata and AI response metadata.
+- [x] Create handoff events when AI policy or model extraction decides to escalate.
+- [x] Reply through LINE Messaging API when a reply token and channel access token are available.
 - [ ] Implement admin verify code flow for hotel admins in LINE.
-- [ ] Connect LINE webhook replies to the AI orchestrator and booking lead creation/update flow.
+- [ ] Connect booking lead creation/update from extracted AI entities.
