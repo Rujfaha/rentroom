@@ -2,7 +2,7 @@
 
 ### Current Status
 
-HospiqStarterPack has been scaffolded as a standalone Next.js app inside the current workspace. It now has Supabase CLI as a local dev dependency, expanded Starter Pack SaaS/AI migrations, RLS policy migration, onboarding backend route/service/schema, booking lead update support, an initial AI orchestrator shell, LINE webhook foundation, and dashboard/onboarding route shells.
+HospiqStarterPack has been scaffolded as a standalone Next.js app inside the current workspace. It now has Supabase CLI as a local dev dependency, expanded Starter Pack SaaS/AI migrations, RLS policy migration, onboarding backend route/service/schema, booking lead update support, AI Task 4.0 module scaffold, LINE webhook foundation, and dashboard/onboarding route shells.
 
 ### Completed Work
 
@@ -21,6 +21,8 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - [x] Added Starter Pack RLS policy migration with private helper functions
 - [x] Added onboarding backend route, validator, service, and FAQ repository
 - [x] Added admin booking lead update support for check-in/check-out, lead status, notes, contact channel, and webbooking redirect timestamp
+- [x] Added AI Task 4.0 scaffold with context, intent, policy, prompt, RAG retriever, reply composer, evaluation, and orchestrator boundaries
+- [x] Added policy resolver tests for booking CTA and handoff behavior
 
 ### Unfinished Work
 
@@ -29,8 +31,9 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - [ ] Run `npx supabase db reset --local` after Docker is available, or verify migrations against the linked project after Supabase setup
 - [ ] Generate real Supabase database types from the new project
 - [ ] Run Supabase DB advisors after the migrations are verified
-- [ ] Implement AI context loader from Starter Pack tables using `hotel-ai-rag-architecture.md`
-- [ ] Expand AI prompt builder, intent router, reply composer, model provider integration, and RAG evaluation
+- [ ] Implement DB-backed AI context loader from Starter Pack tables using `hotel-ai-rag-architecture.md`
+- [ ] Replace not-configured reply composer with model-backed reply composer and provider abstraction
+- [ ] Expand intent router, semantic RAG retrieval, memory update, and `ai_testcases` evaluation runner
 - [ ] Implement LINE config lookup, signature verification with per-hotel secret, session persistence, chat history, admin verify code, and reply calls
 - [ ] Implement full dashboard/onboarding UI after backend contract is stable
 
@@ -43,6 +46,7 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - `HospiqStarterPack/src/app/api/bookings/[id]/route.ts` - booking lead update API route
 - `HospiqStarterPack/src/server/services/onboarding.service.ts` - onboarding use case
 - `HospiqStarterPack/src/server/repositories/ai.repository.ts` - AI FAQ persistence
+- `HospiqStarterPack/src/lib/ai/` - AI Task 4.0 module scaffold and policy tests
 - `CONTEXT.md` - glossary for `rentroom`, `HospiqStarterPack`, Starter Pack, and new Supabase project
 - `docs/superpowers/specs/2026-05-25-hospiq-starter-pack-design.md` - design spec
 - `docs/superpowers/plans/2026-05-25-hospiq-starter-pack.md` - implementation plan
@@ -52,7 +56,7 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - The user has not set up the real/new Supabase project yet. Current Supabase work is only local CLI config plus migration files.
 - Docker is not installed or not available in PATH, so local migration execution with `npx supabase db reset --local` is blocked until Docker is available.
 - `npm install` reports 2 moderate vulnerabilities from the current dependency tree; no `npm audit fix --force` was run because it may introduce breaking changes.
-- AI orchestrator is intentionally a safe shell and does not yet call a model or load real hotel context.
+- AI orchestrator now has the correct module flow, but still uses a not-configured composer and does not yet call a model or load real hotel context from Supabase.
 - LINE webhook service currently parses payload and preserves the `[hotelId]` contract but does not yet verify against a stored per-hotel secret.
 - RLS policies are drafted in migration `202605250003`, but they still need to be verified against real Supabase users.
 
@@ -71,6 +75,7 @@ npm test -- src/server/validators/__tests__/roomtype.schema.test.ts
 npm test -- src/lib/ai/__tests__/response-guard.test.ts
 npm test -- src/lib/line/__tests__/signature.test.ts
 npm test
+npm test -- src/lib/ai
 npm run lint
 npm run build
 supabase --version
@@ -103,4 +108,4 @@ npm run dev
 
 ### Next Recommended Step
 
-Initialize or link Supabase, verify migrations against a real database, then continue Task 14: duplicate/refactor AI internals starting with `hotel-context`, `reply-composer`, and `intent-router`.
+Continue Task 14 with DB-backed `hotel-context` first, then model-backed `reply-composer`, then intent/router and RAG retrieval. Keep the current module boundaries and do not import from the parent `rentroom` app.

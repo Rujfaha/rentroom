@@ -1,8 +1,11 @@
-export function detectStarterIntent(message: string): string {
+import type { StarterAiIntent } from "./types";
+
+export function detectStarterIntent(message: string): StarterAiIntent {
   const normalized = message.trim().toLowerCase();
 
   if (!normalized) return "empty";
-  if (normalized.includes("ราคา") || normalized.includes("ห้อง")) return "room_inquiry";
-  if (normalized.includes("จอง")) return "booking_intent";
+  if (normalized.includes("admin") || normalized.includes("staff")) return "handoff_request";
+  if (normalized.includes("เธฃเธฒเธเธฒ") || normalized.includes("เธซเนเธญเธ")) return "room_inquiry";
+  if (normalized.includes("เธเธญเธ")) return "booking_intent";
   return "general";
 }
