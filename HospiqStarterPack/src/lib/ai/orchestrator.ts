@@ -2,9 +2,11 @@ import { getHotelAIContext } from "./hotel-context";
 import { extractStarterIntentEntities, mergeBookingLeadFromEntities } from "./intent-router";
 import { resolveAiPolicy } from "./policy-resolver";
 import { buildStarterPromptPayload } from "./prompt-builder";
-import { retrieveRelevantFaqs } from "./rag-retriever";
+import { getAiProvider } from "./provider";
+import { retrieveFaqsWithSemanticFallback } from "./rag-retriever";
 import { createModelBackedReplyComposer } from "./reply-composer";
 import { guardAiResponse } from "./response-guard";
+import { createSupabaseSemanticFaqClient } from "./semantic-faq-client";
 import type { GenerateHospiqReplyInput, GenerateHospiqReplyResult } from "./types";
 
 export async function generateHospiqReply(input: GenerateHospiqReplyInput): Promise<GenerateHospiqReplyResult> {
@@ -12,7 +14,15 @@ export async function generateHospiqReply(input: GenerateHospiqReplyInput): Prom
   const baseContext = input.context ?? (await getHotelAIContext(input.hotelId, input.lineUserId, input.lineSessionId));
   const intent = extraction.primaryIntent;
   const mergedMemory = mergeBookingLeadFromEntities(baseContext.memory, extraction);
-  const relevantFaqs = retrieveRelevantFaqs(baseContext.faqs, input.message, extraction.language);
+  const aiProvider = getAiProvider();
+  const relevantFaqs = await retrieveFaqsWithSemanticFallback({
+    hotelId: input.hotelId,
+    faqs: baseContext.faqs,
+    message: input.message,
+    language: extraction.language,
+    embeddingProvider: aiProvider.embed ? { embed: aiProvider.embed.bind(aiProvider) } : undefined,
+    semanticClient: createSupabaseSemanticFaqClient(),
+  });
   const context = {
     ...baseContext,
     faqs: relevantFaqs,
@@ -21,7 +31,7 @@ export async function generateHospiqReply(input: GenerateHospiqReplyInput): Prom
   const policy = resolveAiPolicy(context, intent);
   const handoffRequired = policy.shouldHandoff || extraction.handoff?.required === true;
   const prompt = buildStarterPromptPayload(context, input.message, intent);
-  const composer = createModelBackedReplyComposer();
+  const composer = createModelBackedReplyComposer(aiProvider);
   const draft = await composer.compose(prompt);
   const guard = guardAiResponse({
     response: draft.reply,

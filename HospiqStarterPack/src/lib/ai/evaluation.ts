@@ -1,4 +1,6 @@
 import type { GenerateHospiqReplyResult, StarterAiIntent } from "./types";
+import { generateHospiqReply } from "./orchestrator";
+import { getHotelAIContext } from "./hotel-context";
 
 export interface AiTestcaseExpectation {
   expectedIntent?: StarterAiIntent;
@@ -10,6 +12,13 @@ export interface AiTestcaseExpectation {
 export interface AiEvaluationResult {
   passed: boolean;
   failures: string[];
+}
+
+export interface PersistedAiTestcaseEvaluation {
+  testcaseId: string;
+  passed: boolean;
+  failures: string[];
+  intent: StarterAiIntent;
 }
 
 export function evaluateAiResult(
@@ -38,4 +47,42 @@ export function evaluateAiResult(
     passed: failures.length === 0,
     failures,
   };
+}
+
+export async function runPersistedAiTestcases(input: {
+  hotelId: string;
+  lineUserId?: string;
+  limit?: number;
+}): Promise<PersistedAiTestcaseEvaluation[]> {
+  const context = await getHotelAIContext(input.hotelId, input.lineUserId ?? "ai-test-runner");
+  const testcases = context.knowledge?.testcases.slice(0, input.limit ?? 5) ?? [];
+  const results: PersistedAiTestcaseEvaluation[] = [];
+
+  for (const testcase of testcases) {
+    const result = await generateHospiqReply({
+      hotelId: input.hotelId,
+      lineUserId: input.lineUserId ?? "ai-test-runner",
+      message: testcase.userMessage,
+      context,
+    });
+    const evaluation = evaluateAiResult(result, {
+      expectedIntent: normalizeExpectedIntent(testcase.expectedIntent),
+      expectedBehavior: testcase.expectedBehavior,
+      mustInclude: testcase.goldenReply ? [testcase.goldenReply] : undefined,
+    });
+
+    results.push({
+      testcaseId: testcase.id,
+      passed: evaluation.passed,
+      failures: evaluation.failures,
+      intent: result.intent,
+    });
+  }
+
+  return results;
+}
+
+function normalizeExpectedIntent(intent: string | null): StarterAiIntent | undefined {
+  if (!intent) return undefined;
+  return intent as StarterAiIntent;
 }

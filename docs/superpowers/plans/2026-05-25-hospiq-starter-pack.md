@@ -1735,7 +1735,10 @@ Reference source: `C:\Users\msi0007\rentroom\src\lib\ai\hotel-ai-rag-architectur
 - [x] Add Gemini embedding support for `text-embedding-004`.
 - [x] Add AI result evaluator for golden testcase checks.
 - [ ] Refactor from the parent `rentroom` AI reference into standalone Starter Pack modules only.
-- [ ] Continue with database RPC wiring for semantic FAQ search and persisted `ai_testcases` evaluation runner.
+- [x] Add database RPC migration for semantic FAQ search.
+- [x] Wire semantic FAQ retrieval to the `match_ai_faqs` RPC through a Supabase-backed semantic client.
+- [x] Add persisted `ai_testcases` evaluation runner that loads hotel testcases and evaluates AI results.
+- [ ] Apply the semantic FAQ RPC migration to the real Supabase project.
 - [ ] Replace temporary hardcoded AI shell replies with database-backed prompt/context assembly.
 - [ ] Implement architecture flow: language detection, keyword fast lane, semantic FAQ search, hotel/room/availability context, prompt assembly, model call, guardrails, memory update.
 - [ ] Use `ai_settings.supported_languages`, `booking_cta_policy`, `handoff_policy`, `fallback_policy`, and `max_reply_length`.
