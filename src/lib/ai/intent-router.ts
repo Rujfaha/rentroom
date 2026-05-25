@@ -1,133 +1,178 @@
-import type { AvailabilityRequest, HotelContext, LineConversationMemory, LineIntent } from "@/types/line-ai.types";
-import { detectLineHandoff } from "./handoff";
+import type {
+  AiGenerateResult,
+  AvailabilityRequest,
+  LineConversationMemory,
+  LineHandoffReason,
+  LineHandoffRequest,
+  LineIntent,
+  LineIntentEntities,
+  LineIntentEntityExtraction,
+  SupportedLineLanguage,
+} from "@/types/line-ai.types";
+import type { AiProvider } from "./provider";
+import { getAiProvider } from "./provider";
 
-interface DeterministicReplyInput {
-  intent: LineIntent;
-  context: HotelContext;
-  bookingUrl: string;
-  memory: LineConversationMemory;
+const SUPPORTED_LANGUAGES: SupportedLineLanguage[] = ["th", "zh", "en", "ja", "es", "ar"];
+
+const SUPPORTED_INTENTS: LineIntent[] = [
+  "availability",
+  "availability_payment",
+  "payment",
+  "price",
+  "promotion",
+  "contact",
+  "booking",
+  "handoff",
+  "general",
+  "greeting",
+  "room_overview",
+  "room_specific_detail",
+  "room_detail",
+  "room_recommendation",
+  "amenities_question",
+  "availability_check",
+  "price_inquiry",
+  "cheapest_room",
+  "group_booking",
+  "booking_ready",
+  "booking_intent",
+  "sales_handoff",
+  "handoff_required",
+  "fallback",
+];
+
+const SUPPORTED_HANDOFF_REASONS: LineHandoffReason[] = [
+  "admin_request",
+  "payment_issue",
+  "refund",
+  "complaint",
+  "cancellation",
+  "special_approval",
+  "group_booking",
+  "booking_ready",
+];
+
+export async function extractLineIntentEntities(
+  message: string,
+  provider: AiProvider = getAiProvider()
+): Promise<LineIntentEntityExtraction & { provider: AiGenerateResult["provider"]; model: string }> {
+  const result = await provider.generate({
+    system: buildIntentExtractionSystemPrompt(),
+    prompt: buildIntentExtractionUserPrompt(message),
+    maxOutputTokens: 500,
+  });
+  const parsed = parseIntentExtraction(result.text);
+
+  return {
+    ...parsed,
+    provider: result.provider,
+    model: result.model,
+  };
 }
 
-export function detectLineIntent(message: string): LineIntent {
-  const intents = detectLineIntents(message);
-  if (intents.includes("availability") && intents.includes("payment")) return "availability_payment";
-  
-  // For backward compatibility, return the first base intent if available
-  const baseIntents: LineIntent[] = ["availability", "payment", "price", "promotion", "contact", "booking", "handoff"];
-  const matchedBase = intents.find((i) => baseIntents.includes(i));
-  return matchedBase ?? intents[0] ?? "general";
+export function parseIntentExtraction(text: string): LineIntentEntityExtraction {
+  const value = parseJsonObject(text);
+  const language = readLanguage(value);
+  const intents = readIntents(value);
+  const primaryIntent = readIntent((value as { primaryIntent?: unknown }).primaryIntent) ?? intents[0] ?? "general";
+  const entities = readEntities((value as { entities?: unknown }).entities);
+  const handoff = readHandoff((value as { handoff?: unknown }).handoff);
+
+  return {
+    language,
+    primaryIntent,
+    intents,
+    entities,
+    handoff,
+  };
 }
 
-export function detectLineIntents(message: string): LineIntent[] {
-  const text = message.toLowerCase();
-  const intents: LineIntent[] = [];
-  
-  if (detectLineHandoff(message)) intents.push("handoff");
-
-  // 1. Group booking (10+ people or keywords)
-  if (/(1\d|[2-9]\d|\d{3,})\s*(คน|ท่าน)|(กรุ๊ป|หมู่คณะ|หลายคน|มาเป็นกลุ่ม|ทัวร์|บริษัท|group booking)/i.test(text)) {
-    intents.push("group_booking");
-  }
-
-  // 2. Cheapest room
-  if (/(ถูกที่สุด|ถูกสุด|ราคาถูก|ประหยัดสุด|cheapest|lowest price)/i.test(text)) {
-    intents.push("cheapest_room");
-  }
-
-  // 3. Room recommendation
-  if (/(ห้องไหนดี|แนะนำห้อง|ที่ไหนสวยสุด|ห้องไหนสวยสุด|วิวดี|ถ่ายรูปสวย|ไม่ชอบบ้านไม้|ไม่ชอบแบบบ้านไม้)/i.test(text)) {
-    intents.push("room_recommendation");
-  }
-
-  // 4. Amenities question
-  if (/(สิ่งอำนวยความสะดวก|มีอะไรบ้าง|facility|amenities|ของใช้|อุปกรณ์)/i.test(text)) {
-    intents.push("amenities_question");
-  }
-
-  // 5. Availability check
-  if (/(ว่างไหม|ว่างวันไหน|มีห้องไหม|เช็กห้อง|เช็คห้อง)/i.test(text)) {
-    intents.push("availability_check");
-  }
-
-  // 6. Price inquiry
-  if (/(ราคา|เท่าไหร่|กี่บาท|เรท|rate|price|budget|价格|料金|precio|سعر)/i.test(text)) {
-    intents.push("price_inquiry");
-  }
-
-  // 7. Room detail
-  if (/(รายละเอียด|ข้อมูลเพิ่มเติม|สนใจ|ห้อง|house|warmly|honeymoon|slowly|forest)/i.test(text)) {
-    intents.push("room_detail");
-  }
-
-  // 8. Booking intent
-  if (/(จอง|จองห้อง|booking|book|reserve|reservation|เอาห้อง|สนใจ|预订|予約|reservar|reserva|حجز)/i.test(text)) {
-    intents.push("booking_intent");
-  }
-
-  // Map to traditional base intents for compatibility
-  if (hasAvailabilityIntent(text) || intents.includes("availability_check")) {
-    intents.push("availability");
-  }
-  if (intents.includes("price_inquiry") || intents.includes("cheapest_room")) {
-    intents.push("price");
-  }
-  if (/(โปร|โปรโมชั่น|ส่วนลด|ลดราคา|promotion|discount|deal|offer|优惠|割引|promoción|descuento|عرض|خصม)/i.test(text)) {
-    intents.push("promotion");
-  }
-  if (/(ชำระ|จ่าย|โอน|พร้อมเพย์|promptpay|สลิป|บัญชี|payment|pay|transfer|slip|付款|支付|支払い|pagar|pago|دفع|تحويل)/i.test(text)) {
-    intents.push("payment");
-  }
-  if (/(ติดต่อ|เบอร์|โทร|line|แผนที่|อยู่ที่ไหน|ที่อยู่|location|contact|phone|call|map|address|联系|電話|連絡|contacto|teléfono|اتصال|هاتف|عنوان)/i.test(text)) {
-    intents.push("contact");
-  }
-  if (intents.includes("booking_intent") || intents.includes("group_booking")) {
-    intents.push("booking");
-  }
-
-  const uniqueIntents = Array.from(new Set(intents));
-  return uniqueIntents.length ? uniqueIntents : ["general"];
+export function buildIntentExtractionSystemPrompt(): string {
+  return [
+    "You extract hotel chat intent and entities for a multi-tenant SaaS hotel assistant.",
+    "Return only valid JSON. Do not include markdown, comments, or explanation.",
+    "Do not infer hotel-specific room names, amenities, styles, policies, prices, or promotions unless the customer explicitly wrote them.",
+    "Use ISO YYYY-MM-DD for explicit or relative dates when clear. If a date is unclear, omit it.",
+    "Use the customer's language code when supported.",
+    "Schema:",
+    JSON.stringify({
+      language: "th | en | zh | ja | es | ar",
+      primaryIntent: "one LineIntent",
+      intents: ["one or more LineIntent values"],
+      entities: {
+        roomTypeName: "customer-written room type name",
+        checkIn: "YYYY-MM-DD",
+        checkOut: "YYYY-MM-DD",
+        guests: 2,
+        guestName: "customer name",
+        phone: "customer phone",
+        roomPreference: ["customer preferences only"],
+        dislikedFeatures: ["customer dislikes only"],
+        isGroupBooking: false,
+        leadScore: "low | medium | high",
+      },
+      handoff: {
+        required: false,
+        reason: "admin_request | payment_issue | refund | complaint | cancellation | special_approval | group_booking | booking_ready",
+        priority: "normal | high",
+      },
+    }),
+  ].join("\n");
 }
 
-function hasAvailabilityIntent(text: string): boolean {
-  const availabilityWords =
-    /(ว่าง|ห้องว่าง|เข้าพัก|เช็คอิน|เช็กอิน|check.?in|check.?out|available|availability|room|stay|tomorrow|tonight|有没有|空房|部屋|空室|habitación|disponible|غرفة|متاح|พรุ่งนี้|มะรืน|วันนี้)/i;
-  if (availabilityWords.test(text)) return true;
-
-  const datePatterns = /(วัน(?:ที่)?\s*\d{1,2}|\b\d{1,2}[\s\-/]+(?:ถึง)?\s*\d{1,2}\b|มกราคม|กุมภาพันธ์|มีนาคม|เมษายน|พฤษภาคม|มิถุนายน|กรกฎาคม|สิงหาคม|กันยายน|ตุลาคม|พฤศจิกายน|ธันวาคม|ม\.ค\.|ก\.พ\.|มี\.ค\.|เม\.ย\.|พ\.ค\.|มิ\.ย\.|ก\.ค\.|ส\.ค\.|ก\.ย\.|ต\.ค\.|พ\.ย\.|ธ\.ค\.|เดือนนี้|เดือนหน้า|ปีนี้|ปีหน้า)/i;
-  if (datePatterns.test(text)) return true;
-
-  const hasGuestCount = /\d{1,2}\s*(คน|ท่าน)\b/.test(text);
-  const hasStayWord = /(ห้อง|พัก|จอง|คืน|เข้าพัก|เช็คอิน|เช็กอิน)/.test(text);
-  return hasGuestCount && hasStayWord;
+function buildIntentExtractionUserPrompt(message: string): string {
+  return `Customer message:\n${message}`;
 }
 
-export function buildDeterministicReply(input: DeterministicReplyInput): string | null {
-  switch (input.intent) {
-    case "availability_payment":
-      return buildAvailabilityPaymentReply(input.context, input.bookingUrl);
-    case "payment":
-      return buildPaymentReply(input.context, input.bookingUrl);
-    case "price":
-      return buildPriceReply(input.context, input.bookingUrl);
-    case "promotion":
-      return buildPromotionReply(input.context);
-    case "contact":
-      return buildContactReply(input.context);
-    case "booking":
-      return buildBookingReply(input.bookingUrl, input.memory);
-    case "availability":
-      return buildAvailabilityReply(input.context, input.bookingUrl);
-    default:
-      return null;
+export function buildAvailabilityRequestFromEntities(entities: LineIntentEntities): AvailabilityRequest | null {
+  if (!entities.checkIn || !entities.checkOut) return null;
+  return {
+    checkIn: entities.checkIn,
+    checkOut: entities.checkOut,
+    ...(entities.guests ? { guests: entities.guests } : {}),
+  };
+}
+
+export function mergeBookingLeadFromEntities(
+  existing: LineConversationMemory,
+  entities: LineIntentEntities
+): LineConversationMemory {
+  const prevLead = existing.bookingLead ?? {};
+  const prevSource = prevLead.source ?? {};
+  const nextLead = {
+    ...prevLead,
+    source: {
+      ...prevSource,
+    },
+  };
+
+  if (entities.roomTypeName) {
+    nextLead.roomTypeName = entities.roomTypeName;
+    nextLead.source.roomId = "customer";
   }
-}
+  if (entities.checkIn) {
+    nextLead.checkIn = entities.checkIn;
+    nextLead.source.checkIn = "customer";
+  }
+  if (entities.checkOut) {
+    nextLead.checkOut = entities.checkOut;
+    nextLead.source.checkOut = "customer";
+  }
+  if (entities.guests) {
+    nextLead.guests = entities.guests;
+    nextLead.source.guests = "customer";
+  }
+  if (entities.guestName) nextLead.guestName = entities.guestName;
+  if (entities.phone) nextLead.phone = entities.phone;
+  if (entities.roomPreference) nextLead.roomPreference = entities.roomPreference;
+  if (entities.dislikedFeatures) nextLead.dislikedFeatures = entities.dislikedFeatures;
+  if (entities.isGroupBooking) nextLead.isGroupBooking = true;
+  if (entities.leadScore) nextLead.leadScore = entities.leadScore;
 
-function buildAvailabilityPaymentReply(context: HotelContext, bookingUrl: string): string | null {
-  const availabilityReply = buildAvailabilityReply(context, bookingUrl);
-  const paymentReply = buildPaymentReply(context, bookingUrl, false);
-
-  if (!availabilityReply) return paymentReply;
-  return [availabilityReply, paymentReply].join("\n\n");
+  return {
+    ...existing,
+    bookingLead: nextLead,
+  };
 }
 
 export function mergeBookingLead(memory: LineConversationMemory, next: Partial<AvailabilityRequest>): LineConversationMemory {
@@ -140,71 +185,83 @@ export function mergeBookingLead(memory: LineConversationMemory, next: Partial<A
   };
 }
 
-function buildPaymentReply(context: HotelContext, bookingUrl: string, includeBookingUrl = true): string {
-  const methods = context.payment?.promptPayConfigured
-    ? `ชำระผ่าน PromptPay/โอนเงินได้ค่ะ${context.payment.accountName ? ` ชื่อบัญชี ${context.payment.accountName}` : ""}`
-    : "ชำระผ่านการโอนเงินตามขั้นตอนในหน้าจองได้ค่ะ";
-
-  const lines = [
-    methods,
-    "หลังชำระเงินแล้วให้อัปโหลดสลิปในหน้าจอง เพื่อให้ทีมงานตรวจสอบและยืนยันการจองค่ะ",
-    "ถ้าโอนแล้วแต่ลืมอัปโหลดสลิป ให้กลับไปอัปโหลดในหน้าจอง หรือแจ้งทีมงานพร้อมชื่อ/เบอร์ที่ใช้จองเพื่อช่วยตรวจสอบค่ะ",
-  ];
-
-  if (includeBookingUrl) lines.push(`เริ่มจองได้ที่ ${bookingUrl}`);
-  return lines.join("\n");
-}
-
-function buildAvailabilityReply(context: HotelContext, bookingUrl: string): string | null {
-  if (!context.availability) return null;
-
-  const { request, roomTypes } = context.availability;
-  if (!roomTypes.length) {
-    return `ช่วงวันที่ ${request.checkIn} ถึง ${request.checkOut}${request.guests ? ` สำหรับ ${request.guests} ท่าน` : ""} ตอนนี้ยังไม่พบห้องว่างจากระบบค่ะ`;
+function parseJsonObject(text: string): Record<string, unknown> {
+  const trimmed = text.trim();
+  const jsonText = extractJsonObjectText(trimmed);
+  try {
+    const value: unknown = JSON.parse(jsonText);
+    if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+    return value as Record<string, unknown>;
+  } catch {
+    return {};
   }
-
-  const roomLines = roomTypes
-    .slice(0, 5)
-    .map((roomType) => `- ${roomType.name}: ว่าง ${roomType.availableRooms} ห้อง เริ่มต้น ${formatCurrency(roomType.basePrice)} บาท/คืน`);
-  return [
-    `ช่วงวันที่ ${request.checkIn} ถึง ${request.checkOut}${request.guests ? ` สำหรับ ${request.guests} ท่าน` : ""} มีตัวเลือกดังนี้ค่ะ`,
-    ...roomLines,
-    `จองต่อได้ที่ ${bookingUrl}`,
-  ].join("\n");
 }
 
-function buildPriceReply(context: HotelContext, bookingUrl: string): string {
-  if (!context.roomTypes.length) return `ตอนนี้ยังไม่มีข้อมูลราคาห้องในระบบค่ะ ดูรายละเอียดเพิ่มเติมได้ที่ ${bookingUrl}`;
-
-  const roomLines = context.roomTypes
-    .slice(0, 5)
-    .map((roomType) => `- ${roomType.name}: เริ่มต้น ${formatCurrency(roomType.basePrice)} บาท/คืน รองรับ ${roomType.maxGuests} ท่าน`);
-
-  return [`ราคาห้องพักเริ่มต้นมีดังนี้ค่ะ`, ...roomLines, `ยอดรวมจริงขึ้นกับวันที่เข้าพักและโปรโมชัน ดู/จองได้ที่ ${bookingUrl}`].join("\n");
+function extractJsonObjectText(text: string): string {
+  const first = text.indexOf("{");
+  const last = text.lastIndexOf("}");
+  if (first === -1 || last === -1 || last < first) return text;
+  return text.slice(first, last + 1);
 }
 
-function buildPromotionReply(context: HotelContext): string {
-  if (!context.promotions.length) return "ตอนนี้ยังไม่พบโปรโมชั่นที่เปิดใช้งานในระบบค่ะ";
-  return ["โปรโมชั่นที่มีตอนนี้ค่ะ", ...context.promotions.map((promo) => `- ${promo.title}${promo.discountText ? ` (${promo.discountText})` : ""}`)].join("\n");
+function readLanguage(value: Record<string, unknown>): SupportedLineLanguage {
+  const language = value.language;
+  return typeof language === "string" && isSupportedLanguage(language) ? language : "th";
 }
 
-function buildContactReply(context: HotelContext): string {
-  const lines = [
-    context.phone ? `โทร: ${context.phone}` : null,
-    context.email ? `อีเมล: ${context.email}` : null,
-    context.address ? `ที่อยู่: ${context.address}` : null,
-    ...context.contacts.map((contact) => `${contact.label || contact.type}: ${contact.value}`),
-  ].filter((line): line is string => Boolean(line));
-
-  return lines.length ? lines.join("\n") : "ตอนนี้ยังไม่มีข้อมูลติดต่อในระบบค่ะ";
+function readIntents(value: Record<string, unknown>): LineIntent[] {
+  const raw = value.intents;
+  if (!Array.isArray(raw)) return ["general"];
+  const intents = raw.map(readIntent).filter((intent): intent is LineIntent => Boolean(intent));
+  const unique = Array.from(new Set(intents));
+  return unique.length ? unique : ["general"];
 }
 
-function buildBookingReply(bookingUrl: string, memory: LineConversationMemory): string {
-  const lead = memory.bookingLead;
-  const summary = lead?.checkIn && lead.checkOut ? `วันที่ ${lead.checkIn} ถึง ${lead.checkOut}${lead.guests ? ` สำหรับ ${lead.guests} ท่าน` : ""}` : null;
-  return [summary ? `ได้ค่ะ สรุปข้อมูลที่มีตอนนี้: ${summary}` : "ได้ค่ะ สามารถเริ่มจองผ่านหน้าเว็บได้เลย", `ลิงก์จอง: ${bookingUrl}`].join("\n");
+function readIntent(value: unknown): LineIntent | null {
+  if (typeof value !== "string") return null;
+  return isSupportedIntent(value) ? value : null;
 }
 
-function formatCurrency(value: number): string {
-  return value.toLocaleString("th-TH", { maximumFractionDigits: 0 });
+function readEntities(value: unknown): LineIntentEntities {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const source = value as Record<string, unknown>;
+  const entities: LineIntentEntities = {};
+
+  if (typeof source.roomTypeName === "string" && source.roomTypeName.trim()) entities.roomTypeName = source.roomTypeName.trim();
+  if (typeof source.checkIn === "string" && source.checkIn.trim()) entities.checkIn = source.checkIn.trim();
+  if (typeof source.checkOut === "string" && source.checkOut.trim()) entities.checkOut = source.checkOut.trim();
+  if (typeof source.guests === "number" && Number.isInteger(source.guests) && source.guests > 0) entities.guests = source.guests;
+  if (typeof source.guestName === "string" && source.guestName.trim()) entities.guestName = source.guestName.trim();
+  if (typeof source.phone === "string" && source.phone.trim()) entities.phone = source.phone.trim();
+  if (Array.isArray(source.roomPreference)) entities.roomPreference = source.roomPreference.filter(isString);
+  if (Array.isArray(source.dislikedFeatures)) entities.dislikedFeatures = source.dislikedFeatures.filter(isString);
+  if (source.isGroupBooking === true) entities.isGroupBooking = true;
+  if (source.leadScore === "low" || source.leadScore === "medium" || source.leadScore === "high") entities.leadScore = source.leadScore;
+
+  return entities;
+}
+
+function readHandoff(value: unknown): LineHandoffRequest | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const source = value as Record<string, unknown>;
+  if (source.required !== true) return null;
+  const reason = typeof source.reason === "string" && isSupportedHandoffReason(source.reason) ? source.reason : "admin_request";
+  const priority = source.priority === "high" ? "high" : "normal";
+  return { required: true, reason, priority };
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === "string" && value.trim().length > 0;
+}
+
+function isSupportedLanguage(value: string): value is SupportedLineLanguage {
+  return SUPPORTED_LANGUAGES.includes(value as SupportedLineLanguage);
+}
+
+function isSupportedIntent(value: string): value is LineIntent {
+  return SUPPORTED_INTENTS.includes(value as LineIntent);
+}
+
+function isSupportedHandoffReason(value: string): value is LineHandoffReason {
+  return SUPPORTED_HANDOFF_REASONS.includes(value as LineHandoffReason);
 }

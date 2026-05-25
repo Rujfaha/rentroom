@@ -9,6 +9,7 @@ const state = vi.hoisted(() => ({
   getLineUserProfile: vi.fn(),
   notifyLineStaffHandoff: vi.fn(),
   updateLineConversationMemory: vi.fn(),
+  generate: vi.fn(),
 }));
 
 const hotelContext: HotelContext = {
@@ -22,6 +23,7 @@ const hotelContext: HotelContext = {
   payment: { promptPayConfigured: true, accountName: "arkkarawin" },
   roomTypes: [{ id: "rt-1", name: "Warmly House", basePrice: 2500, maxGuests: 2, availableRooms: 2 }],
   promotions: [],
+  aiKnowledge: { settings: null, faqs: [], testcases: [] },
 };
 
 vi.mock("@/lib/ai/hotel-context", () => ({
@@ -38,6 +40,12 @@ vi.mock("@/lib/line/client", () => ({
 
 vi.mock("@/lib/line/staff-notifier", () => ({
   notifyLineStaffHandoff: state.notifyLineStaffHandoff,
+}));
+
+vi.mock("@/lib/ai/provider", () => ({
+  getAiProvider: vi.fn(() => ({
+    generate: state.generate,
+  })),
 }));
 
 vi.mock("@/lib/line/logging", () => ({
@@ -67,6 +75,12 @@ describe("LINE webhook AI route", () => {
     state.getLineUserProfile.mockResolvedValue({ displayName: "Mina" });
     state.replyLineMessage.mockReset();
     state.notifyLineStaffHandoff.mockReset();
+    state.generate.mockReset();
+    state.generate.mockResolvedValue({
+      provider: "gemini",
+      model: "extractor-test",
+      text: extractionJson({ primaryIntent: "general", intents: ["general"] }),
+    });
     state.updateLineConversationMemory.mockReset();
     state.updateLineConversationMemory.mockImplementation(async (_supabase, _conversationId, memory) => {
       state.memory = memory;
@@ -75,6 +89,31 @@ describe("LINE webhook AI route", () => {
   });
 
   it("routes admin slip issues and the next customer details through handoff", async () => {
+    state.generate
+      .mockResolvedValueOnce({
+        provider: "gemini",
+        model: "extractor-test",
+        text: extractionJson({
+          primaryIntent: "handoff",
+          intents: ["handoff"],
+          handoff: { required: true, reason: "payment_issue", priority: "high" },
+        }),
+      })
+      .mockResolvedValueOnce({
+        provider: "gemini",
+        model: "response-test",
+        text: "ทีมงานจะช่วยดูต่อค่ะ รบกวนแจ้งชื่อ/เบอร์ที่ใช้จองไว้ได้เลยค่ะ",
+      })
+      .mockResolvedValueOnce({
+        provider: "gemini",
+        model: "extractor-test",
+        text: extractionJson({ primaryIntent: "general", intents: ["general"] }),
+      })
+      .mockResolvedValueOnce({
+        provider: "gemini",
+        model: "response-test",
+        text: "รับข้อมูลแล้วค่ะ ทีมงานจะช่วยดูต่อให้ค่ะ",
+      });
     const first = await POST(buildLineRequest("ติดต่อแอดมินให้หน่อย จองแล้วลืมแนบสลิป", "reply-1"));
 
     expect(first.status).toBe(200);
@@ -111,6 +150,18 @@ describe("LINE webhook AI route", () => {
       JSON.stringify({ type: "group", groupId: "Cgroup-id-123", userId: "Uuser-id-123" })
     );
   });
+
+  it("replies to follow events with a short Hospiq greeting", async () => {
+    const response = await POST(buildFollowRequest("reply-follow"));
+
+    expect(response.status).toBe(200);
+    const reply = state.replyLineMessage.mock.calls[0]?.[0].messages[0].text as string;
+    expect(reply).toContain("Hospiq");
+    expect(reply).toContain("Arkkarawin");
+    expect(reply).toContain("ค่ะ");
+    expect(reply).not.toContain("ครับ");
+    expect(reply.length).toBeLessThanOrEqual(90);
+  });
 });
 
 function buildLineRequest(
@@ -136,5 +187,41 @@ function buildLineRequest(
       "x-line-signature": createHmac("sha256", "test-secret").update(body).digest("base64"),
     },
     body,
+  });
+}
+
+function buildFollowRequest(replyToken: string): NextRequest {
+  const body = JSON.stringify({
+    events: [
+      {
+        type: "follow",
+        replyToken,
+        source: { type: "user", userId: "line-user-1" },
+      },
+    ],
+  });
+
+  return new NextRequest("http://localhost/api/line/webhook", {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      "x-line-signature": createHmac("sha256", "test-secret").update(body).digest("base64"),
+    },
+    body,
+  });
+}
+
+function extractionJson(input: {
+  primaryIntent: string;
+  intents: string[];
+  entities?: Record<string, unknown>;
+  handoff?: Record<string, unknown> | null;
+}): string {
+  return JSON.stringify({
+    language: "th",
+    primaryIntent: input.primaryIntent,
+    intents: input.intents,
+    entities: input.entities ?? {},
+    handoff: input.handoff ?? null,
   });
 }

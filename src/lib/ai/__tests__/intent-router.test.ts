@@ -1,108 +1,98 @@
-import { describe, expect, it } from "vitest";
-import { buildDeterministicReply, detectLineIntent, detectLineIntents, mergeBookingLead } from "../intent-router";
-import type { HotelContext, LineConversationMemory } from "@/types/line-ai.types";
+import { describe, expect, it, vi } from "vitest";
+import {
+  buildAvailabilityRequestFromEntities,
+  buildIntentExtractionSystemPrompt,
+  extractLineIntentEntities,
+  mergeBookingLead,
+  mergeBookingLeadFromEntities,
+  parseIntentExtraction,
+} from "../intent-router";
+import type { LineConversationMemory } from "@/types/line-ai.types";
+import type { AiProvider } from "../provider";
 
-const context: HotelContext = {
-  hotelId: "hotel-1",
-  hotelName: "Arkkarawin",
-  description: null,
-  address: "เชียงใหม่",
-  phone: "0812345678",
-  email: "stay@example.com",
-  contacts: [{ type: "line", label: "LINE", value: "@arkkarawin" }],
-  payment: {
-    promptPayConfigured: true,
-    accountName: "Arkkarawin Resort",
-  },
-  roomTypes: [
-    { id: "rt-1", name: "Deluxe", basePrice: 1200, maxGuests: 2, availableRooms: 3 },
-    { id: "rt-2", name: "Family", basePrice: 2200, maxGuests: 4, availableRooms: 1 },
-  ],
-  promotions: [{ title: "พักยาวลดเพิ่ม", description: "พัก 2 คืนขึ้นไป", discountText: "10%", validUntil: null }],
-};
+describe("extractLineIntentEntities", () => {
+  it("uses the LLM provider to extract intent, entities, and language instead of regex rules", async () => {
+    const generate = vi.fn(async () => ({
+        provider: "gemini" as const,
+        model: "extractor-test",
+        text: JSON.stringify({
+          language: "th",
+          primaryIntent: "room_specific_detail",
+          intents: ["room_specific_detail", "price"],
+          entities: { roomTypeName: "Sunset Villa", guests: 2 },
+          handoff: null,
+        }),
+      }));
+    const provider: AiProvider = { generate };
 
-describe("detectLineIntent", () => {
-  it("detects common hotel intents", () => {
-    expect(detectLineIntent("ชำระเงินทางไหนได้บ้าง")).toBe("payment");
-    expect(detectLineIntent("มีห้องว่างพรุ่งนี้ไหม")).toBe("availability");
-    expect(detectLineIntent("ราคาเท่าไหร่")).toBe("price");
-    expect(detectLineIntent("มีโปรอะไรบ้าง")).toBe("promotion");
-    expect(detectLineIntent("ติดต่อยังไง")).toBe("contact");
-    expect(detectLineIntent("อยากจอง")).toBe("booking");
+    const result = await extractLineIntentEntities("Sunset Villa ราคาเท่าไหร่ 2 คน", provider);
+
+    expect(generate).toHaveBeenCalledOnce();
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({
+      system: expect.stringContaining("Return only valid JSON"),
+    }));
+    expect(generate).toHaveBeenCalledWith(expect.objectContaining({
+      system: expect.stringContaining("Do not infer hotel-specific room names"),
+    }));
+    expect(result.language).toBe("th");
+    expect(result.intents).toEqual(["room_specific_detail", "price"]);
+    expect(result.entities).toEqual({ roomTypeName: "Sunset Villa", guests: 2 });
   });
 
-  it("keeps mixed availability and payment questions as availability first", () => {
-    expect(detectLineIntent("ขอห้องที่ถูกสุดสำหรับ 2 คน เช็กอินพรุ่งนี้ เช็กเอาต์มะรืน แล้วชำระเงินทางไหน")).toBe("availability_payment");
+  it("parses handoff requests from LLM JSON", () => {
+    const result = parseIntentExtraction(JSON.stringify({
+      language: "th",
+      primaryIntent: "handoff",
+      intents: ["handoff"],
+      entities: {},
+      handoff: { required: true, reason: "payment_issue", priority: "high" },
+    }));
+
+    expect(result.handoff).toEqual({ required: true, reason: "payment_issue", priority: "high" });
   });
 
-  it("detects multiple intents in one customer message", () => {
-    expect(detectLineIntents("Do you have the cheapest room for 2 tomorrow, any promotion, and how can I pay?")).toEqual([
-      "cheapest_room",
-      "availability",
-      "price",
-      "promotion",
-      "payment",
-    ]);
+  it("falls back safely when the provider returns malformed JSON", () => {
+    expect(parseIntentExtraction("not json")).toEqual({
+      language: "th",
+      primaryIntent: "general",
+      intents: ["general"],
+      entities: {},
+      handoff: null,
+    });
   });
 
-  it("includes handoff intent for risky staff cases", () => {
-    expect(detectLineIntents("โอนแล้วแต่สลิปมีปัญหา ช่วยให้แอดมินตรวจให้หน่อย")).toContain("handoff");
-  });
+  it("keeps extraction prompt SaaS-ready without hotel-specific room examples", () => {
+    const prompt = buildIntentExtractionSystemPrompt();
 
-  it("does not treat a customer name and phone number as an availability question", () => {
-    expect(detectLineIntents("มีนา คนะยก 0817963289")).toEqual(["general"]);
-  });
-
-  it("detects explicit admin requests as handoff", () => {
-    expect(detectLineIntents("ขอคุยกับแอดมินหน่อย")).toEqual(["handoff"]);
+    expect(prompt).toContain("multi-tenant SaaS hotel assistant");
+    expect(prompt).not.toContain("Warmly House");
+    expect(prompt).not.toContain("Honeymoon House");
+    expect(prompt).not.toContain("Forest Hill");
   });
 });
 
-describe("buildDeterministicReply", () => {
-  it("answers payment questions directly from system data", () => {
-    const reply = buildDeterministicReply({
-      intent: "payment",
-      context,
-      bookingUrl: "https://example.com/booking",
-      memory: {},
+describe("entity helpers", () => {
+  it("builds availability request from extracted entities", () => {
+    expect(buildAvailabilityRequestFromEntities({ checkIn: "2026-06-01", checkOut: "2026-06-03", guests: 2 })).toEqual({
+      checkIn: "2026-06-01",
+      checkOut: "2026-06-03",
+      guests: 2,
     });
-
-    expect(reply).toContain("PromptPay");
-    expect(reply).toContain("อัปโหลดสลิป");
-    expect(reply).toContain("https://example.com/booking");
   });
 
-  it("answers price questions with room type starting prices", () => {
-    const reply = buildDeterministicReply({
-      intent: "price",
-      context,
-      bookingUrl: "https://example.com/booking",
-      memory: {},
-    });
+  it("merges LLM-extracted entities into booking memory", () => {
+    const memory: LineConversationMemory = {
+      bookingLead: { checkIn: "2026-06-01", source: { checkIn: "customer" } },
+    };
 
-    expect(reply).toContain("Deluxe");
-    expect(reply).toContain("1,200");
-    expect(reply).toContain("Family");
-  });
-
-  it("answers mixed availability and payment questions in one deterministic reply", () => {
-    const reply = buildDeterministicReply({
-      intent: "availability_payment",
-      context: {
-        ...context,
-        availability: {
-          request: { checkIn: "2026-05-26", checkOut: "2026-05-27", guests: 2 },
-          roomTypes: context.roomTypes,
-        },
+    expect(mergeBookingLeadFromEntities(memory, { roomTypeName: "Sunset Villa", guests: 2 })).toEqual({
+      bookingLead: {
+        checkIn: "2026-06-01",
+        roomTypeName: "Sunset Villa",
+        guests: 2,
+        source: { checkIn: "customer", roomId: "customer", guests: "customer" },
       },
-      bookingUrl: "https://example.com/booking?checkIn=2026-05-26&checkOut=2026-05-27&guests=2",
-      memory: {},
     });
-
-    expect(reply).toContain("Deluxe");
-    expect(reply).toContain("1,200");
-    expect(reply).toContain("PromptPay");
-    expect(reply).toContain("https://example.com/booking?checkIn=2026-05-26&checkOut=2026-05-27&guests=2");
   });
 });
 

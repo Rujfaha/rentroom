@@ -5,7 +5,9 @@ import type {
   HotelContactSummary,
   HotelContext,
   HotelPromotionSummary,
+  SupportedLineLanguage,
 } from "@/types/line-ai.types";
+import { fetchHotelAiKnowledge } from "./ai-knowledge";
 
 interface HotelRow {
   id: string;
@@ -54,79 +56,14 @@ export type RoomInfo = AvailableRoomTypeSummary & {
   style: string[];
   suitableFor: string[];
   notSuitableFor: string[];
-  description: string;
-  amenities: string[];
-};
-
-export const ROOM_STATIC_DETAILS: Record<string, {
-  style?: string[];
-  suitableFor?: string[];
-  notSuitableFor?: string[];
-  description?: string;
-  amenities?: string[];
-}> = {
-  "warmly house": {
-    style: ["simple", "minimalist", "wooden-house"],
-    suitableFor: ["budget-friendly", "simple-stay", "couple", "starter", "customer-who-wants-cheapest-room"],
-    notSuitableFor: ["large-group-in-one-room"],
-    description: "ห้องพักเริ่มต้น บรรยากาศเรียบง่าย และคุ้มค่าที่สุด",
-    amenities: ["WiFi", "แอร์", "ตู้เย็น", "เครื่องทำน้ำอุ่น"],
-  },
-  "honeymoon house": {
-    style: ["romantic", "luxury", "wooden-house"],
-    suitableFor: ["couple", "honeymoon", "special-occasion"],
-    notSuitableFor: ["large-group-in-one-room"],
-    description: "ห้องพักสุดโรแมนติก เหมาะสำหรับคู่รักในโอกาสพิเศษ",
-    amenities: ["WiFi", "แอร์", "ตู้เย็น", "เครื่องทำน้ำอุ่น", "อ่างอาบน้ำ"],
-  },
-  "slowly house": {
-    style: ["slow-life", "cozy", "wooden-house"],
-    suitableFor: ["relaxation", "couple"],
-    notSuitableFor: ["large-group-in-one-room"],
-    description: "ห้องพักสไตล์อบอุ่น เน้นการพักผ่อนอย่างช้าๆ ชิลๆ",
-    amenities: ["WiFi", "แอร์", "ตู้เย็น", "เครื่องทำน้ำอุ่น"],
-  },
-  "forest hill": {
-    style: ["nature", "photo-friendly", "not-wooden", "modern"],
-    suitableFor: [
-      "customer-who-wants-beautiful-room",
-      "customer-who-dislikes-wooden-house",
-      "couple",
-      "small-family"
-    ],
-    notSuitableFor: ["large-group-in-one-room"],
-    description: "เหมาะกับลูกค้าที่ชอบบรรยากาศธรรมชาติ แต่ไม่อยากได้ฟีลบ้านไม้",
-    amenities: ["WiFi", "แอร์", "ตู้เย็น", "เครื่องทำน้ำอุ่น", "ระเบียง"],
-  }
 };
 
 export function enrichRoomInfo(room: AvailableRoomTypeSummary): RoomInfo {
-  const key = room.name.toLowerCase();
-  const staticDetail = ROOM_STATIC_DETAILS[key] || {};
-  
-  let dbAmenities: string[] = [];
-  if (room.amenities) {
-    if (Array.isArray(room.amenities)) {
-      dbAmenities = room.amenities.filter((a): a is string => typeof a === "string");
-    } else if (typeof room.amenities === "string") {
-      try {
-        const parsed = JSON.parse(room.amenities);
-        if (Array.isArray(parsed)) {
-          dbAmenities = parsed.filter((a): a is string => typeof a === "string");
-        }
-      } catch {
-        dbAmenities = [room.amenities];
-      }
-    }
-  }
-
   return {
     ...room,
-    style: staticDetail.style || [],
-    suitableFor: staticDetail.suitableFor || [],
-    notSuitableFor: staticDetail.notSuitableFor || [],
-    description: room.description || staticDetail.description || "",
-    amenities: dbAmenities.length > 0 ? dbAmenities : (staticDetail.amenities || []),
+    style: [],
+    suitableFor: [],
+    notSuitableFor: [],
   };
 }
 
@@ -181,14 +118,15 @@ export function summarizeAvailability(context: HotelContext): string {
   return `ช่วงวันที่ ${request.checkIn} ถึง ${request.checkOut}${guestText}: ${options.join("; ")}`;
 }
 
-export async function buildHotelContext(request?: AvailabilityRequest | null): Promise<HotelContext> {
+export async function buildHotelContext(request?: AvailabilityRequest | null, language: SupportedLineLanguage = "th"): Promise<HotelContext> {
   const { createServiceClient } = await import("../supabase/service");
   const supabase = await createServiceClient();
   const hotel = await fetchActiveHotel(supabase);
-  const [contacts, roomTypes, promotions] = await Promise.all([
+  const [contacts, roomTypes, promotions, aiKnowledge] = await Promise.all([
     fetchContacts(supabase, hotel.id),
     fetchRoomTypes(supabase, hotel.id),
     fetchPromotions(supabase, hotel.id),
+    fetchHotelAiKnowledge(supabase, hotel.id, language),
   ]);
 
   const availability = request
@@ -209,6 +147,7 @@ export async function buildHotelContext(request?: AvailabilityRequest | null): P
     payment: getPaymentSummary(hotel.settings),
     roomTypes,
     promotions,
+    aiKnowledge,
     ...(availability ? { availability } : {}),
   };
 }

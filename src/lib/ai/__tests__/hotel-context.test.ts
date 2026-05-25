@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHotelContextPrompt, summarizeAvailability } from "../hotel-context";
+import { enrichRoomInfo, formatHotelContextPrompt, summarizeAvailability } from "../hotel-context";
 import type { HotelContext } from "@/types/line-ai.types";
 
 const context: HotelContext = {
@@ -16,6 +16,7 @@ const context: HotelContext = {
     { id: "rt-2", name: "Family", basePrice: 2200, maxGuests: 4, availableRooms: 1 },
   ],
   promotions: [{ title: "Stay Longer", description: "พัก 2 คืนลดเพิ่ม", discountText: "10%", validUntil: "2026-06-30" }],
+  aiKnowledge: { settings: null, faqs: [], testcases: [] },
 };
 
 describe("formatHotelContextPrompt", () => {
@@ -26,6 +27,41 @@ describe("formatHotelContextPrompt", () => {
     expect(prompt).toContain("Deluxe: ราคาเริ่มต้น 1,200 บาท");
     expect(prompt).toContain("LINE: @arkkarawin");
     expect(prompt).toContain("Stay Longer");
+  });
+});
+
+describe("enrichRoomInfo", () => {
+  it("uses only DB room facts and does not add hardcoded room descriptions or amenities", () => {
+    const room = enrichRoomInfo({
+      id: "rt-1",
+      name: "Warmly House",
+      basePrice: 2500,
+      maxGuests: 2,
+      availableRooms: 2,
+      description: null,
+      amenities: null,
+    });
+
+    expect(room.description).toBeNull();
+    expect(room.amenities).toEqual(null);
+    expect(room.style).toEqual([]);
+    expect(room.suitableFor).toEqual([]);
+    expect(room.notSuitableFor).toEqual([]);
+  });
+
+  it("keeps DB-provided room descriptions and amenities", () => {
+    const room = enrichRoomInfo({
+      id: "rt-2",
+      name: "Any Hotel Room",
+      basePrice: 3200,
+      maxGuests: 3,
+      availableRooms: 1,
+      description: "วิวสวน ใกล้สระว่ายน้ำ",
+      amenities: ["WiFi", "เครื่องทำน้ำอุ่น"],
+    });
+
+    expect(room.description).toBe("วิวสวน ใกล้สระว่ายน้ำ");
+    expect(room.amenities).toEqual(["WiFi", "เครื่องทำน้ำอุ่น"]);
   });
 });
 

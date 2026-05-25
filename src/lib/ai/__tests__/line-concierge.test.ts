@@ -9,25 +9,35 @@ const hotelContext: HotelContext = {
   hotelId: "hotel-1",
   hotelName: "Arkkarawin",
   description: null,
-  address: "hello",
+  address: "Chiang Mai",
   phone: "0993822802",
   email: null,
-  contacts: [
-    { type: "facebook", label: "facebook", value: "RUJITECH เว็บไซต์และระบบหลังบ้าน" },
-    { type: "instagram", label: "instagram", value: "rujitech@gmail.com" },
-  ],
+  contacts: [{ type: "line", label: "LINE", value: "@arkkarawin" }],
   payment: { promptPayConfigured: true, accountName: "arkkarawin" },
   roomTypes: [
     { id: "rt-1", name: "Warmly House", basePrice: 2500, maxGuests: 2, availableRooms: 2 },
     { id: "rt-2", name: "Honeymoon House", basePrice: 3500, maxGuests: 2, availableRooms: 2 },
   ],
   promotions: [],
+  aiKnowledge: {
+    settings: {
+      assistantName: "Hospiq",
+      tone: "short, warm, hotel admin",
+      supportedLanguages: ["th"],
+      bookingCtaPolicy: "send booking link only after clear booking readiness",
+      handoffPolicy: "handoff payment issues to staff",
+      fallbackPolicy: "do not invent missing facts",
+      metadata: {},
+    },
+    faqs: [{ question: "How to pay?", answer: "Upload slip on booking page.", category: "payment", language: "en", keywords: ["payment"] }],
+    testcases: [{ userMessage: "room price?", expectedIntent: "price", expectedEntities: {}, expectedBehavior: "show room prices from DB", goldenReply: null, language: "en", tags: [] }],
+  },
 };
 
 vi.mock("../hotel-context", () => ({
   buildHotelContext: vi.fn(async () => hotelContext),
-  formatHotelContextPrompt: vi.fn(() => "hotel context"),
-  summarizeAvailability: vi.fn(() => "availability summary"),
+  formatHotelContextPrompt: vi.fn(() => "hotel facts from db: Warmly House, Honeymoon House"),
+  summarizeAvailability: vi.fn(() => "availability summary from db"),
 }));
 
 vi.mock("../provider", () => ({
@@ -36,44 +46,22 @@ vi.mock("../provider", () => ({
   })),
 }));
 
-import { buildBookingUrl, extractAvailabilityRequest, generateLineConciergeReply, normalizeLineReply } from "../line-concierge";
+import { buildBookingUrl, generateLineConciergeReply, normalizeLineReply } from "../line-concierge";
 
 beforeEach(() => {
   providerState.generate.mockReset();
-  providerState.generate.mockResolvedValue({
-    provider: "gemini",
-    model: "test-model",
-    text: "Hello from Hospiq",
-  });
-});
-
-describe("extractAvailabilityRequest", () => {
-  it("extracts ISO date ranges and guest count from Thai availability questions", () => {
-    expect(extractAvailabilityRequest("มีห้องว่าง 2026-06-01 ถึง 2026-06-03 สำหรับ 2 คนไหม")).toEqual({
-      checkIn: "2026-06-01",
-      checkOut: "2026-06-03",
-      guests: 2,
-    });
-  });
-
-  it("understands natural Thai relative dates", () => {
-    const result = extractAvailabilityRequest("มีห้องว่างพรุ่งนี้ไหม");
-
-    expect(result?.checkIn).toMatch(/^20\d{2}-\d{2}-\d{2}$/);
-    expect(result?.checkOut).toMatch(/^20\d{2}-\d{2}-\d{2}$/);
-  });
+  mockConversation({ primaryIntent: "general", intents: ["general"] }, "Final grounded reply");
 });
 
 describe("normalizeLineReply", () => {
   it("trims long AI output to a LINE-safe text length", () => {
-    const reply = normalizeLineReply(" ก ".repeat(3000));
-
+    const reply = normalizeLineReply(" a ".repeat(3000));
     expect(reply.length).toBeLessThanOrEqual(1900);
     expect(reply.endsWith("...")).toBe(true);
   });
 
   it("uses fallback text when AI output is blank", () => {
-    expect(normalizeLineReply("   ")).toContain("ขออภัย");
+    expect(normalizeLineReply("   ").length).toBeGreaterThan(0);
   });
 });
 
@@ -84,36 +72,75 @@ describe("buildBookingUrl", () => {
         checkIn: "2026-06-01",
         checkOut: "2026-06-03",
         guests: 2,
-      })
+      }),
     ).toBe("https://example.com/booking?checkIn=2026-06-01&checkOut=2026-06-03&guests=2");
   });
 });
 
-describe("generateLineConciergeReply handoff flow", () => {
-  it("introduces Hospiq on the first deterministic reply when history is empty", async () => {
-    const result = await generateLineConciergeReply("What are the room prices?", { history: [] });
+describe("generateLineConciergeReply", () => {
+  it("uses LLM twice: extraction first, grounded response second", async () => {
+    mockConversation({ primaryIntent: "room_overview", intents: ["room_overview"] }, "Hospiq final room overview");
+    const result = await generateLineConciergeReply("What room types do you have?");
 
-    expect(result.model).toBe("deterministic");
-    expect(result.reply).toContain("Hospiq");
-    expect(result.reply).toContain("Arkkarawin");
-    expect(result.reply).toContain("Warmly House");
-    expect(result.reply).toContain("\n\n");
+    expect(providerState.generate).toHaveBeenCalledTimes(2);
+    expect(result.model).toBe("response-test");
+    expect(result.reply).toBe("Hospiq final room overview");
   });
 
-  it("introduces Hospiq when history only contains inbound customer messages", async () => {
-    const result = await generateLineConciergeReply("What are the room prices?", {
-      history: [{ direction: "inbound", text: "What are the room prices?", createdAt: "2026-05-24T08:00:00.000Z" }],
-    });
+  it("passes DB facts, FAQ, testcases, and response plan into final generation", async () => {
+    mockConversation({ primaryIntent: "price", intents: ["price", "promotion"] }, "Final");
+    await generateLineConciergeReply("price and promo?");
 
-    expect(result.model).toBe("deterministic");
-    expect(result.reply).toContain("Hospiq");
-    expect(result.reply).toContain("Arkkarawin");
-    expect(result.reply).toContain("Warmly House");
-    expect(result.reply).toContain("\n\n");
+    const finalPrompt = providerState.generate.mock.calls[1]?.[0]?.prompt ?? "";
+    expect(finalPrompt).toContain("Hotel facts from database");
+    expect(finalPrompt).toContain("FAQ examples from database");
+    expect(finalPrompt).toContain("Golden testcases from database");
+    expect(finalPrompt).toContain("Response plan");
+    expect(finalPrompt).toContain("room_prices");
+    expect(finalPrompt).toContain("promotions");
   });
 
-  it("does not introduce Hospiq when memory has a pending handoff", async () => {
-    const result = await generateLineConciergeReply("0817963289", {
+  it("keeps memory from extracted entities", async () => {
+    mockConversation({
+      primaryIntent: "booking_ready",
+      intents: ["booking_ready", "booking"],
+      entities: { roomTypeName: "Honeymoon House", guests: 2 },
+    }, "Please provide check-in date.");
+
+    const result = await generateLineConciergeReply("I want to book Honeymoon House for 2");
+    expect(result.memory.bookingLead?.roomTypeName).toBe("Honeymoon House");
+    expect(result.memory.bookingLead?.guests).toBe(2);
+  });
+
+  it("blocks booking URL in the response plan until required booking details are complete", async () => {
+    mockConversation({
+      primaryIntent: "booking_ready",
+      intents: ["booking_ready", "booking"],
+      entities: { roomTypeName: "Honeymoon House", guests: 2 },
+    }, "Please provide check-in date.");
+
+    await generateLineConciergeReply("I want to book Honeymoon House for 2");
+    const finalPrompt = providerState.generate.mock.calls[1]?.[0]?.prompt ?? "";
+    expect(finalPrompt).toContain('"canIncludeBookingUrl": false');
+    expect(finalPrompt).toContain('"checkIn"');
+  });
+
+  it("allows booking URL only after clear readiness with complete booking details", async () => {
+    mockConversation({
+      primaryIntent: "booking_ready",
+      intents: ["booking_ready", "booking"],
+      entities: { checkIn: "2026-06-01", checkOut: "2026-06-03", guests: 2 },
+    }, "Book here: https://example.com/booking?checkIn=2026-06-01&checkOut=2026-06-03&guests=2");
+
+    await generateLineConciergeReply("book 1-3 June for 2");
+    const finalPrompt = providerState.generate.mock.calls[1]?.[0]?.prompt ?? "";
+    expect(finalPrompt).toContain('"canIncludeBookingUrl": true');
+    expect(finalPrompt).toContain("http://localhost:3000/booking?checkIn=2026-06-01&checkOut=2026-06-03&guests=2");
+  });
+
+  it("keeps pending handoff focused in the response plan", async () => {
+    mockConversation({ primaryIntent: "general", intents: ["general"] }, "Staff will follow up.");
+    const result = await generateLineConciergeReply("Mina 0817963289", {
       memory: {
         handoffPending: {
           reason: "payment_issue",
@@ -123,63 +150,60 @@ describe("generateLineConciergeReply handoff flow", () => {
       },
     });
 
-    expect(result.model).toBe("deterministic");
-    expect(result.reply).not.toContain("Hospiq");
-  });
-
-  it("does not introduce Hospiq when history contains an outbound assistant message", async () => {
-    const result = await generateLineConciergeReply("What are the room prices?", {
-      history: [
-        { direction: "inbound", text: "Hello", createdAt: "2026-05-24T08:00:00.000Z" },
-        { direction: "outbound", text: "Sure", createdAt: "2026-05-24T08:00:01.000Z" },
-        { direction: "inbound", text: "What are the room prices?", createdAt: "2026-05-24T08:01:00.000Z" },
-      ],
-    });
-
-    expect(result.model).toBe("deterministic");
-    expect(result.reply).not.toContain("Hospiq");
-    expect(result.reply).toContain("Warmly House");
-  });
-
-  it("instructs the fallback provider to introduce Hospiq on first general contact", async () => {
-    const result = await generateLineConciergeReply("Hello there", { history: [] });
-    const providerInput = providerState.generate.mock.calls[0]?.[0];
-
-    expect(result.model).toBe("test-model");
-    expect(providerInput?.prompt).toContain("First customer interaction");
-    expect(providerInput?.prompt).toContain("Hospiq");
-    expect(providerInput?.prompt).toContain("Arkkarawin");
-  });
-
-  it("keeps explicit admin requests focused on human handoff", async () => {
-    const result = await generateLineConciergeReply("ติดต่อแอดมินให้หน่อย จองแล้วลืมแนบสลิป");
-
-    expect(result.handoff?.reason).toBe("payment_issue");
-    expect(result.intent).toContain("handoff");
-    expect(result.memory.handoffPending?.reason).toBe("payment_issue");
-    expect(result.reply).toContain("ทีมงาน");
-    expect(result.reply).toContain("ชื่อ/เบอร์");
-    expect(result.reply).not.toContain("PromptPay");
-    expect(result.reply).not.toContain("ที่อยู่");
-    expect(result.reply).not.toContain("จองต่อได้ที่");
-  });
-
-  it("treats name and phone after handoff as handoff details, not availability", async () => {
-    const result = await generateLineConciergeReply("มีนา คนะยก 0817963289", {
-      memory: {
-        bookingLead: { checkIn: "2026-05-25", checkOut: "2026-05-26", guests: 2 },
-        handoffPending: {
-          reason: "payment_issue",
-          priority: "high",
-          requestedAt: "2026-05-24T08:00:00.000Z",
-        },
-      },
-    });
-
+    const finalPrompt = providerState.generate.mock.calls[1]?.[0]?.prompt ?? "";
     expect(result.intent).toBe("handoff");
-    expect(result.reply).toContain("รับข้อมูลแล้ว");
-    expect(result.reply).toContain("ทีมงาน");
-    expect(result.reply).not.toContain("Warmly House");
-    expect(result.reply).not.toContain("จองต่อได้ที่");
+    expect(finalPrompt).toContain('"salesStage": "handoff"');
+    expect(finalPrompt).toContain('"reason": "payment_issue"');
+  });
+
+  it("adds Hospiq persona, sales flow, and grounded fact rules to final prompts", async () => {
+    mockConversation({ primaryIntent: "general", intents: ["general"] }, "Hello from Hospiq");
+    await generateLineConciergeReply("Hello", { history: [] });
+
+    const finalInput = providerState.generate.mock.calls[1]?.[0];
+    expect(finalInput?.system).toContain("Hospiq");
+    expect(finalInput?.prompt).toContain("First customer interaction");
+    expect(finalInput?.prompt).toContain("Hospiq sales flow");
+    expect(finalInput?.prompt).toContain("Do not use canned templates or invent hotel-specific facts");
   });
 });
+
+function mockConversation(
+  input: {
+    primaryIntent: string;
+    intents: string[];
+    language?: string;
+    entities?: Record<string, unknown>;
+    handoff?: Record<string, unknown> | null;
+  },
+  finalReply: string,
+): void {
+  providerState.generate.mockReset();
+  providerState.generate
+    .mockResolvedValueOnce({
+      provider: "gemini",
+      model: "extractor-test",
+      text: extractionJson(input),
+    })
+    .mockResolvedValueOnce({
+      provider: "gemini",
+      model: "response-test",
+      text: finalReply,
+    });
+}
+
+function extractionJson(input: {
+  primaryIntent: string;
+  intents: string[];
+  language?: string;
+  entities?: Record<string, unknown>;
+  handoff?: Record<string, unknown> | null;
+}): string {
+  return JSON.stringify({
+    language: input.language ?? "en",
+    primaryIntent: input.primaryIntent,
+    intents: input.intents,
+    entities: input.entities ?? {},
+    handoff: input.handoff ?? null,
+  });
+}

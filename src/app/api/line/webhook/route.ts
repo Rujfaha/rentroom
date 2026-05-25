@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { LINE_AI_FALLBACK_REPLY, LINE_UNSUPPORTED_MESSAGE_REPLY } from "@/constants/line-ai";
+import { HOSPIQ_ASSISTANT_PROFILE } from "@/lib/ai/assistant-profile";
 import { generateLineConciergeReply } from "@/lib/ai/line-concierge";
-import { resolveActiveHotelId } from "@/lib/ai/hotel-context";
+import { buildHotelContext, resolveActiveHotelId } from "@/lib/ai/hotel-context";
 import { getLineUserProfile, replyLineMessage } from "@/lib/line/client";
 import {
   ensureLineConversation,
@@ -54,7 +55,7 @@ async function handleLineEvent(event: LineWebhookEvent): Promise<void> {
   }
 
   if (event.type === "follow") {
-    await safeReply(event.replyToken, "สวัสดีครับ สอบถามข้อมูลห้องพัก ราคา หรือวันเข้าพักที่ต้องการได้เลยครับ");
+    await safeReply(event.replyToken, await buildFollowGreeting());
     return;
   }
 
@@ -137,6 +138,16 @@ async function handleTextMessageEvent(event: LineMessageEvent): Promise<void> {
   } catch (error) {
     console.error("LINE text event handling error:", error);
     await safeReply(event.replyToken, LINE_AI_FALLBACK_REPLY);
+  }
+}
+
+async function buildFollowGreeting(): Promise<string> {
+  try {
+    const context = await buildHotelContext(null);
+    return `สวัสดีค่ะ ${HOSPIQ_ASSISTANT_PROFILE.name} ผู้ช่วยของ ${context.hotelName} นะคะ สอบถามห้องพักหรือเรียกทีมงานได้เลยค่ะ`;
+  } catch (error) {
+    console.error("LINE follow greeting context error:", error);
+    return `สวัสดีค่ะ ${HOSPIQ_ASSISTANT_PROFILE.name} ผู้ช่วยของที่พักนะคะ สอบถามห้องพักหรือเรียกทีมงานได้เลยค่ะ`;
   }
 }
 

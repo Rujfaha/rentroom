@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { composeLineReply } from "../reply-composer";
+import { buildLineResponsePlan } from "../reply-composer";
 import type { HotelContext } from "@/types/line-ai.types";
 
 const context: HotelContext = {
@@ -12,165 +12,86 @@ const context: HotelContext = {
   contacts: [{ type: "line", label: "LINE", value: "@arkkarawin" }],
   payment: { promptPayConfigured: true, accountName: "Arkkarawin Resort" },
   roomTypes: [
-    { id: "rt-1", name: "Standard", basePrice: 800, maxGuests: 2, availableRooms: 2 },
-    { id: "rt-2", name: "Deluxe", basePrice: 1200, maxGuests: 2, availableRooms: 1 },
+    { id: "rt-1", name: "Warmly House", basePrice: 2500, maxGuests: 2, availableRooms: 2 },
+    { id: "rt-2", name: "Honeymoon House", basePrice: 3500, maxGuests: 2, availableRooms: 1 },
   ],
   promotions: [{ title: "Stay longer", description: null, discountText: "10%", validUntil: null }],
-  availability: {
-    request: { checkIn: "2026-05-26", checkOut: "2026-05-27", guests: 2 },
-    roomTypes: [
-      { id: "rt-1", name: "Standard", basePrice: 800, maxGuests: 2, availableRooms: 2 },
-      { id: "rt-2", name: "Deluxe", basePrice: 1200, maxGuests: 2, availableRooms: 1 },
-    ],
-  },
+  aiKnowledge: { settings: null, faqs: [], testcases: [] },
 };
 
-describe("composeLineReply", () => {
-  it("introduces Hospiq on a first Thai contact with hotel context and available room options", () => {
-    const reply = composeLineReply({
-      language: "th",
-      intents: ["availability"],
+describe("buildLineResponsePlan", () => {
+  it("classifies overview questions as information stage and does not allow early booking links", () => {
+    const plan = buildLineResponsePlan({
+      intents: ["room_overview"],
       context,
-      bookingUrl: "https://example.com/booking?checkIn=2026-05-26&checkOut=2026-05-27&guests=2",
-      memory: {},
-      isFirstInteraction: true,
+      bookingUrl: "https://example.com/booking",
+      memory: { bookingLead: { guests: 1 } },
     });
 
-    expect(reply).toContain("Hospiq");
-    expect(reply).toContain("Arkkarawin");
-    expect(reply).toContain("Standard");
-    expect(reply).toContain("\n\n");
-    expect(reply).toContain("- Standard");
-    expect(reply).toContain("ค่ะ");
-    expect(reply).not.toContain("ผม");
-    expect(reply).not.toContain("ครับ");
+    expect(plan.salesStage).toBe("information");
+    expect(plan.requestedFacts).toContain("room_types");
+    expect(plan.canIncludeBookingUrl).toBe(false);
   });
 
-  it("keeps later Thai availability replies focused without reintroducing Hospiq", () => {
-    const reply = composeLineReply({
-      language: "th",
-      intents: ["availability"],
-      context,
-      bookingUrl: "https://example.com/booking?checkIn=2026-05-26&checkOut=2026-05-27&guests=2",
-      memory: {},
-      isFirstInteraction: false,
-    });
-
-    expect(reply).not.toContain("Hospiq");
-    expect(reply).toContain("Standard");
-    expect(reply).toContain("\n\n");
-    expect(reply).toContain("ค่ะ");
-    expect(reply).not.toContain("ผม");
-    expect(reply).not.toContain("ครับ");
-  });
-
-  it("answers multiple Thai intents in one friendly reply", () => {
-    const reply = composeLineReply({
-      language: "th",
-      intents: ["availability", "price", "promotion", "payment"],
-      context,
-      bookingUrl: "https://example.com/booking?checkIn=2026-05-26&checkOut=2026-05-27&guests=2",
-      memory: {},
-    });
-
-    expect(reply).toContain("Standard");
-    expect(reply).toContain("800");
-    expect(reply).toContain("Stay longer");
-    expect(reply).toContain("PromptPay");
-    expect(reply).toContain("\n\n");
-  });
-
-  it("answers English customers in English", () => {
-    const reply = composeLineReply({
-      language: "en",
-      intents: ["availability", "payment"],
+  it("keeps multi-intent fact requests instead of collapsing to one branch", () => {
+    const plan = buildLineResponsePlan({
+      intents: ["price", "promotion", "payment"],
       context,
       bookingUrl: "https://example.com/booking",
       memory: {},
     });
 
-    expect(reply).toContain("Available options");
-    expect(reply).toContain("PromptPay");
-    expect(reply).toContain("booking");
-    expect(reply).not.toContain("ครับ");
+    expect(plan.requestedFacts).toEqual(expect.arrayContaining(["room_prices", "promotions", "payment"]));
   });
 
-  it("adds a staff handoff response without claiming the issue is resolved", () => {
-    const reply = composeLineReply({
-      language: "th",
+  it("allows a booking link only when booking readiness has complete lead data", () => {
+    const plan = buildLineResponsePlan({
+      intents: ["booking_ready"],
+      context,
+      bookingUrl: "https://example.com/booking?checkIn=2026-05-26&checkOut=2026-05-27&guests=2",
+      memory: {
+        bookingLead: {
+          checkIn: "2026-05-26",
+          checkOut: "2026-05-27",
+          guests: 2,
+        },
+      },
+    });
+
+    expect(plan.salesStage).toBe("booking_ready");
+    expect(plan.missingBookingFields).toEqual([]);
+    expect(plan.canIncludeBookingUrl).toBe(true);
+  });
+
+  it("asks for one missing field path before booking links are allowed", () => {
+    const plan = buildLineResponsePlan({
+      intents: ["booking_ready"],
+      context,
+      bookingUrl: "https://example.com/booking",
+      memory: { bookingLead: { guests: 2 } },
+    });
+
+    expect(plan.canIncludeBookingUrl).toBe(false);
+    expect(plan.missingBookingFields[0]).toBe("checkIn");
+  });
+
+  it("marks handoff as handoff stage and blocks booking links", () => {
+    const plan = buildLineResponsePlan({
       intents: ["handoff", "payment"],
       context,
       bookingUrl: "https://example.com/booking",
-      memory: {},
-      handoff: { required: true, reason: "payment_issue", priority: "high" },
-    });
-
-    expect(reply).toContain("ทีมงาน");
-    expect(reply).toContain("ชื่อ/เบอร์");
-    expect(reply).toContain("ค่ะ");
-    expect(reply).not.toContain("ผม");
-    expect(reply).not.toContain("ครับ");
-    expect(reply).not.toContain("ยืนยันแล้ว");
-  });
-
-  it("does not expose internal handoff reason codes to customers", () => {
-    const reply = composeLineReply({
-      language: "th",
-      intents: ["handoff"],
-      context,
-      bookingUrl: "https://example.com/booking",
-      memory: {},
-      handoff: { required: true, reason: "admin_request", priority: "normal" },
-    });
-
-    expect(reply).toContain("ทีมงาน");
-    expect(reply).not.toContain("admin request");
-    expect(reply).not.toContain("admin_request");
-    expect(reply).not.toContain("(");
-    expect(reply).not.toContain(")");
-  });
-
-  it("does not expose internal handoff reason codes when acknowledging details", () => {
-    const reply = composeLineReply({
-      language: "th",
-      intents: ["handoff"],
-      context,
-      bookingUrl: "https://example.com/booking",
       memory: {
-        handoffPending: {
-          reason: "admin_request",
-          priority: "normal",
-          requestedAt: "2026-05-24T08:00:00.000Z",
-        },
-      },
-      handoff: { required: true, reason: "admin_request", priority: "normal" },
-    });
-
-    expect(reply).toContain("รับข้อมูลแล้ว");
-    expect(reply).not.toContain("admin request");
-    expect(reply).not.toContain("admin_request");
-    expect(reply).not.toContain("(");
-    expect(reply).not.toContain(")");
-  });
-
-  it("acknowledges customer details during a pending handoff instead of asking again", () => {
-    const reply = composeLineReply({
-      language: "th",
-      intents: ["handoff"],
-      context,
-      bookingUrl: "https://example.com/booking",
-      memory: {
-        handoffPending: {
-          reason: "payment_issue",
-          priority: "high",
-          requestedAt: "2026-05-24T08:00:00.000Z",
+        bookingLead: {
+          checkIn: "2026-05-26",
+          checkOut: "2026-05-27",
+          guests: 2,
         },
       },
       handoff: { required: true, reason: "payment_issue", priority: "high" },
     });
 
-    expect(reply).toContain("รับข้อมูลแล้ว");
-    expect(reply).toContain("ทีมงาน");
-    expect(reply).not.toContain("จองต่อได้ที่");
+    expect(plan.salesStage).toBe("handoff");
+    expect(plan.handoff?.reason).toBe("payment_issue");
+    expect(plan.canIncludeBookingUrl).toBe(false);
   });
 });

@@ -57,6 +57,8 @@ export type LineIntent =
   | "handoff"
   | "general"
   | "greeting"
+  | "room_overview"
+  | "room_specific_detail"
   | "room_detail"
   | "room_recommendation"
   | "amenities_question"
@@ -64,7 +66,9 @@ export type LineIntent =
   | "price_inquiry"
   | "cheapest_room"
   | "group_booking"
+  | "booking_ready"
   | "booking_intent"
+  | "sales_handoff"
   | "handoff_required"
   | "fallback";
 export type SupportedLineLanguage = "th" | "zh" | "en" | "ja" | "es" | "ar";
@@ -116,6 +120,40 @@ export interface HotelPaymentSummary {
   accountName: string | null;
 }
 
+export interface HotelAiSettingsSummary {
+  assistantName: string;
+  tone: string | null;
+  supportedLanguages: string[];
+  bookingCtaPolicy: string | null;
+  handoffPolicy: string | null;
+  fallbackPolicy: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface HotelFaqSummary {
+  question: string;
+  answer: string;
+  category: string | null;
+  language: string;
+  keywords: string[];
+}
+
+export interface HotelAiTestcaseSummary {
+  userMessage: string;
+  expectedIntent: string | null;
+  expectedEntities: Record<string, unknown>;
+  expectedBehavior: string | null;
+  goldenReply: string | null;
+  language: string;
+  tags: string[];
+}
+
+export interface HotelAiKnowledge {
+  settings: HotelAiSettingsSummary | null;
+  faqs: HotelFaqSummary[];
+  testcases: HotelAiTestcaseSummary[];
+}
+
 export interface HotelContext {
   hotelId: string;
   hotelName: string;
@@ -127,6 +165,7 @@ export interface HotelContext {
   payment: HotelPaymentSummary;
   roomTypes: AvailableRoomTypeSummary[];
   promotions: HotelPromotionSummary[];
+  aiKnowledge: HotelAiKnowledge;
   availability?: {
     request: AvailabilityRequest;
     roomTypes: AvailableRoomTypeSummary[];
@@ -168,6 +207,27 @@ export interface LineConversationMemory {
     requestedAt: string;
     lastCustomerMessage?: string;
   };
+}
+
+export interface LineIntentEntities {
+  roomTypeName?: string;
+  checkIn?: string;
+  checkOut?: string;
+  guests?: number;
+  guestName?: string;
+  phone?: string;
+  roomPreference?: string[];
+  dislikedFeatures?: string[];
+  isGroupBooking?: boolean;
+  leadScore?: "low" | "medium" | "high";
+}
+
+export interface LineIntentEntityExtraction {
+  language: SupportedLineLanguage;
+  primaryIntent: LineIntent;
+  intents: LineIntent[];
+  entities: LineIntentEntities;
+  handoff?: LineHandoffRequest | null;
 }
 
 export interface AiGenerateInput {

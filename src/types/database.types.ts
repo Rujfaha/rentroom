@@ -426,6 +426,50 @@ export interface LineMessage {
   created_at: string;
 }
 
+export interface HotelAiSetting {
+  id: string;
+  hotel_id: string;
+  assistant_name: string;
+  tone: string | null;
+  supported_languages: unknown;
+  booking_cta_policy: string | null;
+  handoff_policy: string | null;
+  fallback_policy: string | null;
+  metadata: Record<string, unknown>;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HotelFaq {
+  id: string;
+  hotel_id: string;
+  question: string;
+  answer: string;
+  category: string | null;
+  language: string;
+  keywords: unknown;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface HotelAiTestcase {
+  id: string;
+  hotel_id: string;
+  user_message: string;
+  expected_intent: string | null;
+  expected_entities: Record<string, unknown>;
+  expected_behavior: string | null;
+  golden_reply: string | null;
+  language: string;
+  tags: unknown;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 // ========================
 // Supabase Database Type (for typed client)
 // ========================
@@ -463,6 +507,9 @@ export interface Database {
       line_users: { Row: LineUser; Insert: Partial<LineUser> & Pick<LineUser, "hotel_id" | "line_user_id">; Update: Partial<LineUser> };
       line_conversations: { Row: LineConversation; Insert: Partial<LineConversation> & Pick<LineConversation, "hotel_id" | "line_user_id">; Update: Partial<LineConversation> };
       line_messages: { Row: LineMessage; Insert: Partial<LineMessage> & Pick<LineMessage, "hotel_id" | "direction" | "message_type">; Update: Partial<LineMessage> };
+      hotel_ai_settings: { Row: HotelAiSetting; Insert: Partial<HotelAiSetting> & Pick<HotelAiSetting, "hotel_id">; Update: Partial<HotelAiSetting> };
+      hotel_faqs: { Row: HotelFaq; Insert: Partial<HotelFaq> & Pick<HotelFaq, "hotel_id" | "question" | "answer">; Update: Partial<HotelFaq> };
+      hotel_ai_testcases: { Row: HotelAiTestcase; Insert: Partial<HotelAiTestcase> & Pick<HotelAiTestcase, "hotel_id" | "user_message">; Update: Partial<HotelAiTestcase> };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
