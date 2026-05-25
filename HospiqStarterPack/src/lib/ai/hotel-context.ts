@@ -1,4 +1,5 @@
 import { createSupabaseAdminClient } from "../supabase/admin";
+import { createHospiqAiKnowledge } from "./ai-knowledge";
 import type { HospiqAiContext, LineConversationMemory } from "./types";
 
 interface HotelRow {
@@ -61,6 +62,17 @@ interface LineSessionRow {
   memory: unknown;
 }
 
+interface AiTestcaseRow {
+  id: string;
+  user_message: string;
+  expected_intent: string | null;
+  expected_entities: unknown;
+  expected_behavior: string | null;
+  golden_reply: string | null;
+  language: string | null;
+  tags: unknown;
+}
+
 export interface HotelContextRepository {
   loadContext(hotelId: string, lineUserId: string, lineSessionId?: string): Promise<HospiqAiContext>;
 }
@@ -78,12 +90,13 @@ export async function getHotelAIContext(
 ): Promise<HospiqAiContext> {
   const supabase = createSupabaseAdminClient();
   const hotel = await fetchHotel(supabase, hotelId);
-  const [roomtypes, amenities, rooms, aiSetting, faqs, session] = await Promise.all([
+  const [roomtypes, amenities, rooms, aiSetting, faqs, testcases, session] = await Promise.all([
     fetchRoomtypes(supabase, hotelId),
     fetchRoomAmenities(supabase, hotelId),
     fetchRoomInventory(supabase, hotelId),
     fetchAiSetting(supabase, hotelId),
     fetchAiFaqs(supabase, hotelId),
+    fetchAiTestcases(supabase, hotelId),
     fetchLineSession(supabase, hotelId, lineUserId, lineSessionId),
   ]);
 
@@ -94,6 +107,7 @@ export async function getHotelAIContext(
     rooms,
     aiSetting,
     faqs,
+    testcases,
     memory: parseMemory(session?.memory),
   });
 }
@@ -105,10 +119,30 @@ export function createHotelAiContextFromRows(input: {
   rooms: RoomInventoryRow[];
   aiSetting: AiSettingRow | null;
   faqs: AiFaqRow[];
+  testcases?: AiTestcaseRow[];
   memory?: LineConversationMemory;
 }): HospiqAiContext {
   const amenityNamesByRoomtype = groupAmenityNames(input.amenities);
   const activeRoomCountsByType = countActiveRoomsByType(input.rooms);
+  const faqs = input.faqs.map((faq) => ({
+    id: faq.id,
+    question: faq.question,
+    answer: faq.answer,
+    category: faq.category,
+    language: faq.language ?? "th",
+    keywords: parseStringArray(faq.keywords),
+  }));
+  const aiSetting = {
+    assistantName: "Hospiq",
+    assistantGenderTone: input.aiSetting?.assistant_gender_tone || "female_polite",
+    supportedLanguages: parseStringArray(input.aiSetting?.supported_languages, ["th"]),
+    bookingCtaPolicy: parsePolicy(input.aiSetting?.booking_cta_policy),
+    handoffPolicy: parsePolicy(input.aiSetting?.handoff_policy),
+    fallbackPolicy: parsePolicy(input.aiSetting?.fallback_policy),
+    maxReplyLength: input.aiSetting?.max_reply_length ?? 700,
+    fallbackToAdminEnabled: input.aiSetting?.fallback_to_admin_enabled ?? true,
+    adminContactMessage: input.aiSetting?.admin_contact_message ?? null,
+  };
 
   return {
     hotelId: input.hotel.id,
@@ -130,26 +164,23 @@ export function createHotelAiContextFromRows(input: {
         amenities: amenityNamesByRoomtype.get(roomtype.id) ?? [],
       };
     }),
-    faqs: input.faqs.map((faq) => ({
-      id: faq.id,
-      question: faq.question,
-      answer: faq.answer,
-      category: faq.category,
-      language: faq.language ?? "th",
-      keywords: parseStringArray(faq.keywords),
-    })),
-    aiSetting: {
-      assistantName: input.aiSetting?.assistant_name || "Hospiq",
-      assistantGenderTone: input.aiSetting?.assistant_gender_tone || "female_polite",
-      supportedLanguages: parseStringArray(input.aiSetting?.supported_languages, ["th"]),
-      bookingCtaPolicy: parsePolicy(input.aiSetting?.booking_cta_policy),
-      handoffPolicy: parsePolicy(input.aiSetting?.handoff_policy),
-      fallbackPolicy: parsePolicy(input.aiSetting?.fallback_policy),
-      maxReplyLength: input.aiSetting?.max_reply_length ?? 700,
-      fallbackToAdminEnabled: input.aiSetting?.fallback_to_admin_enabled ?? true,
-      adminContactMessage: input.aiSetting?.admin_contact_message ?? null,
-    },
+    faqs,
+    aiSetting,
     memory: input.memory ?? createEmptyMemory(),
+    knowledge: createHospiqAiKnowledge({
+      aiSetting,
+      faqs,
+      testcases: (input.testcases ?? []).map((testcase) => ({
+        id: testcase.id,
+        userMessage: testcase.user_message,
+        expectedIntent: testcase.expected_intent,
+        expectedEntities: parseRecord(testcase.expected_entities),
+        expectedBehavior: testcase.expected_behavior,
+        goldenReply: testcase.golden_reply,
+        language: testcase.language ?? "th",
+        tags: parseStringArray(testcase.tags),
+      })),
+    }),
   };
 }
 
@@ -244,6 +275,23 @@ async function fetchAiFaqs(
   return data ?? [];
 }
 
+async function fetchAiTestcases(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  hotelId: string,
+): Promise<AiTestcaseRow[]> {
+  const { data, error } = await supabase
+    .from("ai_testcases")
+    .select("id, user_message, expected_intent, expected_entities, expected_behavior, golden_reply, language, tags")
+    .eq("hotel_id", hotelId)
+    .eq("is_active", true)
+    .order("created_at", { ascending: false })
+    .limit(5)
+    .returns<AiTestcaseRow[]>();
+
+  if (error) throw new Error(`AI testcases fetch failed: ${error.message}`);
+  return data ?? [];
+}
+
 async function fetchLineSession(
   supabase: ReturnType<typeof createSupabaseAdminClient>,
   hotelId: string,
@@ -314,4 +362,9 @@ function parsePolicy(value: unknown): Record<string, unknown> {
   } catch {
     return {};
   }
+}
+
+function parseRecord(value: unknown): Record<string, unknown> {
+  if (value && typeof value === "object" && !Array.isArray(value)) return value as Record<string, unknown>;
+  return {};
 }

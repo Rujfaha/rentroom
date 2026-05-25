@@ -1,3 +1,4 @@
+import { createHospiqAiKnowledge, formatAiKnowledgeForPrompt } from "./ai-knowledge";
 import type { HospiqAiContext, StarterAiIntent, StarterPromptPayload } from "./types";
 
 export function buildStarterPromptPayload(
@@ -5,12 +6,19 @@ export function buildStarterPromptPayload(
   userMessage: string,
   intent: StarterAiIntent,
 ): StarterPromptPayload {
+  const knowledge = context.knowledge ?? createHospiqAiKnowledge({
+    aiSetting: context.aiSetting,
+    faqs: context.faqs,
+  });
+
   return {
     identity: {
-      assistantName: context.aiSetting.assistantName,
+      brandName: knowledge.brand.productName,
       hotelName: context.hotelName,
-      tone: context.aiSetting.assistantGenderTone,
+      role: knowledge.brand.role,
     },
+    brandRules: knowledge.brand.rules,
+    aiKnowledge: formatAiKnowledgeForPrompt(knowledge),
     hotelData: {
       hasWebbooking: context.hasWebbooking,
       webbookingUrl: context.webbookingUrl,

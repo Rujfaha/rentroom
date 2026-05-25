@@ -65,7 +65,8 @@ describe("createHotelAiContextFromRows", () => {
     expect(context.roomtypes[0]?.basePrice).toBe(900);
     expect(context.roomtypes[0]?.availableRooms).toBe(2);
     expect(context.roomtypes[0]?.amenities).toEqual(["wifi"]);
-    expect(context.aiSetting.assistantName).toBe("Nara");
+    expect(context.aiSetting.assistantName).toBe("Hospiq");
+    expect(context.knowledge.brand.productName).toBe("Hospiq");
     expect(context.aiSetting.bookingCtaPolicy).toEqual({ enabled: true });
     expect(context.faqs[0]?.keywords).toEqual(["parking"]);
     expect(context.memory.bookingLead.guests).toBe(2);

@@ -74,14 +74,47 @@ export interface HospiqAiContext {
     adminContactMessage: string | null;
   };
   memory: LineConversationMemory;
+  knowledge?: HospiqAiKnowledge;
+}
+
+export interface HospiqBrandProfile {
+  productName: "Hospiq";
+  role: "hotel_saas_assistant";
+  rules: string[];
+}
+
+export interface HospiqAiKnowledge {
+  brand: HospiqBrandProfile;
+  settings: {
+    supportedLanguages: string[];
+    bookingCtaPolicy: Record<string, unknown>;
+    handoffPolicy: Record<string, unknown>;
+    fallbackPolicy: Record<string, unknown>;
+    maxReplyLength: number;
+    fallbackToAdminEnabled: boolean;
+    adminContactMessage: string | null;
+  };
+  faqs: HospiqAiContext["faqs"];
+  testcases: Array<{
+    id: string;
+    userMessage: string;
+    expectedIntent: string | null;
+    expectedEntities: Record<string, unknown>;
+    expectedBehavior: string | null;
+    goldenReply: string | null;
+    language: string;
+    tags: string[];
+  }>;
 }
 
 export interface StarterPromptPayload {
   identity: {
-    assistantName: string;
+    brandName: string;
     hotelName: string;
-    tone: string;
+    role: string;
   };
+  brandRules: string[];
+  aiKnowledge: Record<string, unknown>;
   hotelData: {
     hasWebbooking: boolean;
     webbookingUrl: string | null;

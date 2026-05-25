@@ -10,10 +10,12 @@ const baseResult: GenerateHospiqReplyResult = {
   aiModel: "fake",
   prompt: {
     identity: {
-      assistantName: "Nara",
+      brandName: "Hospiq",
       hotelName: "Demo",
-      tone: "female_polite",
+      role: "hotel_saas_assistant",
     },
+    brandRules: [],
+    aiKnowledge: {},
     hotelData: {
       hasWebbooking: false,
       webbookingUrl: null,
