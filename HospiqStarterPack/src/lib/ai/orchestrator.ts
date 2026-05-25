@@ -7,7 +7,7 @@ import { enforceFemalePoliteThaiTone, preventCrossHotelLeak } from "./response-g
 import type { GenerateHospiqReplyInput, GenerateHospiqReplyResult } from "./types";
 
 export async function generateHospiqReply(input: GenerateHospiqReplyInput): Promise<GenerateHospiqReplyResult> {
-  const context = input.context ?? (await getHotelAIContext(input.hotelId));
+  const context = input.context ?? (await getHotelAIContext(input.hotelId, input.lineUserId, input.lineSessionId));
   const intent = detectStarterIntent(input.message);
   const policy = resolveAiPolicy(context, intent);
   const prompt = buildStarterPromptPayload(context, input.message, intent);
