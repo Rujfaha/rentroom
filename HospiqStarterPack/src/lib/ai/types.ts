@@ -93,7 +93,21 @@ export interface GenerateHospiqReplyResult {
   reply: string;
   intent: StarterAiIntent;
   aiResponseSource: string;
+  aiProvider: string | null;
+  aiModel: string | null;
   prompt: StarterPromptPayload;
   handoffRequired: boolean;
   memoryUpdate: Partial<LineConversationMemory>;
+}
+
+export interface AiGenerateInput {
+  system: string;
+  prompt: string;
+  maxOutputTokens?: number;
+}
+
+export interface AiGenerateResult {
+  provider: string;
+  model: string;
+  text: string;
 }

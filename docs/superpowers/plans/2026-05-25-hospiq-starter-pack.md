@@ -1725,8 +1725,11 @@ Reference source: `C:\Users\msi0007\rentroom\src\lib\ai\hotel-ai-rag-architectur
 - [x] Change orchestrator flow to context -> intent -> policy -> prompt payload -> composer -> guardrail.
 - [x] Add policy resolver tests for booking CTA and handoff behavior.
 - [x] Add DB-backed `hotel-context` loader adapted from the parent AI reference for Starter Pack tables.
+- [x] Add AI provider abstraction and Gemini provider adapted from the parent AI reference.
+- [x] Replace not-configured reply composer with model-backed composer that builds a grounded Starter Pack prompt.
+- [x] Return provider/model metadata from AI generation for future `line_chat_history` persistence.
 - [ ] Refactor from the parent `rentroom` AI reference into standalone Starter Pack modules only.
-- [ ] Continue real logic with model-backed `reply-composer`, then intent/router, then RAG retrieval.
+- [ ] Continue real logic with intent/router, semantic RAG retrieval, memory update, and LINE persistence.
 - [ ] Replace temporary hardcoded AI shell replies with database-backed prompt/context assembly.
 - [ ] Implement architecture flow: language detection, keyword fast lane, semantic FAQ search, hotel/room/availability context, prompt assembly, model call, guardrails, memory update.
 - [ ] Use `ai_settings.supported_languages`, `booking_cta_policy`, `handoff_policy`, `fallback_policy`, and `max_reply_length`.

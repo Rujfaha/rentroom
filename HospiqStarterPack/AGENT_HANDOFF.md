@@ -2,7 +2,7 @@
 
 ### Current Status
 
-HospiqStarterPack has been scaffolded as a standalone Next.js app inside the current workspace. It now has Supabase CLI as a local dev dependency, expanded Starter Pack SaaS/AI migrations, RLS policy migration, onboarding backend route/service/schema, booking lead update support, AI Task 4 scaffold with DB-backed hotel context, LINE webhook foundation, and dashboard/onboarding route shells.
+HospiqStarterPack has been scaffolded as a standalone Next.js app inside the current workspace. It now has Supabase CLI as a local dev dependency, expanded Starter Pack SaaS/AI migrations, RLS policy migration, onboarding backend route/service/schema, booking lead update support, AI Task 4 scaffold with DB-backed hotel context and model-backed reply composer, LINE webhook foundation, and dashboard/onboarding route shells.
 
 ### Completed Work
 
@@ -24,6 +24,8 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - [x] Added AI Task 4.0 scaffold with context, intent, policy, prompt, RAG retriever, reply composer, evaluation, and orchestrator boundaries
 - [x] Added policy resolver tests for booking CTA and handoff behavior
 - [x] Added DB-backed AI hotel context loader adapted from the parent AI reference for Starter Pack tables
+- [x] Added AI provider abstraction, Gemini provider, grounded reply prompt, and model-backed reply composer
+- [x] Added provider/model metadata to AI generation results for future chat history persistence
 
 ### Unfinished Work
 
@@ -32,7 +34,6 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - [ ] Run `npx supabase db reset --local` after Docker is available, or verify migrations against the linked project after Supabase setup
 - [ ] Generate real Supabase database types from the new project
 - [ ] Run Supabase DB advisors after the migrations are verified
-- [ ] Replace not-configured reply composer with model-backed reply composer and provider abstraction
 - [ ] Expand intent router, semantic RAG retrieval, memory update, and `ai_testcases` evaluation runner
 - [ ] Implement LINE config lookup, signature verification with per-hotel secret, session persistence, chat history, admin verify code, and reply calls
 - [ ] Implement full dashboard/onboarding UI after backend contract is stable
@@ -56,7 +57,7 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - The user has not set up the real/new Supabase project yet. Current Supabase work is only local CLI config plus migration files.
 - Docker is not installed or not available in PATH, so local migration execution with `npx supabase db reset --local` is blocked until Docker is available.
 - `npm install` reports 2 moderate vulnerabilities from the current dependency tree; no `npm audit fix --force` was run because it may introduce breaking changes.
-- AI orchestrator now loads hotel context from Starter Pack Supabase tables, but still uses a not-configured composer and does not yet call a model.
+- AI orchestrator now loads hotel context from Starter Pack Supabase tables and calls the configured AI provider at runtime. It still needs stronger intent/entity extraction, semantic RAG, and chat-history persistence.
 - LINE webhook service currently parses payload and preserves the `[hotelId]` contract but does not yet verify against a stored per-hotel secret.
 - RLS policies are drafted in migration `202605250003`, but they still need to be verified against real Supabase users.
 
@@ -108,4 +109,4 @@ npm run dev
 
 ### Next Recommended Step
 
-Continue Task 14 with model-backed `reply-composer`, then intent/router and RAG retrieval. Keep the current module boundaries and duplicate/modify good parent logic into Starter Pack rather than importing from the parent `rentroom` app.
+Continue Task 14 with intent/entity extraction, semantic RAG retrieval, memory update, and `ai_testcases` evaluation. Keep the current module boundaries and duplicate/modify good parent logic into Starter Pack rather than importing from the parent `rentroom` app.
