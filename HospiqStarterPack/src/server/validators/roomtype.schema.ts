@@ -13,6 +13,10 @@ export const createRoomtypeSchema = z.object({
   extraBedPrice: z.number().nonnegative().default(0),
   petPolicy: z.string().trim().optional(),
   totalRooms: z.number().int().nonnegative().default(0),
+  roomSize: z.string().trim().optional(),
+  sortOrder: z.number().int().nonnegative().default(0),
+  isFeatured: z.boolean().default(false),
+  priceNote: z.string().trim().optional(),
 });
 
 export const updateRoomtypeSchema = createRoomtypeSchema.partial();

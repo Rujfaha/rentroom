@@ -12,6 +12,9 @@ export interface StarterPackDatabase {
       booking_status: "lead" | "pending" | "confirmed" | "cancelled" | "rejected" | "completed";
       booking_source: "line_ai" | "manual_admin" | "webbooking" | "other";
       line_role: "guest" | "hotel_admin" | "unknown";
+      line_session_status: "open" | "handoff" | "closed";
+      lead_status: "new" | "contacted" | "converted" | "lost";
+      starter_room_status: "available" | "occupied" | "maintenance" | "inactive";
       chat_direction: "incoming" | "outgoing";
       hotel_image_type: "banner" | "showcase" | "gallery";
     };

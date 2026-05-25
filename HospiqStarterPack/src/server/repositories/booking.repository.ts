@@ -1,5 +1,5 @@
 import { createSupabaseAdminClient } from "@/lib/supabase/admin";
-import type { CreateBookingLeadInput } from "../validators/booking.schema";
+import type { CreateBookingLeadInput, UpdateBookingLeadInput } from "../validators/booking.schema";
 
 export const bookingRepository = {
   async listByHotel(hotelId: string) {
@@ -21,6 +21,7 @@ export const bookingRepository = {
       .insert({
         hotel_id: hotelId,
         roomtype_id: input.roomtypeId,
+        line_session_id: input.lineSessionId,
         guest_name: input.guestName,
         guest_phone: input.guestPhone,
         guest_line_user_id: input.guestLineUserId,
@@ -28,11 +29,45 @@ export const bookingRepository = {
         checkout_date: input.checkoutDate,
         guest_count: input.guestCount,
         room_count: input.roomCount,
+        preferred_contact_channel: input.preferredContactChannel,
+        conversation_summary: input.conversationSummary,
         note: input.note,
+        admin_note: input.adminNote,
         ai_summary: input.aiSummary,
         status: "lead",
         source: "line_ai",
       })
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
+
+  async updateLead(hotelId: string, id: string, input: UpdateBookingLeadInput) {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("bookings")
+      .update({
+        roomtype_id: input.roomtypeId,
+        line_session_id: input.lineSessionId,
+        guest_name: input.guestName,
+        guest_phone: input.guestPhone,
+        guest_line_user_id: input.guestLineUserId,
+        checkin_date: input.checkinDate,
+        checkout_date: input.checkoutDate,
+        guest_count: input.guestCount,
+        room_count: input.roomCount,
+        preferred_contact_channel: input.preferredContactChannel,
+        conversation_summary: input.conversationSummary,
+        note: input.note,
+        admin_note: input.adminNote,
+        ai_summary: input.aiSummary,
+        lead_status: input.leadStatus,
+        webbooking_redirected_at: input.webbookingRedirectedAt,
+      })
+      .eq("hotel_id", hotelId)
+      .eq("id", id)
       .select("*")
       .single();
 

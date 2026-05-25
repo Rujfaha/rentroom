@@ -33,6 +33,10 @@ export const roomtypeRepository = {
         extra_bed_price: input.extraBedPrice,
         pet_policy: input.petPolicy,
         total_rooms: input.totalRooms,
+        room_size: input.roomSize,
+        sort_order: input.sortOrder,
+        is_featured: input.isFeatured,
+        price_note: input.priceNote,
       })
       .select("*")
       .single();
@@ -51,6 +55,10 @@ export const roomtypeRepository = {
         mood_description: input.moodDescription,
         base_price: input.basePrice,
         total_rooms: input.totalRooms,
+        room_size: input.roomSize,
+        sort_order: input.sortOrder,
+        is_featured: input.isFeatured,
+        price_note: input.priceNote,
       })
       .eq("hotel_id", hotelId)
       .eq("id", id)

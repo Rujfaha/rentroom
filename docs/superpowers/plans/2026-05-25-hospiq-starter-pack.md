@@ -1683,3 +1683,55 @@ Spec coverage:
 - Test/handoff: Task 10
 
 No parent `rentroom` imports are allowed. Every Starter Pack flow must accept or derive `hotelId` explicitly.
+
+---
+
+## Next Phase: Starter Pack SaaS Schema, RLS, and AI Flow
+
+Reference source: `C:\Users\msi0007\rentroom\src\lib\ai\hotel-ai-rag-architecture.md`.
+
+### Task 11: Supabase CLI / New Project / Migration Verification
+
+- [x] Install local Supabase CLI in `HospiqStarterPack` so the app can use `npx supabase`.
+- [x] Add Starter Pack schema expansion migration for LINE sessions, room inventory, booking lead metadata, AI FAQs, AI settings policies, and AI golden test cases.
+- [x] Add `rooms` table so Starter Pack can support real room availability instead of only roomtype-level inventory.
+- [x] Add `line_handoff_events` and chat history AI metadata for handoff/admin review.
+- [ ] Initialize local Supabase config with `npx supabase init` if `supabase/config.toml` is still missing.
+- [ ] Verify migrations with `npx supabase db reset --local` after Docker or a linked Supabase project is available.
+- [ ] Generate database types from the verified new Supabase project and replace the lightweight manual enum map.
+
+### Task 12: RLS Policies
+
+- [x] Add private `app_private` helper functions for current account role/hotel access.
+- [x] Keep security definer helpers out of the exposed `public` schema.
+- [x] Add hotel-scoped select/insert/update/delete policies for Starter Pack tables.
+- [x] Add authenticated role grants for public tables because newer Supabase projects may not expose new tables automatically.
+- [ ] Run Supabase DB advisors after migrations are verified.
+- [ ] Re-check RLS behavior with real hotel admin and super admin users.
+
+### Task 13: Onboarding Backend
+
+- [x] Add onboarding validator for hotel profile, optional starter roomtype, and initial AI FAQs.
+- [x] Add onboarding service to update hotel profile, create the first roomtype, create FAQ knowledge, and mark onboarding complete.
+- [x] Add `POST /api/hotel/onboarding`.
+- [x] Add booking lead update support for admin-editable check-in/check-out dates, lead status, notes, contact channel, and webbooking redirect metadata.
+- [x] Add `PATCH /api/bookings/[id]`.
+- [ ] Add dashboard UI for onboarding after backend and RLS are verified.
+
+### Task 14: Duplicate / Refactor AI Internals
+
+- [ ] Refactor from the parent `rentroom` AI reference into standalone Starter Pack modules only.
+- [ ] Start with `hotel-context`, `reply-composer`, and `intent-router`.
+- [ ] Replace temporary hardcoded AI shell replies with database-backed prompt/context assembly.
+- [ ] Implement architecture flow: language detection, keyword fast lane, semantic FAQ search, hotel/room/availability context, prompt assembly, model call, guardrails, memory update.
+- [ ] Use `ai_settings.supported_languages`, `booking_cta_policy`, `handoff_policy`, `fallback_policy`, and `max_reply_length`.
+- [ ] Add RAG evaluation against `ai_testcases`.
+
+### Task 15: LINE Session / Chat History / Admin Verify
+
+- [ ] Load per-hotel LINE config by `hotelId` and verify signatures with stored channel secret.
+- [ ] Persist `line_sessions` with `open`, `handoff`, and `closed` status.
+- [ ] Persist `line_chat_history` with provider/model metadata and `(hotel_id, line_user_id, created_at desc)` query path.
+- [ ] Create handoff events when AI policy decides to escalate.
+- [ ] Implement admin verify code flow for hotel admins in LINE.
+- [ ] Connect LINE webhook replies to the AI orchestrator and booking lead creation/update flow.

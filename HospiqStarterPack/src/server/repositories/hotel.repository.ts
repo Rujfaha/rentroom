@@ -37,4 +37,20 @@ export const hotelRepository = {
     if (error) throw new Error(error.message);
     return data;
   },
+
+  async markOnboardingCompleted(hotelId: string) {
+    const supabase = createSupabaseAdminClient();
+    const { data, error } = await supabase
+      .from("hotels")
+      .update({
+        onboarding_completed: true,
+        status: "active",
+      })
+      .eq("id", hotelId)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+    return data;
+  },
 };

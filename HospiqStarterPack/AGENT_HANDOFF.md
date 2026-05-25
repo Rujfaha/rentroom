@@ -2,7 +2,7 @@
 
 ### Current Status
 
-HospiqStarterPack has been scaffolded as a standalone Next.js app inside the current workspace. It has the first Starter Pack database migration, Supabase client helpers, backend auth/service/repository layers, core API contracts, an initial AI orchestrator shell, LINE webhook foundation, and dashboard/onboarding route shells.
+HospiqStarterPack has been scaffolded as a standalone Next.js app inside the current workspace. It now has Supabase CLI as a local dev dependency, expanded Starter Pack SaaS/AI migrations, RLS policy migration, onboarding backend route/service/schema, booking lead update support, an initial AI orchestrator shell, LINE webhook foundation, and dashboard/onboarding route shells.
 
 ### Completed Work
 
@@ -17,32 +17,44 @@ HospiqStarterPack has been scaffolded as a standalone Next.js app inside the cur
 - [x] Added AI response guard and orchestrator shell
 - [x] Added LINE signature verification, client shell, and webhook route
 - [x] Added frontend route shells and API client contract
+- [x] Added schema expansion for LINE session status, AI provider/model chat metadata, handoff events, room inventory, booking lead fields, AI FAQ/RAG fields, AI settings policies, and AI test cases
+- [x] Added Starter Pack RLS policy migration with private helper functions
+- [x] Added onboarding backend route, validator, service, and FAQ repository
+- [x] Added admin booking lead update support for check-in/check-out, lead status, notes, contact channel, and webbooking redirect timestamp
 
 ### Unfinished Work
 
-- [ ] Run `supabase db reset` after Supabase CLI is installed or project tooling is linked
+- [x] Initialized local Supabase config with `npx supabase init`
+- [ ] Set up or link the real/new Supabase project when the user is ready
+- [ ] Run `npx supabase db reset --local` after Docker is available, or verify migrations against the linked project after Supabase setup
 - [ ] Generate real Supabase database types from the new project
-- [ ] Implement full RLS policies for super admin and hotel admin access
-- [ ] Implement onboarding service and route logic
-- [ ] Implement AI context loader from Starter Pack tables
-- [ ] Expand AI prompt builder and model provider integration
+- [ ] Run Supabase DB advisors after the migrations are verified
+- [ ] Implement AI context loader from Starter Pack tables using `hotel-ai-rag-architecture.md`
+- [ ] Expand AI prompt builder, intent router, reply composer, model provider integration, and RAG evaluation
 - [ ] Implement LINE config lookup, signature verification with per-hotel secret, session persistence, chat history, admin verify code, and reply calls
 - [ ] Implement full dashboard/onboarding UI after backend contract is stable
 
 ### Files Changed
 
 - `HospiqStarterPack/` - new standalone Starter Pack app and implementation foundation
+- `HospiqStarterPack/supabase/migrations/202605250002_expand_starter_pack_ai_saas_schema.sql` - Starter Pack SaaS/AI schema expansion
+- `HospiqStarterPack/supabase/migrations/202605250003_add_starter_pack_rls_policies.sql` - hotel-scoped RLS policies
+- `HospiqStarterPack/src/app/api/hotel/onboarding/route.ts` - onboarding API route
+- `HospiqStarterPack/src/app/api/bookings/[id]/route.ts` - booking lead update API route
+- `HospiqStarterPack/src/server/services/onboarding.service.ts` - onboarding use case
+- `HospiqStarterPack/src/server/repositories/ai.repository.ts` - AI FAQ persistence
 - `CONTEXT.md` - glossary for `rentroom`, `HospiqStarterPack`, Starter Pack, and new Supabase project
 - `docs/superpowers/specs/2026-05-25-hospiq-starter-pack-design.md` - design spec
 - `docs/superpowers/plans/2026-05-25-hospiq-starter-pack.md` - implementation plan
 
 ### Known Issues
 
-- Supabase CLI is not available in PATH, so migration SQL has not been executed with `supabase db reset`.
+- The user has not set up the real/new Supabase project yet. Current Supabase work is only local CLI config plus migration files.
+- Docker is not installed or not available in PATH, so local migration execution with `npx supabase db reset --local` is blocked until Docker is available.
 - `npm install` reports 2 moderate vulnerabilities from the current dependency tree; no `npm audit fix --force` was run because it may introduce breaking changes.
 - AI orchestrator is intentionally a safe shell and does not yet call a model or load real hotel context.
 - LINE webhook service currently parses payload and preserves the `[hotelId]` contract but does not yet verify against a stored per-hotel secret.
-- RLS is enabled in the migration, but detailed policies are intentionally unfinished until auth behavior is finalized.
+- RLS policies are drafted in migration `202605250003`, but they still need to be verified against real Supabase users.
 
 ### Commands Already Run
 
@@ -62,12 +74,23 @@ npm test
 npm run lint
 npm run build
 supabase --version
+npm install -D supabase
+npx supabase --version
+npx supabase --help
+npx supabase db --help
+npx supabase init --help
+npx supabase init --yes
+npx supabase db reset --help
+npx supabase db reset --local
+docker --version
 ```
 
 ### Commands To Run Next
 
 ```bash
-supabase db reset
+# After the user sets up Supabase or Docker:
+npx supabase db reset --local
+npx supabase db advisors
 npm test
 npm run lint
 npm run build
@@ -76,8 +99,8 @@ npm run dev
 
 ### Important Context
 
-`HospiqStarterPack` is standalone. Do not import from the parent `rentroom` app. `rentroom` is only a reference implementation for Pro Pack ideas. The Starter Pack uses a new Supabase project, new migrations, and all hotel-owned data must remain scoped by `hotel_id`.
+`HospiqStarterPack` is standalone. Do not import from the parent `rentroom` app. `rentroom` is only a reference implementation for Pro Pack ideas. The Starter Pack uses a new Supabase project, new migrations, and all hotel-owned data must remain scoped by `hotel_id`. AI flow and schema decisions should follow `C:\Users\msi0007\rentroom\src\lib\ai\hotel-ai-rag-architecture.md`.
 
 ### Next Recommended Step
 
-Install or expose the Supabase CLI, run the migration against a local/new Supabase project, then implement RLS policies and the onboarding backend flow before expanding the AI/LINE internals.
+Initialize or link Supabase, verify migrations against a real database, then continue Task 14: duplicate/refactor AI internals starting with `hotel-context`, `reply-composer`, and `intent-router`.
