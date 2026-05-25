@@ -3,6 +3,8 @@ import type { GenerateHospiqReplyResult, StarterAiIntent } from "./types";
 export interface AiTestcaseExpectation {
   expectedIntent?: StarterAiIntent;
   expectedBehavior?: string | null;
+  mustInclude?: string[];
+  mustNotInclude?: string[];
 }
 
 export interface AiEvaluationResult {
@@ -22,6 +24,14 @@ export function evaluateAiResult(
 
   if (result.reply.length > result.prompt.policies.maxReplyLength) {
     failures.push("reply_too_long");
+  }
+
+  for (const phrase of expectation.mustInclude ?? []) {
+    if (!result.reply.toLowerCase().includes(phrase.toLowerCase())) failures.push(`missing:${phrase}`);
+  }
+
+  for (const phrase of expectation.mustNotInclude ?? []) {
+    if (result.reply.toLowerCase().includes(phrase.toLowerCase())) failures.push(`forbidden:${phrase}`);
   }
 
   return {

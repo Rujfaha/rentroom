@@ -1731,8 +1731,11 @@ Reference source: `C:\Users\msi0007\rentroom\src\lib\ai\hotel-ai-rag-architectur
 - [x] Add intent/entity extraction adapted from the parent AI reference.
 - [x] Add memory merge from extracted booking entities and handoff signal.
 - [x] Add keyword/language FAQ retrieval as the first RAG layer.
+- [x] Add semantic RAG extension point with embedding provider and semantic FAQ client interfaces.
+- [x] Add Gemini embedding support for `text-embedding-004`.
+- [x] Add AI result evaluator for golden testcase checks.
 - [ ] Refactor from the parent `rentroom` AI reference into standalone Starter Pack modules only.
-- [ ] Continue real logic with semantic RAG retrieval, `ai_testcases` evaluation runner, and LINE persistence.
+- [ ] Continue with database RPC wiring for semantic FAQ search and persisted `ai_testcases` evaluation runner.
 - [ ] Replace temporary hardcoded AI shell replies with database-backed prompt/context assembly.
 - [ ] Implement architecture flow: language detection, keyword fast lane, semantic FAQ search, hotel/room/availability context, prompt assembly, model call, guardrails, memory update.
 - [ ] Use `ai_settings.supported_languages`, `booking_cta_policy`, `handoff_policy`, `fallback_policy`, and `max_reply_length`.

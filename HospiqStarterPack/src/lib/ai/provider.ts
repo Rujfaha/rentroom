@@ -1,8 +1,9 @@
-import type { AiGenerateInput, AiGenerateResult } from "./types";
+import type { AiEmbeddingResult, AiGenerateInput, AiGenerateResult } from "./types";
 import { GeminiProvider } from "./providers/gemini";
 
 export interface AiProvider {
   generate(input: AiGenerateInput): Promise<AiGenerateResult>;
+  embed?(text: string): Promise<AiEmbeddingResult>;
 }
 
 export function getAiProvider(): AiProvider {

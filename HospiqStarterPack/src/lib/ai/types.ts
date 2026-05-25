@@ -133,6 +133,12 @@ export interface AiGenerateResult {
   text: string;
 }
 
+export interface AiEmbeddingResult {
+  provider: string;
+  model: string;
+  embedding: number[];
+}
+
 export interface StarterIntentEntities {
   roomTypeName?: string;
   checkIn?: string;

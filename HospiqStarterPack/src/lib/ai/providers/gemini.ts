@@ -1,5 +1,5 @@
 import type { AiProvider } from "../provider";
-import type { AiGenerateInput, AiGenerateResult } from "../types";
+import type { AiEmbeddingResult, AiGenerateInput, AiGenerateResult } from "../types";
 
 interface GeminiTextPart {
   text?: string;
@@ -53,6 +53,37 @@ export class GeminiProvider implements AiProvider {
     const text = payload.candidates?.[0]?.content?.parts?.map((part) => part.text || "").join("").trim() || "";
 
     return { provider: "gemini", model, text };
+  }
+
+  async embed(text: string): Promise<AiEmbeddingResult> {
+    const apiKey = process.env.GEMINI_API_KEY;
+    const model = process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004";
+
+    if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
+
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:embedContent?key=${encodeURIComponent(apiKey)}`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: `models/${model}`,
+          content: {
+            parts: [{ text }],
+          },
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      throw new Error(`Gemini embedding request failed: ${response.status} ${await response.text()}`);
+    }
+
+    const payload = await response.json() as { embedding?: { values?: unknown } };
+    const values = payload.embedding?.values;
+    const embedding = Array.isArray(values) ? values.filter((value): value is number => typeof value === "number") : [];
+
+    return { provider: "gemini", model, embedding };
   }
 }
 
