@@ -4,7 +4,7 @@ import { resolveAiPolicy } from "./policy-resolver";
 import { buildStarterPromptPayload } from "./prompt-builder";
 import { retrieveRelevantFaqs } from "./rag-retriever";
 import { createModelBackedReplyComposer } from "./reply-composer";
-import { enforceFemalePoliteThaiTone, preventCrossHotelLeak } from "./response-guard";
+import { guardAiResponse } from "./response-guard";
 import type { GenerateHospiqReplyInput, GenerateHospiqReplyResult } from "./types";
 
 export async function generateHospiqReply(input: GenerateHospiqReplyInput): Promise<GenerateHospiqReplyResult> {
@@ -23,13 +23,16 @@ export async function generateHospiqReply(input: GenerateHospiqReplyInput): Prom
   const prompt = buildStarterPromptPayload(context, input.message, intent);
   const composer = createModelBackedReplyComposer();
   const draft = await composer.compose(prompt);
-  const toneSafe = enforceFemalePoliteThaiTone(draft.reply);
-  const leakSafe = preventCrossHotelLeak(toneSafe, input.hotelId);
+  const guard = guardAiResponse({
+    response: draft.reply,
+    hotelId: input.hotelId,
+    maxReplyLength: prompt.policies.maxReplyLength,
+  });
 
   return {
-    reply: leakSafe.response,
+    reply: guard.allowed ? guard.response : "",
     intent,
-    aiResponseSource: leakSafe.allowed ? draft.source : "guardrail",
+    aiResponseSource: guard.allowed ? draft.source : "guardrail",
     aiProvider: draft.provider,
     aiModel: draft.model,
     prompt,

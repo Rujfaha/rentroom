@@ -1,14 +1,28 @@
-export function enforceFemalePoliteThaiTone(response: string): string {
-  return response.replaceAll("นะครับ", "นะคะ").replaceAll("ครับ", "ค่ะ");
+export interface ResponseGuardResult {
+  allowed: boolean;
+  response: string;
+  reasons: string[];
 }
 
-export function preventCrossHotelLeak(response: string, hotelId: string): { allowed: boolean; response: string } {
-  if (response.includes("hotel_id") && !response.includes(hotelId)) {
-    return {
-      allowed: false,
-      response: "ขออภัยค่ะ ระบบไม่สามารถเปิดเผยข้อมูลของที่พักอื่นได้ค่ะ",
-    };
-  }
+export function guardAiResponse(input: {
+  response: string;
+  hotelId: string;
+  maxReplyLength: number;
+}): ResponseGuardResult {
+  const reasons: string[] = [];
+  const response = input.response.trim();
 
-  return { allowed: true, response };
+  if (!response) reasons.push("empty_response");
+  if (response.length > input.maxReplyLength) reasons.push("reply_too_long");
+  if (referencesDifferentHotelId(response, input.hotelId)) reasons.push("cross_hotel_reference");
+
+  return {
+    allowed: reasons.length === 0,
+    response,
+    reasons,
+  };
+}
+
+function referencesDifferentHotelId(response: string, hotelId: string): boolean {
+  return response.includes("hotel_id") && !response.includes(hotelId);
 }
