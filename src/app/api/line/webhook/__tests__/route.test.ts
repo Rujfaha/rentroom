@@ -140,7 +140,7 @@ describe("LINE webhook AI route", () => {
 
     const third = await POST(buildLineRequest("hospiq", "reply-3"));
     expect(third.status).toBe(200);
-    expect(state.memory.handoffPending).toBeNull(); // Status should be cleared
+    expect(state.memory.handoffPending).toBeUndefined(); // Status should be cleared
     expect(state.replyLineMessage).toHaveBeenCalledTimes(2); // Bot wakes up and replies
     expect(state.generate).toHaveBeenCalledTimes(4); // Called again for wake-up (extractor + response)
   });

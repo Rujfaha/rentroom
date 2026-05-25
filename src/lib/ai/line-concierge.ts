@@ -22,11 +22,12 @@ export function normalizeLineReply(text: string): string {
   return `${normalized.slice(0, LINE_TEXT_LIMIT - 3).trimEnd()}...`;
 }
 
-export function buildBookingUrl(siteUrl: string, request?: AvailabilityRequest | null): string {
+export function buildBookingUrl(siteUrl: string, lead?: LineConversationMemory["bookingLead"] | null): string {
   const url = new URL("/booking", siteUrl);
-  if (request?.checkIn) url.searchParams.set("checkIn", request.checkIn);
-  if (request?.checkOut) url.searchParams.set("checkOut", request.checkOut);
-  if (request?.guests) url.searchParams.set("guests", String(request.guests));
+  if (lead?.checkIn) url.searchParams.set("checkIn", lead.checkIn);
+  if (lead?.checkOut) url.searchParams.set("checkOut", lead.checkOut);
+  if (lead?.guests) url.searchParams.set("guests", String(lead.guests));
+  if (lead?.roomTypeName) url.searchParams.set("roomTypeName", lead.roomTypeName);
   return url.toString();
 }
 
@@ -79,7 +80,7 @@ export async function generateLineConciergeReply(
     ? null
     : buildAvailabilityRequestFromEntities(analysis.entities) ?? getAvailabilityFromMemory(memory, analysis);
   const context = await buildHotelContext(availabilityRequest, language);
-  const bookingUrl = buildBookingUrl(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000", availabilityRequest);
+  const bookingUrl = buildBookingUrl(process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000", memory.bookingLead);
   const responsePlan = buildLineResponsePlan({
     intents: [...intents],
     context,
