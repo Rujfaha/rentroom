@@ -22,11 +22,13 @@ const context: HotelContext = {
 describe("formatHotelContextPrompt", () => {
   it("formats concise hotel context for AI prompts", () => {
     const prompt = formatHotelContextPrompt(context);
+    const parsed = JSON.parse(prompt);
 
-    expect(prompt).toContain("โรงแรม: Arkkarawin");
-    expect(prompt).toContain("Deluxe: ราคาเริ่มต้น 1,200 บาท");
-    expect(prompt).toContain("LINE: @arkkarawin");
-    expect(prompt).toContain("Stay Longer");
+    expect(parsed.hotel.name).toBe("Arkkarawin");
+    expect(parsed.roomTypes[0].name).toBe("Deluxe");
+    expect(parsed.roomTypes[0].basePricePerNight).toBe(1200);
+    expect(parsed.contacts[0].value).toBe("@arkkarawin");
+    expect(parsed.promotions[0].title).toBe("Stay Longer");
   });
 });
 
@@ -74,10 +76,12 @@ describe("summarizeAvailability", () => {
         roomTypes: [context.roomTypes[0]!],
       },
     });
+    const parsed = JSON.parse(summary);
 
-    expect(summary).toContain("2026-06-01 ถึง 2026-06-03");
-    expect(summary).toContain("Deluxe");
-    expect(summary).toContain("ว่าง 3 ห้อง");
+    expect(parsed.status).toBe("available");
+    expect(parsed.checkIn).toBe("2026-06-01");
+    expect(parsed.checkOut).toBe("2026-06-03");
+    expect(parsed.availableRoomTypes[0].name).toBe("Deluxe");
   });
 
   it("states clearly when no rooms are available", () => {
@@ -88,7 +92,8 @@ describe("summarizeAvailability", () => {
         roomTypes: [],
       },
     });
+    const parsed = JSON.parse(summary);
 
-    expect(summary).toContain("ยังไม่พบห้องว่าง");
+    expect(parsed.status).toBe("no_rooms_found");
   });
 });

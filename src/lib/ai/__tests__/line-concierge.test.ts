@@ -112,7 +112,7 @@ describe("generateLineConciergeReply", () => {
     expect(result.memory.bookingLead?.guests).toBe(2);
   });
 
-  it("blocks booking URL in the response plan until required booking details are complete", async () => {
+  it("allows booking URL in the response plan when interest in booking is shown", async () => {
     mockConversation({
       primaryIntent: "booking_ready",
       intents: ["booking_ready", "booking"],
@@ -121,7 +121,7 @@ describe("generateLineConciergeReply", () => {
 
     await generateLineConciergeReply("I want to book Honeymoon House for 2");
     const finalPrompt = providerState.generate.mock.calls[1]?.[0]?.prompt ?? "";
-    expect(finalPrompt).toContain('"canIncludeBookingUrl": false');
+    expect(finalPrompt).toContain('"canIncludeBookingUrl": true');
     expect(finalPrompt).toContain('"checkIn"');
   });
 

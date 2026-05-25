@@ -72,50 +72,61 @@ export function enrichRoomTypes(roomTypes: AvailableRoomTypeSummary[]): RoomInfo
 }
 
 export function formatHotelContextPrompt(context: HotelContext): string {
-  const roomLines = context.roomTypes.map((roomType) => {
-    const desc = roomType.description ? `, รายละเอียด: ${roomType.description}` : "";
-    const amenities = roomType.amenities && roomType.amenities.length > 0 ? `, สิ่งอำนวยความสะดวก: ${roomType.amenities.join(", ")}` : "";
-    const style = roomType.style && roomType.style.length > 0 ? `, สไตล์: ${roomType.style.join(", ")}` : "";
-    const suitable = roomType.suitableFor && roomType.suitableFor.length > 0 ? `, เหมาะสำหรับ: ${roomType.suitableFor.join(", ")}` : "";
-    const notSuitable = roomType.notSuitableFor && roomType.notSuitableFor.length > 0 ? `, ไม่เหมาะสำหรับ: ${roomType.notSuitableFor.join(", ")}` : "";
-    return `- ${roomType.name}: ราคาเริ่มต้น ${formatCurrency(roomType.basePrice)} บาท, รองรับ ${roomType.maxGuests} ท่าน, ห้อง active ${roomType.availableRooms} ห้อง${desc}${amenities}${style}${suitable}${notSuitable}`;
-  });
-  const contactLines = context.contacts.map((contact) => `- ${contact.label || contact.type}: ${contact.value}`);
-  const promotionLines = context.promotions.map((promotion) =>
-    `- ${promotion.title}${promotion.discountText ? ` (${promotion.discountText})` : ""}${promotion.validUntil ? ` ถึง ${promotion.validUntil}` : ""}`
-  );
-
-  return [
-    `โรงแรม: ${context.hotelName}`,
-    context.description ? `รายละเอียด: ${context.description}` : null,
-    context.address ? `ที่อยู่: ${context.address}` : null,
-    context.phone ? `โทร: ${context.phone}` : null,
-    context.email ? `อีเมล: ${context.email}` : null,
-    context.payment.promptPayConfigured
-      ? `การชำระเงิน: รองรับ PromptPay${context.payment.accountName ? ` ชื่อบัญชี ${context.payment.accountName}` : ""}`
-      : "การชำระเงิน: ชำระตามขั้นตอนในหน้าจองและอัปโหลดสลิป",
-    roomLines.length ? `ห้องพัก:\n${roomLines.join("\n")}` : "ห้องพัก: ยังไม่มีข้อมูลห้องพัก",
-    contactLines.length ? `ช่องทางติดต่อ:\n${contactLines.join("\n")}` : null,
-    promotionLines.length ? `โปรโมชั่น:\n${promotionLines.join("\n")}` : null,
-    context.availability ? `ผลเช็กห้องว่าง:\n${summarizeAvailability(context)}` : null,
-  ]
-    .filter((line): line is string => Boolean(line))
-    .join("\n");
+  const structured = {
+    hotel: {
+      name: context.hotelName,
+      description: context.description,
+      address: context.address,
+      phone: context.phone,
+      email: context.email,
+    },
+    payment: {
+      promptPayConfigured: context.payment.promptPayConfigured,
+      accountName: context.payment.accountName,
+    },
+    roomTypes: context.roomTypes.map((rt) => ({
+      name: rt.name,
+      basePricePerNight: rt.basePrice,
+      maxGuests: rt.maxGuests,
+      totalRooms: rt.availableRooms,
+      description: rt.description ?? null,
+      amenities: rt.amenities ?? [],
+      style: rt.style ?? [],
+      suitableFor: rt.suitableFor ?? [],
+      notSuitableFor: rt.notSuitableFor ?? [],
+    })),
+    contacts: context.contacts.map((c) => ({
+      type: c.type,
+      label: c.label,
+      value: c.value,
+    })),
+    promotions: context.promotions.map((p) => ({
+      title: p.title,
+      description: p.description,
+      discountText: p.discountText,
+      validUntil: p.validUntil,
+    })),
+  };
+  return JSON.stringify(structured, null, 2);
 }
 
 export function summarizeAvailability(context: HotelContext): string {
-  if (!context.availability) return "ยังไม่ได้เช็กห้องว่างจากระบบ";
-
-  const { request, roomTypes } = context.availability;
-  const guestText = request.guests ? ` สำหรับ ${request.guests} ท่าน` : "";
-  if (!roomTypes.length) {
-    return `ช่วงวันที่ ${request.checkIn} ถึง ${request.checkOut}${guestText} ยังไม่พบห้องว่างจากระบบ`;
+  if (!context.availability) {
+    return JSON.stringify({ status: "not_checked" });
   }
-
-  const options = roomTypes.map(
-    (roomType) => `${roomType.name} ว่าง ${roomType.availableRooms} ห้อง ราคาเริ่มต้น ${formatCurrency(roomType.basePrice)} บาท`
-  );
-  return `ช่วงวันที่ ${request.checkIn} ถึง ${request.checkOut}${guestText}: ${options.join("; ")}`;
+  const { request, roomTypes } = context.availability;
+  return JSON.stringify({
+    status: roomTypes.length > 0 ? "available" : "no_rooms_found",
+    checkIn: request.checkIn,
+    checkOut: request.checkOut,
+    guests: request.guests ?? null,
+    availableRoomTypes: roomTypes.map((rt) => ({
+      name: rt.name,
+      availableRooms: rt.availableRooms,
+      basePricePerNight: rt.basePrice,
+      maxGuests: rt.maxGuests,
+    })),
+  });
 }
 
 export async function buildHotelContext(request?: AvailabilityRequest | null, language: SupportedLineLanguage = "th"): Promise<HotelContext> {
@@ -131,9 +142,9 @@ export async function buildHotelContext(request?: AvailabilityRequest | null, la
 
   const availability = request
     ? {
-        request,
-        roomTypes: await fetchAvailableRoomTypes(supabase, hotel.id, roomTypes, request),
-      }
+      request,
+      roomTypes: await fetchAvailableRoomTypes(supabase, hotel.id, roomTypes, request),
+    }
     : undefined;
 
   return {
@@ -232,8 +243,8 @@ async function fetchRoomTypes(supabase: ServiceClient, hotelId: string): Promise
     amenities: Array.isArray(roomType.amenities)
       ? roomType.amenities.map(String)
       : typeof roomType.amenities === "string"
-      ? [roomType.amenities]
-      : null,
+        ? [roomType.amenities]
+        : null,
   }));
 
   return enrichRoomTypes(rawRoomTypes);
@@ -317,9 +328,7 @@ function countRoomsByType(rooms: RoomInventoryRow[]): Map<string, number> {
   }, new Map<string, number>());
 }
 
-function formatCurrency(value: number): string {
-  return value.toLocaleString("th-TH", { maximumFractionDigits: 0 });
-}
+
 
 function getPaymentSummary(settings: Record<string, unknown> | null) {
   const promptpay = settings?.promptpay;

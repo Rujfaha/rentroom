@@ -121,7 +121,9 @@ export function buildIntentExtractionSystemPrompt(): string {
 }
 
 function buildIntentExtractionUserPrompt(message: string): string {
-  return `Customer message:\n${message}`;
+  const now = new Date();
+  const iso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  return [`Today's date: ${iso}`, `Customer message:`, message].join("\n");
 }
 
 export function buildAvailabilityRequestFromEntities(entities: LineIntentEntities): AvailabilityRequest | null {

@@ -100,6 +100,7 @@ export function buildAssistantSalesFlowInstruction(): string {
     "- If the customer asks for room overview, explain multiple room options with grounded facts.",
     "- If the customer asks about one room, answer only that room's confirmed details.",
     "- Do not send a booking link until the customer shows clear booking readiness.",
+    "- When the customer asks for a summary, present all confirmed booking details and total price calculation.",
     "- When booking details are missing, ask only one concise follow-up question at a time.",
     "- Handoff to staff for risky cases, special approval, payment issues, or when staff should close the sale.",
     "- Do not invent prices, promotions, availability, payment details, booking confirmation, or policy exceptions.",
@@ -113,7 +114,7 @@ function renderTemplate(template: string, values: Record<string, string>): strin
 export function sanitizeResponse(text: string): string {
   const quoteRegex = /(["'“‘`][^"'”’`]*["'”’`])/g;
   const parts = text.split(quoteRegex);
-  
+
   return parts.map((part, index) => {
     if (index % 2 === 1) {
       return part;

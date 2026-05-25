@@ -24,7 +24,10 @@ export function buildLineResponsePlan(input: BuildLineResponsePlanInput): LineRe
   const intents = normalizeIntents(input.intents);
   const handoff = input.handoff?.required ? input.handoff : null;
   const missingBookingFields = getMissingBookingFields(input.memory);
-  const canIncludeBookingUrl = intents.includes("booking_ready") && missingBookingFields.length === 0 && !handoff;
+  const isInterested = intents.some((i) =>
+    i === "booking_ready" || i === "booking_intent" || i === "booking" || i === "availability_check"
+  );
+  const canIncludeBookingUrl = isInterested && !handoff;
 
   return {
     intents,

@@ -63,7 +63,7 @@ describe("buildLineResponsePlan", () => {
     expect(plan.canIncludeBookingUrl).toBe(true);
   });
 
-  it("asks for one missing field path before booking links are allowed", () => {
+  it("allows booking links even with missing fields when booking is requested", () => {
     const plan = buildLineResponsePlan({
       intents: ["booking_ready"],
       context,
@@ -71,7 +71,7 @@ describe("buildLineResponsePlan", () => {
       memory: { bookingLead: { guests: 2 } },
     });
 
-    expect(plan.canIncludeBookingUrl).toBe(false);
+    expect(plan.canIncludeBookingUrl).toBe(true);
     expect(plan.missingBookingFields[0]).toBe("checkIn");
   });
 
