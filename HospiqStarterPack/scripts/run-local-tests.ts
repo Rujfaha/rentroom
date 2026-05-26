@@ -29,13 +29,43 @@ const testCases = [
   },
   {
     name: "6. การจองพร้อมจอง (Booking Ready)",
-    message: "จองห้อง Standard Queen พัก 2 คน คืนนี้ครับ ชื่อ เอกพล เบอร์ 0817777777",
+    message: "จองห้อง Deluxe Lanna Garden พัก 2 คน คืนนี้ครับ ชื่อ เอกพล เบอร์ 0817777777",
   },
 ];
 
+interface TestSuccessResult {
+  name: string;
+  message: string;
+  reply: string;
+  intent: string;
+  provider: string | null;
+  model: string | null;
+  handoffRequired: boolean;
+  handoffReason: string | null;
+  entities: Record<string, unknown>;
+  retrievedFaqs: string[];
+  error?: never;
+}
+
+interface TestErrorResult {
+  name: string;
+  message: string;
+  error: string;
+  reply?: never;
+  intent?: never;
+  provider?: never;
+  model?: never;
+  handoffRequired?: never;
+  handoffReason?: never;
+  entities?: never;
+  retrievedFaqs?: never;
+}
+
+type TestResult = TestSuccessResult | TestErrorResult;
+
 async function runTests() {
   console.log("Starting local AI response tests...");
-  const results: any[] = [];
+  const results: TestResult[] = [];
 
   for (const tc of testCases) {
     console.log(`Running: ${tc.name}`);
@@ -55,15 +85,16 @@ async function runTests() {
         model: result.aiModel,
         handoffRequired: result.handoffRequired,
         handoffReason: result.handoffReason,
-        entities: result.entities,
+        entities: result.entities as Record<string, unknown>,
         retrievedFaqs: result.prompt.retrievedFaqs.map((faq) => faq.question),
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error running test ${tc.name}:`, error);
+      const errMsg = error instanceof Error ? error.message : String(error);
       results.push({
         name: tc.name,
         message: tc.message,
-        error: error.message || error,
+        error: errMsg,
       });
     }
   }
@@ -102,7 +133,7 @@ async function runTests() {
       mdContent += `- **Handoff:** \`${r.handoffRequired ? "Yes" : "No"}${r.handoffReason ? ` (${r.handoffReason})` : ""}\`\n`;
       mdContent += `- **AI Provider / Model:** \`${r.provider}\` / \`${r.model}\`\n`;
       mdContent += `- **Extracted Entities:** \`${JSON.stringify(r.entities)}\`\n`;
-      if (r.retrievedFaqs.length > 0) {
+      if (r.retrievedFaqs && r.retrievedFaqs.length > 0) {
         mdContent += `- **Retrieved FAQs:**\n`;
         r.retrievedFaqs.forEach((faq: string) => {
           mdContent += `  - ${faq}\n`;

@@ -43,7 +43,7 @@ export function buildHospitalitySalesPolicy(input: {
     ],
     salesRules: [
       "Help the customer choose before sending booking links.",
-      "Recommend the best-fit room using guest count, availability, price, and room descriptions from the provided context.",
+      "Recommend the best-fit room using guest count, availability, price, and room descriptions from the provided context. Do not recommend or list fully booked roomtypes (Available rooms: 0) as available choices; instead, guide the customer to other available options.",
       "Suggest an extra bed as a polite upsell/option when a room standard capacity is below the guest count but max capacity allows extra guests.",
       "Avoid general disclaimers about room prices changing by dates if check-in and check-out dates are already known.",
       "Use a light sales assistance style: helpful, confident, and not pushy.",

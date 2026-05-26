@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { generateHospiqReply } from "../src/lib/ai/orchestrator";
 import { lineRepository } from "../src/server/repositories/line.repository";
 import { bookingService } from "../src/server/services/booking.service";
-import { createSupabaseAdminClient } from "../src/lib/supabase/admin";
 
 loadEnv(".env.local");
 
@@ -29,20 +28,49 @@ const turns = [
   {
     turn: 4,
     name: "Lead Capture / Booking Ready (ยืนยันจองพร้อมให้ข้อมูล)",
-    message: "โอเคครับ จองห้อง Family Twin เลยครับ พัก 3 คน วันที่ 1-3 มิ.ย. นี้ ชื่อ พงศกร เบอร์ 0998887777",
+    message: "โอเคครับ จองห้อง Deluxe Lanna Garden เลยครับ พัก 3 คน วันที่ 1-3 มิ.ย. นี้ ชื่อ พงศกร เบอร์ 0998887777",
   },
 ];
 
+interface LongTestSuccessResult {
+  turn: number;
+  name: string;
+  message: string;
+  reply: string;
+  intent: string;
+  provider: string | null;
+  model: string | null;
+  handoffRequired: boolean;
+  entities: Record<string, unknown>;
+  memoryState: unknown;
+  error?: never;
+}
+
+interface LongTestErrorResult {
+  turn: number;
+  name: string;
+  message: string;
+  error: string;
+  reply?: never;
+  intent?: never;
+  provider?: never;
+  model?: never;
+  handoffRequired?: never;
+  entities?: never;
+  memoryState?: never;
+}
+
+type LongTestResult = LongTestSuccessResult | LongTestErrorResult;
+
 async function runLongConversationTest() {
   console.log(`Starting long conversation test for user: ${lineUserId}`);
-  const supabase = createSupabaseAdminClient();
 
   // 1. Upsert initial session
   console.log("Initializing LINE session...");
   const session = await lineRepository.upsertLineSession(hotelId, lineUserId, "Test User");
   console.log(`Session initialized. ID: ${session.id}`);
 
-  const results: any[] = [];
+  const results: LongTestResult[] = [];
 
   for (const step of turns) {
     console.log(`\n--- Running Turn ${step.turn}: ${step.name} ---`);
@@ -110,17 +138,18 @@ async function runLongConversationTest() {
         provider: result.aiProvider,
         model: result.aiModel,
         handoffRequired: result.handoffRequired,
-        entities: result.entities,
+        entities: result.entities as Record<string, unknown>,
         memoryState: result.memoryUpdate,
       });
 
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error(`Error in Turn ${step.turn}:`, error);
+      const errMsg = error instanceof Error ? error.message : String(error);
       results.push({
         turn: step.turn,
         name: step.name,
         message: step.message,
-        error: error.message || error,
+        error: errMsg,
       });
       break; // stop conversation on error
     }
