@@ -1,14 +1,24 @@
 import { createHospiqAiKnowledge, formatAiKnowledgeForPrompt } from "./ai-knowledge";
+import { HOSPIQ_PERSONA_POLICY } from "./persona-policy";
+import { buildHospitalitySalesPolicy } from "./sales-policy";
 import type { HospiqAiContext, StarterAiIntent, StarterPromptPayload } from "./types";
 
 export function buildStarterPromptPayload(
   context: HospiqAiContext,
   userMessage: string,
   intent: StarterAiIntent,
+  policy?: { canOfferBookingLink: boolean; shouldHandoff: boolean },
 ): StarterPromptPayload {
   const knowledge = context.knowledge ?? createHospiqAiKnowledge({
     aiSetting: context.aiSetting,
     faqs: context.faqs,
+  });
+  const hospitalitySales = buildHospitalitySalesPolicy({
+    intent,
+    canOfferBookingLink: policy?.canOfferBookingLink ?? Boolean(context.hasWebbooking && context.webbookingUrl),
+    shouldHandoff: policy?.shouldHandoff ?? false,
+    memory: context.memory,
+    roomtypes: context.roomtypes,
   });
 
   return {
@@ -18,6 +28,8 @@ export function buildStarterPromptPayload(
       role: knowledge.brand.role,
     },
     brandRules: knowledge.brand.rules,
+    persona: HOSPIQ_PERSONA_POLICY,
+    hospitalitySales,
     aiKnowledge: formatAiKnowledgeForPrompt(knowledge),
     hotelData: {
       hasWebbooking: context.hasWebbooking,

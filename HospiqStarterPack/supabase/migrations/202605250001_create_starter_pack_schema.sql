@@ -1,15 +1,54 @@
 create extension if not exists "pgcrypto";
 
-create type account_role as enum ('super_admin', 'hotel_admin');
-create type account_status as enum ('active', 'inactive', 'pending');
-create type hotel_status as enum ('active', 'inactive', 'setup_required');
-create type booking_status as enum ('lead', 'pending', 'confirmed', 'cancelled', 'rejected', 'completed');
-create type booking_source as enum ('line_ai', 'manual_admin', 'webbooking', 'other');
-create type line_role as enum ('guest', 'hotel_admin', 'unknown');
-create type chat_direction as enum ('incoming', 'outgoing');
-create type hotel_image_type as enum ('banner', 'showcase', 'gallery');
+do $$
+begin
+  create type account_role as enum ('super_admin', 'hotel_admin');
+exception when duplicate_object then null;
+end $$;
 
-create table hotels (
+do $$
+begin
+  create type account_status as enum ('active', 'inactive', 'pending');
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type hotel_status as enum ('active', 'inactive', 'setup_required');
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type booking_status as enum ('lead', 'pending', 'confirmed', 'cancelled', 'rejected', 'completed');
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type booking_source as enum ('line_ai', 'manual_admin', 'webbooking', 'other');
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type line_role as enum ('guest', 'hotel_admin', 'unknown');
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type chat_direction as enum ('incoming', 'outgoing');
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type hotel_image_type as enum ('banner', 'showcase', 'gallery');
+exception when duplicate_object then null;
+end $$;
+
+create table if not exists hotels (
   id uuid primary key default gen_random_uuid(),
   name text not null,
   slug text not null unique,
@@ -30,7 +69,7 @@ create table hotels (
   updated_at timestamptz not null default now()
 );
 
-create table accounts (
+create table if not exists accounts (
   id uuid primary key references auth.users(id) on delete cascade,
   email text not null unique,
   full_name text,
@@ -44,7 +83,7 @@ create table accounts (
   )
 );
 
-create table roomtypes (
+create table if not exists roomtypes (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   name text not null,
@@ -65,7 +104,7 @@ create table roomtypes (
   unique (hotel_id, name)
 );
 
-create table roomtype_images (
+create table if not exists roomtype_images (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   roomtype_id uuid not null references roomtypes(id) on delete cascade,
@@ -77,7 +116,7 @@ create table roomtype_images (
   created_at timestamptz not null default now()
 );
 
-create table roomtype_amenities (
+create table if not exists roomtype_amenities (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   roomtype_id uuid not null references roomtypes(id) on delete cascade,
@@ -86,7 +125,7 @@ create table roomtype_amenities (
   unique (roomtype_id, name)
 );
 
-create table bookings (
+create table if not exists bookings (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   roomtype_id uuid references roomtypes(id) on delete set null,
@@ -108,7 +147,7 @@ create table bookings (
   )
 );
 
-create table line_configs (
+create table if not exists line_configs (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null unique references hotels(id) on delete cascade,
   channel_id text,
@@ -120,7 +159,7 @@ create table line_configs (
   updated_at timestamptz not null default now()
 );
 
-create table line_sessions (
+create table if not exists line_sessions (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   line_user_id text not null,
@@ -135,7 +174,7 @@ create table line_sessions (
   unique (hotel_id, line_user_id)
 );
 
-create table line_chat_history (
+create table if not exists line_chat_history (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   line_session_id uuid references line_sessions(id) on delete set null,
@@ -149,7 +188,7 @@ create table line_chat_history (
   created_at timestamptz not null default now()
 );
 
-create table ai_settings (
+create table if not exists ai_settings (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null unique references hotels(id) on delete cascade,
   assistant_name text not null default 'Hospiq',
@@ -164,7 +203,7 @@ create table ai_settings (
   updated_at timestamptz not null default now()
 );
 
-create table ai_faqs (
+create table if not exists ai_faqs (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   question text not null,
@@ -175,7 +214,7 @@ create table ai_faqs (
   updated_at timestamptz not null default now()
 );
 
-create table hotel_images (
+create table if not exists hotel_images (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   image_type hotel_image_type not null,
@@ -186,7 +225,7 @@ create table hotel_images (
   created_at timestamptz not null default now()
 );
 
-create table promotions (
+create table if not exists promotions (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   title text not null,
@@ -206,25 +245,34 @@ begin
 end;
 $$ language plpgsql;
 
+drop trigger if exists hotels_updated_at on hotels;
 create trigger hotels_updated_at before update on hotels for each row execute function update_updated_at_column();
+drop trigger if exists accounts_updated_at on accounts;
 create trigger accounts_updated_at before update on accounts for each row execute function update_updated_at_column();
+drop trigger if exists roomtypes_updated_at on roomtypes;
 create trigger roomtypes_updated_at before update on roomtypes for each row execute function update_updated_at_column();
+drop trigger if exists bookings_updated_at on bookings;
 create trigger bookings_updated_at before update on bookings for each row execute function update_updated_at_column();
+drop trigger if exists line_configs_updated_at on line_configs;
 create trigger line_configs_updated_at before update on line_configs for each row execute function update_updated_at_column();
+drop trigger if exists line_sessions_updated_at on line_sessions;
 create trigger line_sessions_updated_at before update on line_sessions for each row execute function update_updated_at_column();
+drop trigger if exists ai_settings_updated_at on ai_settings;
 create trigger ai_settings_updated_at before update on ai_settings for each row execute function update_updated_at_column();
+drop trigger if exists ai_faqs_updated_at on ai_faqs;
 create trigger ai_faqs_updated_at before update on ai_faqs for each row execute function update_updated_at_column();
+drop trigger if exists promotions_updated_at on promotions;
 create trigger promotions_updated_at before update on promotions for each row execute function update_updated_at_column();
 
-create index hotels_status_idx on hotels(status);
-create index accounts_hotel_idx on accounts(hotel_id);
-create index roomtypes_hotel_active_idx on roomtypes(hotel_id, is_active);
-create index roomtype_images_roomtype_idx on roomtype_images(roomtype_id, sort_order);
-create index bookings_hotel_status_idx on bookings(hotel_id, status, created_at desc);
-create index line_sessions_hotel_user_idx on line_sessions(hotel_id, line_user_id);
-create index line_chat_history_session_idx on line_chat_history(line_session_id, created_at desc);
-create index ai_faqs_hotel_active_idx on ai_faqs(hotel_id, is_active);
-create index promotions_hotel_active_idx on promotions(hotel_id, is_active);
+create index if not exists hotels_status_idx on hotels(status);
+create index if not exists accounts_hotel_idx on accounts(hotel_id);
+create index if not exists roomtypes_hotel_active_idx on roomtypes(hotel_id, is_active);
+create index if not exists roomtype_images_roomtype_idx on roomtype_images(roomtype_id, sort_order);
+create index if not exists bookings_hotel_status_idx on bookings(hotel_id, status, created_at desc);
+create index if not exists line_sessions_hotel_user_idx on line_sessions(hotel_id, line_user_id);
+create index if not exists line_chat_history_session_idx on line_chat_history(line_session_id, created_at desc);
+create index if not exists ai_faqs_hotel_active_idx on ai_faqs(hotel_id, is_active);
+create index if not exists promotions_hotel_active_idx on promotions(hotel_id, is_active);
 
 alter table hotels enable row level security;
 alter table accounts enable row level security;

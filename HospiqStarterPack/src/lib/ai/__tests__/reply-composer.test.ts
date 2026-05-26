@@ -17,8 +17,11 @@ const context: HospiqAiContext = {
       description: "Simple room",
       moodDescription: "Quiet",
       basePrice: 900,
+      standardCapacity: 2,
+      maxCapacity: 2,
       availableRooms: 2,
       totalRooms: 5,
+      priceNote: "Starting price",
       amenities: ["wifi"],
     },
   ],
@@ -73,6 +76,50 @@ describe("reply composer", () => {
 
     expect(prompt).toContain("Do not use data from any other hotel");
     expect(prompt).toContain("If a requested fact is missing, do not guess");
+    expect(prompt).toContain("answer those facts directly");
+    expect(prompt).toContain("Do not respond with a generic greeting");
+    expect(prompt).toContain("Mandatory grounding brief");
     expect(prompt).toContain("Standard");
+  });
+
+  it("builds a prompt with persona, hospitality, sales, CTA, and memory summary guidance", () => {
+    const payload = buildStarterPromptPayload(
+      {
+        ...context,
+        memory: {
+          ...createEmptyMemory(),
+          bookingLead: {
+            guestName: "Somchai",
+            phone: "0812345678",
+            roomTypeName: "Standard",
+            guests: 2,
+            checkIn: "2026-06-01",
+            checkOut: "2026-06-03",
+          },
+        },
+      },
+      "I want to book Standard for two guests.",
+      "booking_ready",
+    );
+    const prompt = buildGroundedReplyPrompt(payload);
+
+    expect(prompt).toContain("female hotel sales assistant");
+    expect(prompt).toContain("Use natural feminine Thai service language");
+    expect(prompt).toContain("Lead with what the hotel can support");
+    expect(prompt).toContain("Do not lead with limitations");
+    expect(prompt).toContain("Do not repeat caveats from FAQ unless operationally necessary");
+    expect(prompt).toContain("Use Hospiq for AI support and reserve admin for human handoff");
+    expect(prompt).toContain("Use hotel vocabulary such as guests staying");
+    expect(prompt).toContain("estimatedCost");
+    expect(prompt).toContain("1800");
+    expect(prompt).toContain("Booking summary facts");
+    expect(prompt).toContain("checkIn");
+    expect(prompt).toContain("checkOut");
+    expect(prompt).toContain("Starting price");
+    expect(prompt).toContain("Help the customer choose before sending booking links");
+    expect(prompt).toContain("CTA strategy: booking_ready");
+    expect(prompt).toContain("Summarize known booking details");
+    expect(prompt).toContain("Somchai");
+    expect(prompt).toContain("0812345678");
   });
 });

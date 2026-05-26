@@ -57,7 +57,7 @@ export class GeminiProvider implements AiProvider {
 
   async embed(text: string): Promise<AiEmbeddingResult> {
     const apiKey = process.env.GEMINI_API_KEY;
-    const model = process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004";
+    const model = process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-001";
 
     if (!apiKey) throw new Error("GEMINI_API_KEY is not configured");
 
@@ -71,6 +71,7 @@ export class GeminiProvider implements AiProvider {
           content: {
             parts: [{ text }],
           },
+          outputDimensionality: 768,
         }),
       },
     );

@@ -1,5 +1,6 @@
 import type { LineConversationMemory } from "../../lib/ai/types";
 import { createSupabaseAdminClient } from "../../lib/supabase/admin";
+import type { Json } from "../../lib/supabase/database.types";
 
 export interface LineConfigRecord {
   channelSecret: string | null;
@@ -151,7 +152,7 @@ export const lineRepository = {
         ai_response_source: input.aiResponseSource,
         ai_provider: input.aiProvider,
         ai_model: input.aiModel,
-        raw_payload: input.rawPayload ?? {},
+        raw_payload: (input.rawPayload ?? {}) as Json,
       });
 
     if (error) throw new Error(error.message);
@@ -168,7 +169,7 @@ export const lineRepository = {
         reason: input.reason,
         priority: input.priority,
         source_message: input.sourceMessage,
-        metadata: input.metadata ?? {},
+        metadata: (input.metadata ?? {}) as Json,
       });
 
     if (error) throw new Error(error.message);

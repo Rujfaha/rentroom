@@ -113,8 +113,8 @@ export const bookingRepository = {
       preferred_contact_channel: "line",
       conversation_summary: input.conversationSummary,
       ai_summary: input.aiSummary,
-      status: "lead",
-      source: "line_ai",
+      status: "lead" as const,
+      source: "line_ai" as const,
     };
 
     if (existing?.id) {

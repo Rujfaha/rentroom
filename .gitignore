@@ -38,14 +38,6 @@ yarn-error.log*
 # Vercel only serves files that exist at build time, so ignoring this folder
 # makes database paths like /uploads/hero/example.jpg work locally but 404 online.
 
-## Code Style
-- Keep components small and readable
-- Avoid large useEffect blocks
-- Extract reusable logic into hooks or utils
-- Avoid scattered hardcoded strings
-- Use constants for route paths, query keys, status values
-- Do not change existing behavior unless requested
-
 # vercel
 .vercel
 

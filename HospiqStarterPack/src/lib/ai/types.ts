@@ -49,8 +49,13 @@ export interface HospiqAiContext {
     description: string | null;
     moodDescription: string | null;
     basePrice: number;
+    standardCapacity: number;
+    maxCapacity: number;
     availableRooms: number | null;
     totalRooms: number;
+    maxExtraBeds: number;
+    extraBedPrice: number;
+    priceNote: string | null;
     amenities: string[];
   }>;
   faqs: Array<{
@@ -114,6 +119,27 @@ export interface StarterPromptPayload {
     role: string;
   };
   brandRules: string[];
+  persona: {
+    identity: string;
+    styleRules: string[];
+    avoidRules: string[];
+  };
+  hospitalitySales: {
+    hospitalityRules: string[];
+    salesRules: string[];
+    ctaStrategy: string;
+    memorySummary: {
+      shouldSummarize: boolean;
+      knownDetails: Record<string, string | number>;
+      estimatedCost: {
+        roomTypeName: string;
+        nights: number;
+        basePrice: number;
+        total: number;
+        note: string | null;
+      } | null;
+    };
+  };
   aiKnowledge: Record<string, unknown>;
   hotelData: {
     hasWebbooking: boolean;

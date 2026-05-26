@@ -1,6 +1,7 @@
 import { createSupabaseAdminClient } from "../supabase/admin";
 import { createHospiqAiKnowledge } from "./ai-knowledge";
 import type { HospiqAiContext, LineConversationMemory } from "./types";
+import { calculateAvailableRoomsByRoomtype } from "../availability";
 
 interface HotelRow {
   id: string;
@@ -22,6 +23,8 @@ interface RoomtypeRow {
   standard_capacity: number | null;
   max_capacity: number | null;
   total_rooms: number | null;
+  max_extra_beds: number | null;
+  extra_bed_price: number | string | null;
   room_size: string | null;
   is_featured: boolean | null;
   price_note: string | null;
@@ -34,6 +37,14 @@ interface RoomAmenityRow {
 
 interface RoomInventoryRow {
   roomtype_id: string;
+  status: string;
+}
+
+interface AvailabilityBookingRow {
+  roomtype_id: string | null;
+  checkin_date: string | null;
+  checkout_date: string | null;
+  room_count: number | null;
   status: string;
 }
 
@@ -159,8 +170,13 @@ export function createHotelAiContextFromRows(input: {
         description: roomtype.description,
         moodDescription: roomtype.mood_description,
         basePrice: Number(roomtype.base_price ?? 0),
+        standardCapacity: roomtype.standard_capacity ?? 2,
+        maxCapacity: roomtype.max_capacity ?? roomtype.standard_capacity ?? 2,
         availableRooms: activeRoomCount ?? totalRooms,
         totalRooms,
+        maxExtraBeds: roomtype.max_extra_beds ?? 0,
+        extraBedPrice: Number(roomtype.extra_bed_price ?? 0),
+        priceNote: roomtype.price_note,
         amenities: amenityNamesByRoomtype.get(roomtype.id) ?? [],
       };
     }),
@@ -202,7 +218,7 @@ async function fetchRoomtypes(
 ): Promise<RoomtypeRow[]> {
   const { data, error } = await supabase
     .from("roomtypes")
-    .select("id, name, description, mood_description, base_price, standard_capacity, max_capacity, total_rooms, room_size, is_featured, price_note")
+    .select("id, name, description, mood_description, base_price, standard_capacity, max_capacity, total_rooms, max_extra_beds, extra_bed_price, room_size, is_featured, price_note")
     .eq("hotel_id", hotelId)
     .eq("is_active", true)
     .order("sort_order", { ascending: true })
@@ -326,6 +342,58 @@ function countActiveRoomsByType(rows: RoomInventoryRow[]): Map<string, number> {
     counts.set(row.roomtype_id, (counts.get(row.roomtype_id) ?? 0) + 1);
     return counts;
   }, new Map<string, number>());
+}
+
+export async function applyStayAvailabilityToContext(context: HospiqAiContext): Promise<HospiqAiContext> {
+  const checkinDate = context.memory.bookingLead.checkIn;
+  const checkoutDate = context.memory.bookingLead.checkOut;
+  if (!checkinDate || !checkoutDate) return context;
+
+  const supabase = createSupabaseAdminClient();
+  const bookings = await fetchAvailabilityBookings(supabase, context.hotelId, checkinDate, checkoutDate);
+  const availableByRoomtype = calculateAvailableRoomsByRoomtype({
+    checkinDate,
+    checkoutDate,
+    roomtypes: context.roomtypes.map((roomtype) => ({
+      id: roomtype.id,
+      totalRooms: roomtype.totalRooms,
+      activeRooms: roomtype.availableRooms ?? roomtype.totalRooms,
+    })),
+    bookings: bookings.map((booking) => ({
+      roomtypeId: booking.roomtype_id,
+      checkinDate: booking.checkin_date,
+      checkoutDate: booking.checkout_date,
+      roomCount: booking.room_count,
+      status: booking.status,
+    })),
+  });
+
+  return {
+    ...context,
+    roomtypes: context.roomtypes.map((roomtype) => ({
+      ...roomtype,
+      availableRooms: availableByRoomtype.get(roomtype.id) ?? roomtype.availableRooms,
+    })),
+  };
+}
+
+async function fetchAvailabilityBookings(
+  supabase: ReturnType<typeof createSupabaseAdminClient>,
+  hotelId: string,
+  checkinDate: string,
+  checkoutDate: string,
+): Promise<AvailabilityBookingRow[]> {
+  const { data, error } = await supabase
+    .from("bookings")
+    .select("roomtype_id, checkin_date, checkout_date, room_count, status")
+    .eq("hotel_id", hotelId)
+    .in("status", ["pending", "confirmed"])
+    .lt("checkin_date", checkoutDate)
+    .gt("checkout_date", checkinDate)
+    .returns<AvailabilityBookingRow[]>();
+
+  if (error) throw new Error(`Availability bookings fetch failed: ${error.message}`);
+  return data ?? [];
 }
 
 function parseMemory(value: unknown): LineConversationMemory {

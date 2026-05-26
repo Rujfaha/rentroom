@@ -1,17 +1,31 @@
 create extension if not exists vector;
 
-create type line_session_status as enum ('open', 'handoff', 'closed');
-create type lead_status as enum ('new', 'contacted', 'converted', 'lost');
-create type starter_room_status as enum ('available', 'occupied', 'maintenance', 'inactive');
+do $$
+begin
+  create type line_session_status as enum ('open', 'handoff', 'closed');
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type lead_status as enum ('new', 'contacted', 'converted', 'lost');
+exception when duplicate_object then null;
+end $$;
+
+do $$
+begin
+  create type starter_room_status as enum ('available', 'occupied', 'maintenance', 'inactive');
+exception when duplicate_object then null;
+end $$;
 
 alter table line_sessions
-  add column status line_session_status not null default 'open';
+  add column if not exists status line_session_status not null default 'open';
 
 alter table line_chat_history
-  add column ai_provider text,
-  add column ai_model text;
+  add column if not exists ai_provider text,
+  add column if not exists ai_model text;
 
-create table line_handoff_events (
+create table if not exists line_handoff_events (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   line_session_id uuid references line_sessions(id) on delete set null,
@@ -26,12 +40,12 @@ create table line_handoff_events (
 );
 
 alter table roomtypes
-  add column room_size text,
-  add column sort_order integer not null default 0,
-  add column is_featured boolean not null default false,
-  add column price_note text;
+  add column if not exists room_size text,
+  add column if not exists sort_order integer not null default 0,
+  add column if not exists is_featured boolean not null default false,
+  add column if not exists price_note text;
 
-create table rooms (
+create table if not exists rooms (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   roomtype_id uuid not null references roomtypes(id) on delete restrict,
@@ -46,27 +60,27 @@ create table rooms (
 );
 
 alter table bookings
-  add column line_session_id uuid references line_sessions(id) on delete set null,
-  add column lead_status lead_status not null default 'new',
-  add column preferred_contact_channel text,
-  add column conversation_summary text,
-  add column webbooking_redirected_at timestamptz,
-  add column admin_note text;
+  add column if not exists line_session_id uuid references line_sessions(id) on delete set null,
+  add column if not exists lead_status lead_status not null default 'new',
+  add column if not exists preferred_contact_channel text,
+  add column if not exists conversation_summary text,
+  add column if not exists webbooking_redirected_at timestamptz,
+  add column if not exists admin_note text;
 
 alter table ai_settings
-  add column supported_languages jsonb not null default '["th"]'::jsonb,
-  add column booking_cta_policy text,
-  add column handoff_policy text,
-  add column fallback_policy text,
-  add column max_reply_length integer not null default 900;
+  add column if not exists supported_languages jsonb not null default '["th"]'::jsonb,
+  add column if not exists booking_cta_policy text,
+  add column if not exists handoff_policy text,
+  add column if not exists fallback_policy text,
+  add column if not exists max_reply_length integer not null default 900;
 
 alter table ai_faqs
-  add column language text not null default 'th',
-  add column keywords jsonb not null default '[]'::jsonb,
-  add column sort_order integer not null default 0,
-  add column embedding vector(768);
+  add column if not exists language text not null default 'th',
+  add column if not exists keywords jsonb not null default '[]'::jsonb,
+  add column if not exists sort_order integer not null default 0,
+  add column if not exists embedding vector(768);
 
-create table ai_testcases (
+create table if not exists ai_testcases (
   id uuid primary key default gen_random_uuid(),
   hotel_id uuid not null references hotels(id) on delete cascade,
   user_message text not null,
@@ -81,21 +95,23 @@ create table ai_testcases (
   updated_at timestamptz not null default now()
 );
 
+drop trigger if exists rooms_updated_at on rooms;
 create trigger rooms_updated_at before update on rooms for each row execute function update_updated_at_column();
+drop trigger if exists ai_testcases_updated_at on ai_testcases;
 create trigger ai_testcases_updated_at before update on ai_testcases for each row execute function update_updated_at_column();
 
-create index line_sessions_hotel_status_idx on line_sessions(hotel_id, status, last_seen_at desc);
-create index line_chat_history_user_created_idx on line_chat_history(hotel_id, line_user_id, created_at desc);
-create index line_handoff_events_hotel_status_idx on line_handoff_events(hotel_id, status, created_at desc);
-create index line_handoff_events_session_idx on line_handoff_events(line_session_id, created_at desc);
-create index roomtypes_hotel_sort_idx on roomtypes(hotel_id, is_active, sort_order, base_price);
-create index rooms_hotel_roomtype_status_idx on rooms(hotel_id, roomtype_id, is_active, status);
-create index bookings_line_session_idx on bookings(line_session_id, created_at desc);
-create index bookings_hotel_lead_status_idx on bookings(hotel_id, lead_status, created_at desc);
-create index ai_faqs_hotel_language_active_idx on ai_faqs(hotel_id, language, is_active, sort_order);
-create index ai_faqs_hotel_keywords_idx on ai_faqs using gin (keywords);
-create index ai_faqs_embedding_idx on ai_faqs using ivfflat (embedding vector_cosine_ops) with (lists = 100);
-create index ai_testcases_hotel_language_active_idx on ai_testcases(hotel_id, language, is_active, created_at desc);
+create index if not exists line_sessions_hotel_status_idx on line_sessions(hotel_id, status, last_seen_at desc);
+create index if not exists line_chat_history_user_created_idx on line_chat_history(hotel_id, line_user_id, created_at desc);
+create index if not exists line_handoff_events_hotel_status_idx on line_handoff_events(hotel_id, status, created_at desc);
+create index if not exists line_handoff_events_session_idx on line_handoff_events(line_session_id, created_at desc);
+create index if not exists roomtypes_hotel_sort_idx on roomtypes(hotel_id, is_active, sort_order, base_price);
+create index if not exists rooms_hotel_roomtype_status_idx on rooms(hotel_id, roomtype_id, is_active, status);
+create index if not exists bookings_line_session_idx on bookings(line_session_id, created_at desc);
+create index if not exists bookings_hotel_lead_status_idx on bookings(hotel_id, lead_status, created_at desc);
+create index if not exists ai_faqs_hotel_language_active_idx on ai_faqs(hotel_id, language, is_active, sort_order);
+create index if not exists ai_faqs_hotel_keywords_idx on ai_faqs using gin (keywords);
+create index if not exists ai_faqs_embedding_idx on ai_faqs using ivfflat (embedding vector_cosine_ops) with (lists = 100);
+create index if not exists ai_testcases_hotel_language_active_idx on ai_testcases(hotel_id, language, is_active, created_at desc);
 
 alter table line_handoff_events enable row level security;
 alter table rooms enable row level security;

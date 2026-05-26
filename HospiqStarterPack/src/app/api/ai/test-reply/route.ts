@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { generateHospiqReply } from "@/lib/ai/orchestrator";
 import { getCurrentAccount } from "@/server/auth/get-current-account";
 import { requireHotelAccess } from "@/server/auth/require-hotel-access";
 import { AppError } from "@/server/http/api-error";
 import { apiError, apiOk } from "@/server/http/api-response";
-import { aiRepository } from "@/server/repositories/ai.repository";
-import { createAiFaqsSchema } from "@/server/validators/ai.schema";
+import { testAiReplySchema } from "@/server/validators/ai.schema";
 
 function jsonError(error: unknown, fallbackStatus = 400) {
   const status = error instanceof AppError ? error.status : fallbackStatus;
@@ -12,26 +12,20 @@ function jsonError(error: unknown, fallbackStatus = 400) {
   return NextResponse.json(apiError(error instanceof Error ? error.message : "Unknown error", code), { status });
 }
 
-export async function GET(request: NextRequest) {
-  try {
-    const account = await getCurrentAccount();
-    const requestedHotelId = request.nextUrl.searchParams.get("hotelId") ?? undefined;
-    const hotelId = requireHotelAccess(account, requestedHotelId);
-    const faqs = await aiRepository.listFaqs(hotelId);
-    return NextResponse.json(apiOk(faqs));
-  } catch (error) {
-    return jsonError(error);
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     const account = await getCurrentAccount();
     const requestedHotelId = request.nextUrl.searchParams.get("hotelId") ?? undefined;
     const hotelId = requireHotelAccess(account, requestedHotelId);
-    const payload = createAiFaqsSchema.parse(await request.json());
-    const faqs = await aiRepository.createFaqs(hotelId, payload.faqs);
-    return NextResponse.json(apiOk(faqs), { status: 201 });
+    const payload = testAiReplySchema.parse(await request.json());
+    const result = await generateHospiqReply({
+      hotelId,
+      lineUserId: payload.lineUserId,
+      lineSessionId: payload.lineSessionId,
+      message: payload.message,
+    });
+
+    return NextResponse.json(apiOk(result));
   } catch (error) {
     return jsonError(error);
   }

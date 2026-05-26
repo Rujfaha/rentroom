@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { createEmptyMemory } from "../hotel-context";
-import { mergeBookingLeadFromEntities, parseIntentExtraction } from "../intent-router";
+import { buildIntentExtractionSystemPrompt, mergeBookingLeadFromEntities, parseIntentExtraction } from "../intent-router";
 
 describe("intent-router", () => {
   it("parses model JSON into intent, language, entities, and handoff", () => {
@@ -47,5 +47,15 @@ describe("intent-router", () => {
     expect(memory.language).toBe("en");
     expect(memory.bookingLead.checkIn).toBe("2026-06-01");
     expect(memory.bookingLead.guestName).toBe("Mina");
+  });
+
+  it("documents specific hotel intents before falling back to general", () => {
+    const prompt = buildIntentExtractionSystemPrompt();
+
+    expect(prompt).toContain("Avoid primaryIntent general");
+    expect(prompt).toContain("availability: customer asks whether rooms are available");
+    expect(prompt).toContain("room_recommendation: customer asks which room fits");
+    expect(prompt).toContain("handoff_request: customer asks for admin");
+    expect(prompt).toContain("booking_ready: customer provides enough booking details");
   });
 });

@@ -71,31 +71,42 @@ export async function retrieveFaqsWithSemanticFallback(input: {
   threshold?: number;
 }): Promise<HospiqAiContext["faqs"]> {
   const limit = input.limit ?? 5;
-  const keywordMatches = retrieveRelevantFaqs(input.faqs, input.message, input.language, limit);
+  const languageMatched = input.faqs.filter((faq) => faq.language === input.language);
+  const localSource = languageMatched.length ? languageMatched : input.faqs;
+  const keywordMatches = selectKeywordFaqs(localSource, input.message, limit);
 
-  if (keywordMatches.some((faq) => faq.keywords.length > 0)) return keywordMatches;
-  if (!input.embeddingProvider || !input.semanticClient) return keywordMatches;
+  if (!input.embeddingProvider || !input.semanticClient) {
+    return retrieveRelevantFaqs(input.faqs, input.message, input.language, limit);
+  }
 
-  const embedding = await input.embeddingProvider.embed(input.message);
-  if (!embedding.embedding.length) return keywordMatches;
+  try {
+    const embedding = await input.embeddingProvider.embed(input.message);
+    if (!embedding.embedding.length) {
+      return retrieveRelevantFaqs(input.faqs, input.message, input.language, limit);
+    }
 
-  const semanticRows = await input.semanticClient.searchFaqs({
-    hotelId: input.hotelId,
-    language: input.language,
-    embedding: embedding.embedding,
-    matchThreshold: input.threshold ?? 0.75,
-    matchCount: limit,
-  });
+    const semanticRows = await input.semanticClient.searchFaqs({
+      hotelId: input.hotelId,
+      language: input.language,
+      embedding: embedding.embedding,
+      matchThreshold: input.threshold ?? 0.5,
+      matchCount: limit,
+    });
 
-  return semanticRows.map((row) => ({
-    id: row.id,
-    question: row.question,
-    answer: row.answer,
-    category: row.category,
-    language: row.language,
-    keywords: parseStringArray(row.keywords),
-    score: row.score,
-  }));
+    const semanticFaqs = semanticRows.map((row) => ({
+      id: row.id,
+      question: row.question,
+      answer: row.answer,
+      category: row.category,
+      language: row.language,
+      keywords: parseStringArray(row.keywords),
+      score: row.score,
+    }));
+
+    return mergeFaqResults(semanticFaqs, keywordMatches, localSource, limit);
+  } catch {
+    return retrieveRelevantFaqs(input.faqs, input.message, input.language, limit);
+  }
 }
 
 function parseStringArray(value: unknown): string[] {
@@ -108,4 +119,20 @@ function parseStringArray(value: unknown): string[] {
     }
   }
   return [];
+}
+
+function mergeFaqResults(
+  semanticFaqs: HospiqAiContext["faqs"],
+  keywordMatches: HospiqAiContext["faqs"],
+  fallbackFaqs: HospiqAiContext["faqs"],
+  limit: number,
+) {
+  const byId = new Map<string, HospiqAiContext["faqs"][number]>();
+
+  for (const faq of [...semanticFaqs, ...keywordMatches, ...fallbackFaqs]) {
+    if (!byId.has(faq.id)) byId.set(faq.id, faq);
+    if (byId.size >= limit) break;
+  }
+
+  return Array.from(byId.values());
 }

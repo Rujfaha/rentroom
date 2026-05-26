@@ -17,7 +17,9 @@ export async function GET(request: NextRequest) {
     const account = await getCurrentAccount();
     const requestedHotelId = request.nextUrl.searchParams.get("hotelId") ?? undefined;
     const hotelId = requireHotelAccess(account, requestedHotelId);
-    const roomtypes = await roomtypeService.listRoomtypes(hotelId);
+    const checkinDate = request.nextUrl.searchParams.get("checkinDate") ?? undefined;
+    const checkoutDate = request.nextUrl.searchParams.get("checkoutDate") ?? undefined;
+    const roomtypes = await roomtypeService.listRoomtypes(hotelId, { checkinDate, checkoutDate });
     return NextResponse.json(apiOk(roomtypes));
   } catch (error) {
     return jsonError(error);

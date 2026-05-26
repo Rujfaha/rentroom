@@ -37,6 +37,9 @@ yarn-error.log*
 # local dev server logs
 dev-server.log
 
+# local deploy scripts and credentials
+.tmp/
+
 # vercel
 .vercel
 

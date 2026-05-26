@@ -93,116 +93,136 @@ grant all privileges on
   promotions
 to service_role;
 
+drop policy if exists accounts_select_own_or_super_admin on accounts;
 create policy accounts_select_own_or_super_admin on accounts
   for select
   to authenticated
   using (id = auth.uid() or app_private.is_super_admin());
 
+drop policy if exists accounts_update_super_admin on accounts;
 create policy accounts_update_super_admin on accounts
   for update
   to authenticated
   using (app_private.is_super_admin())
   with check (app_private.is_super_admin());
 
+drop policy if exists accounts_insert_super_admin on accounts;
 create policy accounts_insert_super_admin on accounts
   for insert
   to authenticated
   with check (app_private.is_super_admin());
 
+drop policy if exists hotels_select_accessible on hotels;
 create policy hotels_select_accessible on hotels
   for select
   to authenticated
   using (app_private.can_access_hotel(id));
 
+drop policy if exists hotels_update_accessible on hotels;
 create policy hotels_update_accessible on hotels
   for update
   to authenticated
   using (app_private.can_access_hotel(id))
   with check (app_private.can_access_hotel(id));
 
+drop policy if exists hotels_insert_super_admin on hotels;
 create policy hotels_insert_super_admin on hotels
   for insert
   to authenticated
   with check (app_private.is_super_admin());
 
+drop policy if exists roomtypes_all_accessible on roomtypes;
 create policy roomtypes_all_accessible on roomtypes
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists roomtype_images_all_accessible on roomtype_images;
 create policy roomtype_images_all_accessible on roomtype_images
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists roomtype_amenities_all_accessible on roomtype_amenities;
 create policy roomtype_amenities_all_accessible on roomtype_amenities
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists rooms_all_accessible on rooms;
 create policy rooms_all_accessible on rooms
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists bookings_all_accessible on bookings;
 create policy bookings_all_accessible on bookings
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists line_configs_all_accessible on line_configs;
 create policy line_configs_all_accessible on line_configs
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists line_sessions_all_accessible on line_sessions;
 create policy line_sessions_all_accessible on line_sessions
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists line_chat_history_all_accessible on line_chat_history;
 create policy line_chat_history_all_accessible on line_chat_history
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists line_handoff_events_all_accessible on line_handoff_events;
 create policy line_handoff_events_all_accessible on line_handoff_events
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists ai_settings_all_accessible on ai_settings;
 create policy ai_settings_all_accessible on ai_settings
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists ai_faqs_all_accessible on ai_faqs;
 create policy ai_faqs_all_accessible on ai_faqs
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists ai_testcases_all_accessible on ai_testcases;
 create policy ai_testcases_all_accessible on ai_testcases
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists hotel_images_all_accessible on hotel_images;
 create policy hotel_images_all_accessible on hotel_images
   for all
   to authenticated
   using (app_private.can_access_hotel(hotel_id))
   with check (app_private.can_access_hotel(hotel_id));
 
+drop policy if exists promotions_all_accessible on promotions;
 create policy promotions_all_accessible on promotions
   for all
   to authenticated
